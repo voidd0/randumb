@@ -1,5 +1,10 @@
 # randumb
 
+[![npm version](https://img.shields.io/npm/v/@v0idd0/randumb.svg?color=A0573A)](https://www.npmjs.com/package/@v0idd0/randumb)
+[![npm downloads](https://img.shields.io/npm/dw/@v0idd0/randumb.svg?color=1F1A14)](https://www.npmjs.com/package/@v0idd0/randumb)
+[![License: MIT](https://img.shields.io/badge/license-MIT-A0573A.svg)](LICENSE)
+[![Node ≥14](https://img.shields.io/badge/node-%E2%89%A514-1F1A14)](package.json)
+
 **Locale-consistent random test data.** 58 locales, 5000+ real names. Country ⟺ phone prefix ⟺ currency ⟺ city are coupled: Russia → Ivan Petrov / +7 / RUB / Moscow. Moldova → Tudor Popa / +373 / MDL / Chișinău. No Russian Johns. No Moldovan shekels. No "San Jose, Arizona". Slavic female surnames are properly inflected. Credit cards are Luhn-valid. Everything is English-Latin, seeded for reproducibility.
 
 Free forever gift from [vøiddo](https://voiddo.com).
