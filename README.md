@@ -5,6 +5,10 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-A0573A.svg)](LICENSE)
 [![Node ≥14](https://img.shields.io/badge/node-%E2%89%A514-1F1A14)](package.json)
 
+**[Homepage](https://extensions.voiddo.com/randumb/?ref=randumb-readme)** · **[GitHub](https://github.com/voidd0/randumb)** · **[npm](https://www.npmjs.com/package/@v0idd0/randumb)** · **[All tools](https://tools.voiddo.com/?ref=randumb-catalog-readme)** · **[Contact](mailto:support@voiddo.com)**
+
+---
+
 **Locale-consistent random test data.** 58 locales, 5000+ real names. Country ⟺ phone prefix ⟺ currency ⟺ city are coupled: Russia → Ivan Petrov / +7 / RUB / Moscow. Moldova → Tudor Popa / +373 / MDL / Chișinău. No Russian Johns. No Moldovan shekels. No "San Jose, Arizona". Slavic female surnames are properly inflected. Credit cards are Luhn-valid. Everything is English-Latin, seeded for reproducibility.
 
 Free forever gift from [vøiddo](https://voiddo.com).
@@ -246,19 +250,19 @@ r.LOCALES.ru.feminizeSurname('Ivanov'); // 'Ivanova'
 
 vøiddo builds sharp, free-forever CLIs for devs who are tired of paywalls:
 
-- [`@v0idd0/jsonyo`](https://voiddo.com/tools/jsonyo/) — JSON that yells at you
-- [`@v0idd0/tokcount`](https://voiddo.com/tools/tokcount/) — token counter for 60+ LLMs
-- [`@v0idd0/ctxstuff`](https://voiddo.com/tools/ctxstuff/) — stuff a repo into an LLM context
-- [`@v0idd0/promptdiff`](https://voiddo.com/tools/promptdiff/) — diff two prompts
-- [`@v0idd0/httpwut`](https://voiddo.com/tools/httpwut/) — HTTP debugger with phase timing
-- [`@v0idd0/gitstats`](https://voiddo.com/tools/gitstats/) — local git analytics
-- [`@v0idd0/licenseme`](https://voiddo.com/tools/licenseme/) — LICENSE generator + detector
-- [`@v0idd0/envguard`](https://voiddo.com/tools/envguard/) — .env validator + secret scanner
-- [`@v0idd0/depcheck`](https://voiddo.com/tools/depcheck/) — offline CVE scanner + unused-deps
-- [`@v0idd0/logparse`](https://voiddo.com/tools/logparse/) — structured log parser + aggregator
-- [`@v0idd0/cronwtf`](https://voiddo.com/tools/cronwtf/) — explain cron, catch gotchas
+- [`@v0idd0/jsonyo`](https://tools.voiddo.com/jsonyo/?ref=randumb-related-jsonyo-readme) — JSON that yells at you
+- [`@v0idd0/tokcount`](https://extensions.voiddo.com/tokcount/?ref=randumb-related-tokcount-readme) — token counter for 60+ LLMs
+- [`@v0idd0/ctxstuff`](https://tools.voiddo.com/ctxstuff/?ref=randumb-related-ctxstuff-readme) — stuff a repo into an LLM context
+- [`@v0idd0/promptdiff`](https://tools.voiddo.com/promptdiff/?ref=randumb-related-promptdiff-readme) — diff two prompts
+- [`@v0idd0/httpwut`](https://tools.voiddo.com/httpwut/?ref=randumb-related-httpwut-readme) — HTTP debugger with phase timing
+- [`@v0idd0/gitstats`](https://tools.voiddo.com/gitstats/?ref=randumb-related-gitstats-readme) — local git analytics
+- [`@v0idd0/licenseme`](https://tools.voiddo.com/licenseme/?ref=randumb-related-licenseme-readme) — LICENSE generator + detector
+- [`@v0idd0/envguard`](https://tools.voiddo.com/envguard/?ref=randumb-related-envguard-readme) — .env validator + secret scanner
+- [`@v0idd0/depcheck`](https://tools.voiddo.com/depcheck/?ref=randumb-related-depcheck-readme) — offline CVE scanner + unused-deps
+- [`@v0idd0/logparse`](https://tools.voiddo.com/logparse/?ref=randumb-related-logparse-readme) — structured log parser + aggregator
+- [`@v0idd0/cronwtf`](https://tools.voiddo.com/cronwtf/?ref=randumb-related-cronwtf-readme) — explain cron, catch gotchas
 
-Full catalog: [voiddo.com/tools](https://voiddo.com/tools/).
+Full catalog: [tools.voiddo.com](https://tools.voiddo.com/?ref=randumb-catalog-readme).
 
 ## License
 
@@ -266,10 +270,10 @@ MIT © [vøiddo](https://voiddo.com) — free forever, no asterisks.
 
 ## Links
 
-- Docs: https://voiddo.com/tools/randumb/
+- Docs: https://extensions.voiddo.com/randumb/?ref=randumb-docs-readme
 - Source: https://github.com/voidd0/randumb
 - npm: https://npmjs.com/package/@v0idd0/randumb
-- Studio: https://voiddo.com
+- Studio: https://voiddo.com/?ref=randumb-studio-readme
 - Issues: https://github.com/voidd0/randumb/issues
 - Support: support@voiddo.com
 

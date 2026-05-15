@@ -1,6 +1,6 @@
 {
   "name": "@v0idd0/randumb",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "randumb — locale-consistent random test data. 58 locales, 5000+ real names, coupled to country + phone prefix + currency + city → no Russian Johns, no Moldovan shekels, no John Smiths in Kazan. Seeded RNG, Luhn-valid credit cards, gender-inflected Slavic surnames, Latin-only output. Free forever from vøiddo.",
   "main": "src/generator.js",
   "bin": {
@@ -24,7 +24,7 @@
   ],
   "author": "vøiddo <support@voiddo.com> (https://voiddo.com)",
   "license": "MIT",
-  "homepage": "https://voiddo.com/tools/randumb/",
+  "homepage": "https://tools.voiddo.com/randumb/?ref=randumb-npm",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/voidd0/randumb.git"
