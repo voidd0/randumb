@@ -5,13 +5,22 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-A0573A.svg)](LICENSE)
 [![Node ≥14](https://img.shields.io/badge/node-%E2%89%A514-1F1A14)](package.json)
 
-**[Homepage](https://extensions.voiddo.com/randumb/?ref=randumb-readme)** · **[GitHub](https://github.com/voidd0/randumb)** · **[npm](https://www.npmjs.com/package/@v0idd0/randumb)** · **[All tools](https://tools.voiddo.com/?ref=randumb-catalog-readme)** · **[Contact](mailto:support@voiddo.com)**
+**[Web app](https://tools.voiddo.com/randumb/?ref=randumb-readme)** · **[Compare with Faker.js](https://tools.voiddo.com/randumb/compare/faker-js/?ref=randumb-readme)** · **[Browser extension](https://extensions.voiddo.com/randumb/?ref=randumb-readme)** · **[GitHub](https://github.com/voidd0/randumb)** · **[npm](https://www.npmjs.com/package/@v0idd0/randumb)** · **[All tools](https://tools.voiddo.com/?ref=randumb-catalog-readme)** · **[Contact](mailto:support@voiddo.com)**
 
 ---
 
 **Locale-consistent random test data.** 58 locales, 5000+ real names. Country ⟺ phone prefix ⟺ currency ⟺ city are coupled: Russia → Ivan Petrov / +7 / RUB / Moscow. Moldova → Tudor Popa / +373 / MDL / Chișinău. No Russian Johns. No Moldovan shekels. No "San Jose, Arizona". Slavic female surnames are properly inflected. Credit cards are Luhn-valid. Everything is English-Latin, seeded for reproducibility.
 
 Free forever gift from [vøiddo](https://voiddo.com).
+
+## Compare with Faker.js
+
+If you need broad Node.js fake data, Faker.js is the standard.
+If you need one thing that stays locale-consistent, randumb is the faster fit.
+
+- Faker.js gives you huge module coverage and TypeScript types.
+- randumb gives you 58 locales, seeded fixtures, and country/phone/currency/city coupling by default.
+- If you want the side-by-side breakdown, open [randumb vs Faker.js](https://tools.voiddo.com/randumb/compare/faker-js/?ref=randumb-readme).
 
 ```
 $ randumb user --locale ru

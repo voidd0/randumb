@@ -1,7 +1,7 @@
 {
   "name": "@v0idd0/randumb",
-  "version": "2.0.3",
-  "description": "randumb — locale-consistent random test data. 58 locales, 5000+ real names, coupled to country + phone prefix + currency + city → no Russian Johns, no Moldovan shekels, no John Smiths in Kazan. Seeded RNG, Luhn-valid credit cards, gender-inflected Slavic surnames, Latin-only output. Free forever from vøiddo.",
+  "version": "2.0.4",
+  "description": "randumb — locale-consistent random test data generator and Faker.js alternative. 58 locales, 5000+ real names, coupled to country + phone prefix + currency + city → no Russian Johns, no Moldovan shekels, no John Smiths in Kazan. Seeded RNG, Luhn-valid credit cards, gender-inflected Slavic surnames, Latin-only output. Free forever from vøiddo.",
   "main": "src/generator.js",
   "bin": {
     "randumb": "./bin/randumb.js"
@@ -12,14 +12,28 @@
   "keywords": [
     "random",
     "faker",
+    "faker-js",
+    "faker-alternative",
+    "fake-data",
+    "fake-data-generator",
+    "mock-data",
     "mock",
     "fixtures",
+    "test-fixtures",
     "test-data",
+    "test-data-generator",
     "seeder",
+    "data-seeding",
     "generator",
     "locale",
+    "locale-aware",
+    "country-aware",
     "i18n",
     "cli",
+    "browser-form-filler",
+    "form-filler",
+    "synthetic-data",
+    "synthetic-fixtures",
     "voiddo"
   ],
   "author": "vøiddo <support@voiddo.com> (https://voiddo.com)",
