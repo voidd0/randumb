@@ -94,3 +94,16 @@ def test_digest_summary_send_flags_remain_false_with_runtime_report():
     assert digest["live_outreach_allowed"] is False
     assert digest["digest_agent_report"]["email_sent"] is False
     execute("DELETE FROM mailer_action_queue WHERE id = %s", (run["result_json"]["owner_report_action"]["id"],))
+
+
+def test_digest_summary_includes_sanitized_history():
+    run = run_agent("mailer_digest_agent")
+    digest = mailer_digest_summary()
+    history = digest["digest_agent_history"]
+    assert history["count"] >= 1
+    assert history["latest"]["email_sent"] is False
+    assert history["raw_recipient_addresses_included"] is False
+    assert history["secrets_included"] is False
+    assert "gkorner@" not in str(history)
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (run["result_json"]["owner_report_action"]["id"],))
+    execute("DELETE FROM mailer_digest_reports WHERE id = %s", (run["result_json"]["digest_agent_report"]["history_id"],))

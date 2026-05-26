@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-26 23:58 IDT
+Generated: 2026-05-27 00:07 IDT
 
 ## Decision
 
@@ -25,6 +25,7 @@ P35 exposed mailer ops daily digest evidence in the protected admin dashboard.
 P36 added `mailer_digest_agent` to the autonomous agent loop.
 P37 added a dedicated `mailer_digest_agent_report.md` runtime report file with agent run ID, owner-report action ID, no-send decision, and current mail blockers.
 P38 exposed sanitized digest-agent report metadata in the protected admin digest evidence panel.
+P39 added sanitized digest-agent report history persistence.
 
 ## Passed Gates
 
@@ -53,11 +54,12 @@ P38 exposed sanitized digest-agent report metadata in the protected admin digest
 - mailer digest scheduler agent: implemented
 - mailer digest runtime report file: implemented
 - mailer digest admin report metadata: implemented and protected
+- mailer digest history persistence: implemented
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: Playwright/axe/pa11y PASS
-- API tests: `251 passed`
+- API tests: `254 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -78,7 +80,8 @@ P38 exposed sanitized digest-agent report metadata in the protected admin digest
 - raw recipients in admin summaries: `false`
 - ops action system events after test cleanup: `0`
 - mailer ops run rows after test cleanup: `0`
+- digest report history rows: `2`
 
 ## Next Exact Action
 
-Continue the self-written build cycle with `P39 Mailer Digest Retention and Historical Evidence`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
+Continue the self-written build cycle with `P40 Digest History Admin Counter`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.

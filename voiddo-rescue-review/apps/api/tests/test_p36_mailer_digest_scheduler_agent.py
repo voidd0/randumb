@@ -10,6 +10,7 @@ def _cleanup(action_id: str | None = None) -> None:
     if action_id:
         execute("DELETE FROM mailer_action_queue WHERE id = %s", (action_id,))
     execute("DELETE FROM mailer_action_queue WHERE payload_json::text LIKE %s", ("%daily_digest_hook%",))
+    execute("DELETE FROM mailer_digest_reports WHERE report_path LIKE %s", ("%mailer_digest_agent_report.md%",))
 
 
 def test_mailer_digest_agent_exists_and_generates_report():
@@ -94,3 +95,27 @@ def test_daily_loop_digest_agent_exposes_runtime_report_path():
     assert Path(report["path"]).exists()
     assert report["email_sent"] is False
     _cleanup(digest_run["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_digest_agent_persists_history_row():
+    run = run_agent("mailer_digest_agent")
+    report = run["result_json"]["digest_agent_report"]
+    row = fetch_one(
+        "SELECT agent_run_id, report_path, email_sent, warmup_sent_count, live_outreach_sent_count FROM mailer_digest_reports WHERE id = %s",
+        (report["history_id"],),
+    )
+    assert str(row["agent_run_id"]) == str(run["id"])
+    assert row["report_path"].endswith("mailer_digest_agent_report.md")
+    assert row["email_sent"] is False
+    assert row["warmup_sent_count"] == 0
+    assert row["live_outreach_sent_count"] == 0
+    _cleanup(run["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_digest_history_omits_raw_recipients_and_secrets():
+    run = run_agent("mailer_digest_agent")
+    row = fetch_one("SELECT report_path, blockers_json FROM mailer_digest_reports WHERE id = %s", (run["result_json"]["digest_agent_report"]["history_id"],))
+    assert "gkorner@" not in str(row)
+    assert "SMTP_PASSWORD" not in str(row)
+    assert "voiddorescue.com" not in str(row)
+    _cleanup(run["result_json"]["owner_report_action"]["id"])

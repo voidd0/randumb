@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 23:58 IDT
+Generated: 2026-05-27 00:07 IDT
 
 ## Canonical Latest State
 
@@ -78,10 +78,12 @@ Generated: 2026-05-26 23:58 IDT
 - latest digest agent report: `/opt/voiddo-rescue/reports/mailer_digest_agent_report.md`
 - digest agent email_sent: `false`
 - P38 digest admin report metadata: implemented and protected
+- P39 digest report history table: implemented
+- digest report history rows: `2`
 
 ## Verification
 
-- API tests: `251 passed`
+- API tests: `254 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including authenticated admin digest report metadata
 - secondary QA plugins: Playwright/axe/pa11y PASS, 0 blockers
@@ -89,4 +91,4 @@ Generated: 2026-05-26 23:58 IDT
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P39 Mailer Digest Retention and Historical Evidence`.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P40 Digest History Admin Counter`.

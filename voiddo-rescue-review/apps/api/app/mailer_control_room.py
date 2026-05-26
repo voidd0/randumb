@@ -162,6 +162,17 @@ def mailer_digest_summary() -> dict[str, Any]:
         """,
         ("%daily_digest_hook%",),
     )
+    digest_history_latest = fetch_one(
+        """
+        SELECT id, agent_run_id, report_path, owner_report_action_id, email_sent,
+               warmup_sent_count, live_outreach_sent_count, bounce_or_dsn_count_24h,
+               rate_limit_signal_count_24h, blockers_json, created_at
+        FROM mailer_digest_reports
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    digest_history_count = fetch_one("SELECT count(*) AS count FROM mailer_digest_reports")
     return json_safe(
         {
             "mailer_ops": ops,
@@ -173,6 +184,12 @@ def mailer_digest_summary() -> dict[str, Any]:
                 "exists": digest_report_exists,
                 "modified_at": digest_report_modified_at,
                 "email_sent": False,
+                "raw_recipient_addresses_included": False,
+                "secrets_included": False,
+            },
+            "digest_agent_history": {
+                "count": int(digest_history_count["count"]) if digest_history_count else 0,
+                "latest": dict(digest_history_latest) if digest_history_latest else None,
                 "raw_recipient_addresses_included": False,
                 "secrets_included": False,
             },
@@ -293,7 +310,7 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
         + "\n",
         encoding="utf-8",
     )
-    return {
+    digest = {
         "path": str(path),
         "agent_run_id": agent_run_id,
         "owner_report_path": owner_report.get("path", ""),
@@ -303,3 +320,28 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
         "live_outreach_sent_count": int(state.get("live_outreach_sent_count", 0) or 0),
         "current_mail_blockers": blockers,
     }
+    row = execute(
+        """
+        INSERT INTO mailer_digest_reports(
+            agent_run_id, report_path, owner_report_action_id, email_sent,
+            warmup_sent_count, live_outreach_sent_count, bounce_or_dsn_count_24h,
+            rate_limit_signal_count_24h, blockers_json
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id, created_at
+        """,
+        (
+            agent_run_id,
+            str(path),
+            action.get("id") or None,
+            email_sent,
+            digest["warmup_sent_count"],
+            digest["live_outreach_sent_count"],
+            int(state.get("bounce_count", 0) or 0),
+            int(state.get("rate_limit_signal_count", 0) or 0),
+            Jsonb(blockers),
+        ),
+    )
+    digest["history_id"] = str(row["id"])
+    digest["history_created_at"] = row["created_at"].isoformat()
+    return digest

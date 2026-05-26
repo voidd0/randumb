@@ -81,6 +81,7 @@ apps/api/migrations/023_mailer_closed_loop.sql
 apps/api/migrations/024_recipient_resolver_audit.sql
 apps/api/migrations/025_mailer_ops_runs.sql
 apps/api/migrations/026_mailer_ops_run_retention.sql
+apps/api/migrations/027_mailer_digest_reports.sql
 apps/api/requirements.txt
 apps/api/tests/test_core.py
 apps/api/tests/test_p0_integration.py
@@ -251,8 +252,10 @@ reports/p37_digest_agent_runtime_report_file.md
 reports/p37_next_self_written_tz.md
 reports/p38_mailer_digest_admin_report_link.md
 reports/p38_next_self_written_tz.md
+reports/p39_mailer_digest_retention_history.md
 reports/p39_next_self_written_tz.md
 reports/p3_checkout_deliverability_warmup_report.md
+reports/p40_next_self_written_tz.md
 reports/p4_deliverability_warmup_day1_report.md
 reports/p5_review_package_hygiene_report.md
 reports/p5_warmup_safety_report.md
