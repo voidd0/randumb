@@ -1,3 +1,6 @@
-Archive path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p15-customer-token-monitoring-2026-05-26.zip
-SHA256: see adjacent runtime .sha256 file and final handoff output.
-Note: the source tree cannot embed the exact SHA256 of a ZIP that contains this file without creating a self-referential mismatch.
+source_tree: /opt/voiddo-rescue
+review_folder: voiddo-rescue-review/
+generated_at: 2026-05-26 19:55 IDT
+zip_path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p16-monitoring-scheduler-customer-ui-2026-05-26.zip
+zip_sha256_initial: 04be7baae7f9f0b178c375129f7fc10358fcaab6b03e9cf3ce0b64e507b815e1
+package: clean source tree export, no runtime artifacts

@@ -43,12 +43,24 @@ def customer_dashboard_by_token(token: str) -> dict[str, Any]:
         raise ValueError("customer_token_not_found")
     execute("UPDATE customer_access_tokens SET last_used_at = now() WHERE token_hash = %s", (token_hash,))
     journey = customer_journey_snapshot(customer_id=str(row["id"]))["result_json"]
-    # The token endpoint exposes only that customer's data and does not include
-    # administrative raw rows.
+    safe_fix_requests = []
+    for item in journey["fix_requests"]:
+        safe_fix_requests.append(
+            {
+                "id": item["id"],
+                "product_key": item["product_key"],
+                "status": item["status"],
+                "priority": item["priority"],
+                "title": item["title"],
+                "studio_task_status": item.get("codex_task_status", "open"),
+            }
+        )
+    # The token endpoint exposes only that customer's data and removes internal
+    # task identifiers and operational fields.
     return {
         "customer": journey["customer"],
         "purchased": journey["purchased"],
-        "fix_requests": journey["fix_requests"],
+        "fix_requests": safe_fix_requests,
         "onboarding": journey["onboarding"],
         "monitoring": journey["monitoring"],
         "dashboard_ready": True,

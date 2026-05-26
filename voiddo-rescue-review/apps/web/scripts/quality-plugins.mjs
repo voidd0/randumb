@@ -9,8 +9,21 @@ import { spawnSync } from "node:child_process";
 
 const baseUrl = process.env.QUALITY_BASE_URL || "http://127.0.0.1:18081";
 const outDir = process.env.QUALITY_OUT_DIR || "/tmp/voiddo-rescue-quality-plugins";
-const routes = ["/", "/r/demo", "/customer", "/status", "/unsubscribe/demo-token"];
+const baseRoutes = ["/", "/r/demo", "/customer", "/status", "/unsubscribe/demo-token"];
 const adminToken = process.env.ADMIN_AUTH_TOKEN || "";
+
+function extraRoutes() {
+  if (!process.env.QUALITY_EXTRA_ROUTES) return [];
+  try {
+    const parsed = JSON.parse(process.env.QUALITY_EXTRA_ROUTES);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item) => item && typeof item.path === "string")
+      .map((item) => ({ path: item.path, target: typeof item.target === "string" ? item.target : item.path }));
+  } catch {
+    return [];
+  }
+}
 
 async function ensureDir(dir) {
   await fs.mkdir(dir, { recursive: true });
@@ -95,15 +108,18 @@ async function main() {
   await ensureDir(outDir);
   const browser = await chromium.launch({ headless: true });
   const results = [];
-  for (const route of routes) {
+  const routes = [...baseRoutes.map((route) => ({ path: route, target: route })), ...extraRoutes()];
+  for (const routeSpec of routes) {
+    const route = routeSpec.path;
+    const target = routeSpec.target;
     const context = await browser.newContext({ viewport: { width: 1365, height: 900 } });
     const page = await context.newPage();
     const url = `${baseUrl}${route}`;
     await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
-    const name = route === "/" ? "home" : route.replace(/[^a-z0-9]/gi, "_");
-    results.push(await runAxe(page, route));
-    results.push(await runPa11y(url, route));
-    results.push(await runPixelmatch(page, route, name));
+    const name = target === "/" ? "home" : target.replace(/[^a-z0-9]/gi, "_");
+    results.push(await runAxe(page, target));
+    results.push(await runPa11y(url, target));
+    results.push(await runPixelmatch(page, target, name));
     await context.close();
   }
   if (adminToken) {

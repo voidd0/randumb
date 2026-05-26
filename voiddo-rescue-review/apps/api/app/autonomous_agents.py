@@ -16,7 +16,7 @@ from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
-from .monitoring import run_monitoring_check
+from .monitoring import process_due_monitoring_targets, run_monitoring_check
 from .p0 import (
     build_warmup_calendar,
     mail_signal_summary,
@@ -96,6 +96,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "clean_window_recovery_agent": lambda: run_clean_window_recovery(24),
         "customer_journey_agent": lambda: {"dry_run": True, "status": "customer_journeys_snapshot_on_payment_or_admin_request"},
         "monitoring_agent": lambda: {"dry_run": True, "status": "monitoring_targets_checked_by_protected_endpoint_or_scheduler"},
+        "monitoring_scheduler_agent": lambda: process_due_monitoring_targets(5, True),
         "sender_rotation_readiness_agent": lambda: sender_rotation_ready(),
         "warmup_spacing_planner_agent": lambda: plan_provider_spaced_warmup(50, False),
         "warmup_spacing_apply_gate_agent": lambda: apply_provider_spacing_when_safe(50),
@@ -115,6 +116,7 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_agent",
         "reporting_agent",
         "fix_task_agent",
+        "monitoring_scheduler_agent",
         "economics_agent",
         "autonomous_mailer_agent",
         "outbound_mailer_gate_agent",

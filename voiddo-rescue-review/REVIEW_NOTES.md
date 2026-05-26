@@ -1,38 +1,46 @@
-# Vøiddo Rescue P15 Review Notes
+# Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 19:36 IDT
+Generated: 2026-05-26 19:55 IDT
 
-## Source
+## Scope
 
-Original runtime tree: `/opt/voiddo-rescue`
-Review folder: `voiddo-rescue-review/`
-Branch: `voiddo-rescue-mvp-review-20260526-files`
+This review tree contains the Vøiddo Rescue MVP source tree after P16 monitoring scheduler and customer-token dashboard work.
 
-## P15 Summary
+## Included
 
-P15 adds customer-safe token access and a safe monitoring loop: token hashing, public token dashboard API, protected access-token and monitoring endpoints, monitoring run persistence, and dry-run safe monitoring checks. Live outreach and forced warmup remain blocked.
+- `docker-compose.yml`
+- `.env.example`
+- API, worker, web, shared package, scripts, migrations, WP plugin source
+- redacted reports
+- test suite
 
-## Excluded From Review Tree And Export
+## Excluded
 
-- `.env`, `*.env`, mailbox passwords, private keys
-- `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`
-- `node_modules`, `.next`, `.lighthouseci`
-- runtime `storage`, `logs`, `backups`, `screenshots`, `exports`
-- generated visual screenshots and PNG/JPG/WEBP artifacts
-
-## Secret And Artifact Scan Result
-
-No raw secrets, env files, mailbox passwords, private keys, virtualenvs, cache directories, node_modules, Next build output, runtime storage, screenshots, or exported ZIP files are intentionally included in this review tree.
+- `.env` and `*.env`
+- mailbox passwords, API keys, private keys
+- `storage/`, runtime screenshots, exports, logs
+- `.venv`, `.pytest_cache`, `__pycache__`, `*.pyc`
+- `node_modules`, `.next`
 
 ## Verification
 
-- API tests: `138 passed`
+- API tests: `144 passed`
 - smoke: PASS
-- Huanshu: PASS
-- extra QA plugins: PASS or non-blocking warning
-- warmup sent: `0`
+- Huanshu: PASS, including token dashboard and admin-auth screenshots
+- extra design/QA plugins: PASS or non-blocking warning; blockers `0`
 - live outreach sent: `0`
+- warmup sent: `0`
 
-## Commit SHA
+## Launch State
 
-Final pushed commit SHA is reported in the handoff response after Git creates it.
+`WARMUP_SCHEDULED_NO_OUTREACH`. Recent bounce/DSN and SMTP rate-limit signals still block sending.
+
+## Secrets
+
+No raw secrets are intentionally included. `.env.example` is included as a template only.
+
+## P16 Export
+
+- zip path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p16-monitoring-scheduler-customer-ui-2026-05-26.zip
+- initial zip SHA256 before metadata refresh: 04be7baae7f9f0b178c375129f7fc10358fcaab6b03e9cf3ce0b64e507b815e1
+- branch before commit: 4329e362a878965b069400e3ba43d1a812a9d437

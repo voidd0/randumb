@@ -5,8 +5,9 @@ from urllib.parse import urlparse
 
 from psycopg.types.json import Jsonb
 
-from .db import execute, fetch_one
-from .p0 import json_safe
+from .config import get_settings
+from .db import execute, fetch_all, fetch_one
+from .p0 import effective_pause_state, json_safe
 from .scanner import deterministic_safe_scan
 
 
@@ -64,3 +65,50 @@ def run_monitoring_check(target_id: str, dry_run: bool = True) -> dict[str, Any]
         (target_id, job["id"], Jsonb({"policy": "safe_public_scanner_job_queued"})),
     )
     return dict(row)
+
+
+def process_due_monitoring_targets(limit: int = 5, dry_run: bool = True) -> dict[str, Any]:
+    settings = get_settings()
+    if settings.global_kill_switch or effective_pause_state("scanner", settings.scanning_paused):
+        return {"status": "blocked_paused", "processed": 0, "failed": 0, "sends_started": False}
+    targets = fetch_all(
+        """
+        SELECT id
+        FROM monitoring_targets
+        WHERE status = 'active'
+          AND (last_checked_at IS NULL OR last_checked_at <= now() - interval '24 hours')
+        ORDER BY last_checked_at NULLS FIRST, created_at
+        LIMIT %s
+        """,
+        (limit,),
+    )
+    processed = 0
+    failed = 0
+    runs: list[dict[str, Any]] = []
+    for target in targets:
+        try:
+            run = run_monitoring_check(str(target["id"]), dry_run=dry_run)
+            runs.append({"target_id": str(target["id"]), "run_id": str(run["id"]), "status": run["status"]})
+            processed += 1
+        except Exception as exc:
+            failed += 1
+            execute(
+                """
+                INSERT INTO system_events(type, severity, message, payload_json)
+                VALUES ('monitoring.run_failed', 'warning', 'Monitoring target check failed', %s)
+                """,
+                (Jsonb({"target_id": str(target["id"]), "error": type(exc).__name__, "safe": True}),),
+            )
+            task = execute(
+                """
+                INSERT INTO codex_tasks(type, priority, status, title, description, input_json)
+                VALUES ('scanner_failed_case', 'P2', 'open', 'Monitoring check failed', %s, %s)
+                RETURNING *
+                """,
+                (
+                    "A safe monitoring check failed and needs studio review before any customer-facing action.",
+                    Jsonb({"target_id": str(target["id"]), "error": type(exc).__name__, "safe": True}),
+                ),
+            )
+            runs.append({"target_id": str(target["id"]), "status": "failed", "codex_task_id": str(task["id"])})
+    return {"status": "completed", "processed": processed, "failed": failed, "runs": runs, "sends_started": False, "dry_run": dry_run}

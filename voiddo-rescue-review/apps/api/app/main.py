@@ -52,7 +52,7 @@ from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
 from .customer_access import customer_dashboard_by_token, ensure_customer_access_token
-from .monitoring import ensure_monitoring_target, run_monitoring_check
+from .monitoring import ensure_monitoring_target, process_due_monitoring_targets, run_monitoring_check
 from .language_gate import check_no_ai_public_language
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
@@ -549,6 +549,12 @@ def customer_dashboard_token_get(token: str):
 async def monitoring_target_create(customer_id: str, request: Request):
     payload = await request.json()
     return {"ok": True, "target": ensure_monitoring_target(customer_id, payload.get("site_url", ""))}
+
+
+@app.post("/admin/monitoring/run-due", dependencies=[Depends(require_admin)])
+async def monitoring_due_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "result": process_due_monitoring_targets(int(payload.get("limit", 5)), bool(payload.get("dry_run", True)))}
 
 
 @app.post("/admin/monitoring/{target_id}/run", dependencies=[Depends(require_admin)])

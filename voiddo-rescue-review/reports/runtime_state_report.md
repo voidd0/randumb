@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 19:35 IDT
+Generated: 2026-05-26 19:55 IDT
 
 ## Canonical Latest State
 
@@ -22,16 +22,21 @@ Generated: 2026-05-26 19:35 IDT
 
 - customer journey snapshots: implemented
 - customer access token table: implemented
-- token dashboard API: implemented
+- token dashboard API: implemented and sanitized
+- token dashboard web route: implemented at `/customer/dashboard/[token]`
 - monitoring targets: implemented
 - monitoring runs: implemented
-- monitoring scheduler worker: not yet implemented, assigned to P16
+- monitoring due scheduler: implemented and kill-switch/scanner-pause gated
+- monitoring failure handling: system event + review task
 
 ## Verification
 
-- API tests: `138 passed`
+- API tests: `144 passed`
 - smoke test: PASS
-- Huanshu local adapter: PASS
-- secondary QA plugins: PASS or non-blocking warning
+- Huanshu local adapter: PASS including token dashboard and admin-auth screenshots
+- secondary QA plugins: PASS or non-blocking warning, 0 blockers
 - API/web/worker/postgres/redis: healthy
 
+## Next Allowed Action
+
+Wait until the recent bounce/DSN and SMTP rate-limit window clears, then rerun clean-window recovery and mail QA before any warmup send.
