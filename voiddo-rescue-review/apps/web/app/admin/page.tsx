@@ -226,6 +226,11 @@ export default async function AdminPage() {
                 <input type="hidden" name="limit" value="1" />
                 <button className="button secondary" type="submit">Prepare owner report</button>
               </form>
+              <form action={runMailerOpsAction}>
+                <input type="hidden" name="action" value="digest_history_cleanup" />
+                <input type="hidden" name="limit" value="1" />
+                <button className="button secondary" type="submit">Digest cleanup</button>
+              </form>
             </div>
             <div className="row"><span className="tag">latest</span><span>recorded ops actions</span><span className="score">{opsActions.count ?? 0}</span></div>
             <div className="row"><span className="tag">real</span><span>real ops action history</span><span className="score">{opsActions.real_count ?? 0}</span></div>

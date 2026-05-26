@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 00:51 IDT
+Generated: 2026-05-27 00:47 IDT
 
 ## Decision
 
@@ -30,6 +30,7 @@ P40 exposed sanitized digest history count and latest no-send state in the prote
 P41 added sanitized digest history retention summary and cleanup guard.
 P42 wired digest history retention cleanup into the autonomous daily agent loop.
 P43 added digest history cleanup to persisted mailer ops evidence.
+P44 exposed digest history cleanup as a protected admin Mailer Ops Control and verified that the latest ops list shows the retained no-send cleanup action.
 
 ## Passed Gates
 
@@ -63,11 +64,12 @@ P43 added digest history cleanup to persisted mailer ops evidence.
 - mailer digest history retention guard: implemented and protected
 - mailer digest retention autonomous agent: implemented
 - mailer digest retention ops evidence: implemented
+- mailer digest retention admin visibility: implemented and protected
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: Playwright/axe/pa11y PASS
-- API tests: `265 passed`
+- API tests: `266 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -86,10 +88,11 @@ P43 added digest history cleanup to persisted mailer ops evidence.
 - recent recipient resolver audit rows after test cleanup: `0`
 - customer mail simulation blocking failures: `0`
 - raw recipients in admin summaries: `false`
-- ops action system events after test cleanup: `0`
-- mailer ops run rows after test cleanup: `0`
+- ops action system events after test cleanup: retained no-send admin evidence only
+- mailer ops run rows retained: `1`
+- latest retained ops action: `digest_history_cleanup:completed:send=false`
 - digest report history rows: `2`
 
 ## Next Exact Action
 
-Continue the self-written build cycle with `P44 Mailer Ops Digest Retention Admin Visibility`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
+Continue the self-written build cycle with `P45 Mailer Ops Retention Agent Evidence`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.

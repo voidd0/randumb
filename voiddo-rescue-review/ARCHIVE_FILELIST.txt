@@ -1,6 +1,7 @@
 .env.example
 .gitignore
 ARCHIVE_FILELIST.txt
+ARCHIVE_SHA256.txt
 MIGRATIONS.md
 README.md
 REVIEW_NOTES.md
@@ -263,7 +264,9 @@ reports/p42_digest_retention_agent.md
 reports/p42_next_self_written_tz.md
 reports/p43_mailer_digest_retention_ops_evidence.md
 reports/p43_next_self_written_tz.md
+reports/p44_mailer_digest_retention_admin_visibility.md
 reports/p44_next_self_written_tz.md
+reports/p45_next_self_written_tz.md
 reports/p4_deliverability_warmup_day1_report.md
 reports/p5_review_package_hygiene_report.md
 reports/p5_warmup_safety_report.md

@@ -40,6 +40,20 @@ def test_closed_loop_ops_action_uses_dry_run_transport_only():
     assert payload["result"]["live_outreach_allowed"] is False
 
 
+def test_digest_history_cleanup_ops_endpoint_is_no_send_and_persisted():
+    response = client.post("/admin/mailer/ops-actions", json={"action": "digest_history_cleanup", "limit": 1}, headers=admin_headers())
+    assert response.status_code == 200
+    payload = response.json()["ops_action"]
+    assert payload["action"] == "digest_history_cleanup"
+    assert payload["result"]["status"] == "completed"
+    assert payload["result"]["send_mail"] is False
+    assert payload["result"]["smtp_called"] is False
+    assert payload["result"]["live_outreach_allowed"] is False
+    assert payload["result"]["raw_recipient_addresses_included"] is False
+    assert payload["run"]["action"] == "digest_history_cleanup"
+    assert payload["run"]["send_mail"] is False
+
+
 def test_unknown_ops_action_blocks_without_shell_or_send():
     result = run_mailer_ops_action("run_shell")
     assert result["result"]["status"] == "blocked"
@@ -47,4 +61,3 @@ def test_unknown_ops_action_blocks_without_shell_or_send():
     assert result["result"]["send_mail"] is False
     assert result["result"]["smtp_called"] is False
     assert result["result"]["live_outreach_allowed"] is False
-

@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-27 00:51 IDT
+Generated: 2026-05-27 00:47 IDT
 
 ## Canonical Latest State
 
@@ -84,15 +84,17 @@ Generated: 2026-05-27 00:51 IDT
 - P41 digest history retention guard: implemented and protected
 - P42 digest retention autonomous agent: implemented
 - P43 digest retention ops evidence: implemented
+- P44 digest retention admin visibility: implemented and protected
+- latest retained mailer ops action: `digest_history_cleanup:completed:send=false`
 
 ## Verification
 
-- API tests: `265 passed`
+- API tests: `266 passed`
 - smoke test: PASS
-- Huanshu local adapter: PASS including authenticated admin digest history counter
+- Huanshu local adapter: PASS including authenticated admin digest cleanup control
 - secondary QA plugins: Playwright/axe/pa11y PASS, 0 blockers
 - API/web/worker/postgres/redis: healthy
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P44 Mailer Ops Digest Retention Admin Visibility`.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P45 Mailer Ops Retention Agent Evidence`.
