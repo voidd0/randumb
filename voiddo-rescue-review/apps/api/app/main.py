@@ -47,6 +47,7 @@ from .economics import calculate_unit_economics, latest_economics_summary, run_e
 from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
 from .mailer_readiness import mailbox_health_score, run_clean_window_transition, sender_rotation_ready
+from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .language_gate import check_no_ai_public_language
@@ -499,6 +500,28 @@ async def mailbox_health_run(request: Request):
 @app.post("/admin/mailer/sender-rotation", dependencies=[Depends(require_admin)])
 def sender_rotation_run():
     return {"ok": True, "readiness": sender_rotation_ready()}
+
+
+@app.get("/admin/mailer/status", dependencies=[Depends(require_admin)])
+def mailer_status_run():
+    return {"ok": True, "status": mailer_status_snapshot()}
+
+
+@app.post("/admin/mailer/clean-window-recovery", dependencies=[Depends(require_admin)])
+async def mailer_clean_window_recovery_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "recovery": run_clean_window_recovery(int(payload.get("window_hours", 24)))}
+
+
+@app.post("/admin/mailer/learn-signals", dependencies=[Depends(require_admin)])
+async def mailer_signal_learning_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "learning": record_mail_signal_lessons(int(payload.get("window_hours", 24)))}
+
+
+@app.get("/admin/mailer/template-qa", dependencies=[Depends(require_admin)])
+def mailer_template_qa_run():
+    return {"ok": True, "template_qa": email_template_autonomy_qa()}
 
 
 @app.post("/admin/warmup/provider-spacing-plan", dependencies=[Depends(require_admin)])

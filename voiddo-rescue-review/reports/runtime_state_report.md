@@ -1,11 +1,10 @@
 # Runtime State Report
 
-Generated: 2026-05-26 18:58 IDT
+Generated: 2026-05-26 19:13 IDT
 
 ## Canonical Latest State
 
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- latest synced review HEAD before P12 export: `778971a8d01f54574cf57f6cd5540d0c8462fcc7`
 - checkout status: `READY`
 - mail auth status: `PASS`
 - latest mail QA decision: `PASS`
@@ -20,9 +19,15 @@ Generated: 2026-05-26 18:58 IDT
 - spam signal count, last 24h: `0`
 - launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-## Current Safe Action
+## Autonomous Mailer
 
-Wait until the recent bounce/DSN and SMTP rate-limit window clears, then rerun mail QA and provider-spacing apply gate. No cold outreach is allowed.
+- latest mailer status: `blocked_recent_mail_signals`
+- next safe action: `wait_until_recent_signal_window_clears`
+- clean-window recovery: `blocked_recent_signals`
+- recovery sends started: `false`
+- email template QA: PASS, `17` rendered samples checked
+- signal learning: active
+- daily loop agents executed: `19`
 
 ## Service Health
 
@@ -31,17 +36,6 @@ Wait until the recent bounce/DSN and SMTP rate-limit window clears, then rerun m
 - `voiddo_rescue_worker`: healthy
 - `voiddo_rescue_postgres`: healthy
 - `voiddo_rescue_redis`: healthy
-
-## P12 Agent State
-
-- `warmup_spacing_apply_gate_agent`: completed
-- apply decision: `blocked_safety_gate`
-- reason: recent mail signals
-- schedule applied: `false`
-- sends started by apply gate: `false`
-- daily loop agents executed: `16`
-- self-audit status: `needs_fix`
-- self-audit score: `60`
 
 ## Visual And Design QA
 
@@ -53,7 +47,7 @@ Wait until the recent bounce/DSN and SMTP rate-limit window clears, then rerun m
 
 ## Verification
 
-- API tests: `118 passed`
+- API tests: `126 passed`
 - smoke test: PASS
 - public health endpoints: PASS
 - admin auth route checked with bearer token

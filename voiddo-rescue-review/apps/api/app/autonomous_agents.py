@@ -11,6 +11,7 @@ from .economics import run_economics_audit
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
 from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
+from .mailer_autonomy import mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
@@ -88,6 +89,9 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "revenue_simulation_agent": lambda: run_synthetic_lead_simulation(int(payload.get("count", 25))),
         "mail_clean_window_agent": lambda: check_mail_clean_window(24),
         "mail_clean_window_transition_agent": lambda: run_clean_window_transition(24),
+        "mailer_status_agent": lambda: mailer_status_snapshot(),
+        "mail_signal_learning_agent": lambda: record_mail_signal_lessons(24),
+        "clean_window_recovery_agent": lambda: run_clean_window_recovery(24),
         "sender_rotation_readiness_agent": lambda: sender_rotation_ready(),
         "warmup_spacing_planner_agent": lambda: plan_provider_spaced_warmup(50, False),
         "warmup_spacing_apply_gate_agent": lambda: apply_provider_spacing_when_safe(50),
@@ -112,6 +116,9 @@ def run_daily_loop() -> dict[str, Any]:
         "outbound_mailer_gate_agent",
         "reply_action_agent",
         "mail_clean_window_transition_agent",
+        "mailer_status_agent",
+        "mail_signal_learning_agent",
+        "clean_window_recovery_agent",
         "sender_rotation_readiness_agent",
         "warmup_spacing_planner_agent",
         "warmup_spacing_apply_gate_agent",

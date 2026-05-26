@@ -1,6 +1,6 @@
-# Vøiddo Rescue P12 Review Notes
+# Vøiddo Rescue P13 Review Notes
 
-Generated: 2026-05-26 18:59 IDT
+Generated: 2026-05-26 19:14 IDT
 
 ## Source
 
@@ -8,9 +8,9 @@ Original runtime tree: `/opt/voiddo-rescue`
 Review folder: `voiddo-rescue-review/`
 Branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## P12 Summary
+## P13 Summary
 
-P12 adds a safe provider-spacing application gate and rollback support for the warmup calendar, expands synthetic revenue scenario tests, and keeps the autonomous mailer blocked on recent mail-signal risk.
+P13 adds the autonomous mailer control plane: mailer status snapshots, no-send clean-window recovery, mail-signal learning, template QA, protected admin endpoints, and daily-loop agents. It keeps sending blocked on recent bounce/DSN and SMTP rate-limit signals.
 
 ## Excluded From Review Tree And Export
 
@@ -26,7 +26,7 @@ No raw secrets, env files, mailbox passwords, private keys, virtualenvs, cache d
 
 ## Verification
 
-- API tests: `118 passed`
+- API tests: `126 passed`
 - smoke: PASS
 - Huanshu: PASS
 - extra QA plugins: PASS or non-blocking warning
