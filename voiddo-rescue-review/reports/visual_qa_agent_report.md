@@ -1,6 +1,6 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-26 22:59 IDT
+Generated: 2026-05-26 23:08 IDT
 
 ## Canonical Gate
 
@@ -69,4 +69,19 @@ The authenticated admin panel now reads persisted `mailer_ops_runs` history for 
 - unresolved template variables: `false`
 - raw recipient exposure: `false`
 - no-send status visible: `true`
+- blocking visual issues: `0`
+
+## P33 Notes
+
+The authenticated admin panel now displays real/synthetic mailer ops run separation and unsafe-action block counts.
+
+- Huanshu local adapter: PASS
+- Playwright screenshots: 2, both nonblank
+- `axe-core-playwright`: PASS, 0 violations
+- `pa11y`: PASS, 0 issues
+- horizontal overflow: `false`
+- broken images: `0`
+- unresolved template variables: `false`
+- raw recipient exposure: `false`
+- real/synthetic counters visible: `true`
 - blocking visual issues: `0`

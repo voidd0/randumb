@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 22:59 IDT
+Generated: 2026-05-26 23:08 IDT
 
 ## Canonical Latest State
 
@@ -70,10 +70,11 @@ Generated: 2026-05-26 22:59 IDT
 - P31 ops action events after cleanup: `0`
 - P32 mailer ops result persistence: implemented
 - P32 mailer ops run rows after cleanup: `0`
+- P33 mailer ops real/synthetic retention: implemented
 
 ## Verification
 
-- API tests: `226 passed`
+- API tests: `230 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including authenticated admin mailer ops controls
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
@@ -81,4 +82,4 @@ Generated: 2026-05-26 22:59 IDT
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P33 Mailer Ops Result Retention And Audit Trail`.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P34 Mailer Ops Daily Digest Hook`.

@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 22:59 IDT
+Generated: 2026-05-26 23:08 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `226 passed`
+- API tests: `230 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -78,6 +78,10 @@ PASS
 - ops summary omits raw recipients: PASS
 - unknown ops action persists as blocked: PASS
 - ops summary endpoint returns persisted runs: PASS
+- synthetic cleanup keeps real runs: PASS
+- real ops runs remain sanitized: PASS
+- summary separates real and synthetic counts: PASS
+- unknown ops actions remain blocked in retention summary: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

@@ -53,7 +53,7 @@ from .mailer_control_room import mailer_control_room_summary, monitoring_control
 from .mailer_autonomy_ledger import mailer_autonomy_ledger
 from .mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, process_mailer_action_queue, send_customer_mail, transport_dry_run
 from .mailer_closed_loop import mailer_closed_loop_summary, run_mailer_closed_loop
-from .mailer_ops_actions import mailer_ops_action_summary, run_mailer_ops_action
+from .mailer_ops_actions import cleanup_synthetic_mailer_ops_runs, mailer_ops_action_summary, run_mailer_ops_action
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
@@ -632,7 +632,20 @@ def mailer_ops_actions_get():
 @app.post("/admin/mailer/ops-actions", dependencies=[Depends(require_admin)])
 async def mailer_ops_actions_post(request: Request):
     payload = await request.json()
-    return {"ok": True, "ops_action": run_mailer_ops_action(str(payload.get("action", "")), int(payload.get("limit", 10)))}
+    return {
+        "ok": True,
+        "ops_action": run_mailer_ops_action(
+            str(payload.get("action", "")),
+            int(payload.get("limit", 10)),
+            str(payload.get("source", "admin")),
+            payload.get("is_synthetic"),
+        ),
+    }
+
+
+@app.post("/admin/mailer/ops-actions/cleanup-synthetic", dependencies=[Depends(require_admin)])
+def mailer_ops_actions_cleanup_synthetic():
+    return {"ok": True, "cleanup": cleanup_synthetic_mailer_ops_runs()}
 
 
 @app.post("/admin/mailer/owner-status-report", dependencies=[Depends(require_admin)])

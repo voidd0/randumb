@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -27,8 +28,18 @@ def _sanitize_result(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def run_mailer_ops_action(action: str, limit: int = 10) -> dict[str, Any]:
+def _is_synthetic(source: str, is_synthetic: bool | None = None) -> bool:
+    if is_synthetic is not None:
+        return bool(is_synthetic)
+    if source == "pytest":
+        return True
+    return bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+
+def run_mailer_ops_action(action: str, limit: int = 10, source: str = "admin", is_synthetic: bool | None = None) -> dict[str, Any]:
     action = str(action or "").strip().lower()
+    source = str(source or "admin").strip().lower()
+    synthetic = _is_synthetic(source, is_synthetic)
     limit = max(1, min(int(limit or 10), 25))
     if action not in ALLOWED_OPS_ACTIONS:
         result = {
@@ -106,6 +117,18 @@ def run_mailer_ops_action(action: str, limit: int = 10) -> dict[str, Any]:
             bool(result.get("live_outreach_allowed")),
         ),
     )
+    execute(
+        "UPDATE mailer_ops_runs SET source = %s, is_synthetic = %s WHERE id = %s",
+        (source, synthetic, run["id"]),
+    )
+    run = fetch_one(
+        """
+        SELECT id, action, status, source, is_synthetic, raw_recipient_addresses_included, send_mail, smtp_called, live_outreach_allowed, created_at
+        FROM mailer_ops_runs
+        WHERE id = %s
+        """,
+        (run["id"],),
+    )
     event = execute(
         """
         INSERT INTO system_events(type, severity, message, payload_json)
@@ -126,7 +149,7 @@ def mailer_ops_action_summary(limit: int = 8) -> dict[str, Any]:
         dict(row)
         for row in fetch_all(
             """
-            SELECT id, action, status, raw_recipient_addresses_included, send_mail, smtp_called, live_outreach_allowed, created_at
+            SELECT id, action, status, source, is_synthetic, raw_recipient_addresses_included, send_mail, smtp_called, live_outreach_allowed, created_at
             FROM mailer_ops_runs
             ORDER BY created_at DESC
             LIMIT %s
@@ -147,13 +170,36 @@ def mailer_ops_action_summary(limit: int = 8) -> dict[str, Any]:
     ]
     total_row = fetch_one("SELECT count(*) AS count FROM mailer_ops_runs")
     total = int(total_row["count"]) if total_row else 0
+    real_row = fetch_one("SELECT count(*) AS count FROM mailer_ops_runs WHERE NOT is_synthetic")
+    synthetic_row = fetch_one("SELECT count(*) AS count FROM mailer_ops_runs WHERE is_synthetic")
+    blocked_row = fetch_one("SELECT count(*) AS count FROM mailer_ops_runs WHERE status = 'blocked'")
+    latest_real = fetch_one(
+        """
+        SELECT id, action, status, source, raw_recipient_addresses_included, send_mail, smtp_called, live_outreach_allowed, created_at
+        FROM mailer_ops_runs
+        WHERE NOT is_synthetic
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
     return json_safe(
         {
             "latest": latest,
             "by_action": by_action,
             "count": total,
+            "real_count": int(real_row["count"]) if real_row else 0,
+            "synthetic_count": int(synthetic_row["count"]) if synthetic_row else 0,
+            "blocked_unsafe_count": int(blocked_row["count"]) if blocked_row else 0,
+            "latest_real": dict(latest_real) if latest_real else None,
             "send_mail": False,
             "live_outreach_allowed": False,
             "raw_recipient_addresses_included": False,
         }
     )
+
+
+def cleanup_synthetic_mailer_ops_runs() -> dict[str, Any]:
+    row = execute("DELETE FROM mailer_ops_runs WHERE is_synthetic RETURNING 1")
+    _ = row
+    summary = mailer_ops_action_summary()
+    return json_safe({"cleaned": True, "summary": summary, "send_mail": False, "live_outreach_allowed": False})
