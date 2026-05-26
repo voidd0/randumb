@@ -11,6 +11,7 @@ from .email_templates import render_all_samples
 from .economics import run_economics_audit
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
+from .mailer_control_room import write_owner_status_report
 from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mailer_closed_loop import run_mailer_closed_loop
@@ -90,6 +91,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "autonomous_mailer_agent": lambda: run_autonomous_mailer_cycle(),
         "autonomous_mailer_executor_agent": lambda: run_mailer_closed_loop(int(payload.get("limit", 10))),
         "customer_mail_simulation_agent": lambda: run_customer_mail_simulation(True),
+        "mailer_digest_agent": lambda: write_owner_status_report(send_if_safe=False),
         "outbound_mailer_gate_agent": lambda: evaluate_outbound_message({"email": "sample@example.test", "template_key": "first_audit_notice"}),
         "reply_action_agent": lambda: plan_reply_action("Price", "How much does it cost?", "audit@voiddorescue.com"),
         "quality_plugin_agent": lambda: latest_quality_summary(),
@@ -128,6 +130,7 @@ def run_daily_loop() -> dict[str, Any]:
         "autonomous_mailer_agent",
         "autonomous_mailer_executor_agent",
         "customer_mail_simulation_agent",
+        "mailer_digest_agent",
         "outbound_mailer_gate_agent",
         "reply_action_agent",
         "mail_clean_window_transition_agent",

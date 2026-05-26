@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from app.autonomous_agents import run_agent, run_daily_loop
+from app.db import execute, fetch_one
+
+
+def _cleanup(action_id: str | None = None) -> None:
+    if action_id:
+        execute("DELETE FROM mailer_action_queue WHERE id = %s", (action_id,))
+    execute("DELETE FROM mailer_action_queue WHERE payload_json::text LIKE %s", ("%daily_digest_hook%",))
+
+
+def test_mailer_digest_agent_exists_and_generates_report():
+    run = run_agent("mailer_digest_agent")
+    result = run["result_json"]
+    assert run["status"] == "completed"
+    assert result["email_sent"] is False
+    assert Path(result["path"]).exists()
+    assert result["owner_report_action"]["action_type"] == "owner_report"
+    _cleanup(result["owner_report_action"]["id"])
+
+
+def test_mailer_digest_agent_queues_no_send_owner_report_action():
+    run = run_agent("mailer_digest_agent")
+    action = run["result_json"]["owner_report_action"]
+    row = fetch_one("SELECT status, recipient_hash, payload_json FROM mailer_action_queue WHERE id = %s", (action["id"],))
+    assert row["status"] == "queued"
+    assert row["recipient_hash"] == ""
+    assert row["payload_json"]["payload_json"]["email_sent"] is False
+    _cleanup(action["id"])
+
+
+def test_daily_loop_includes_mailer_digest_agent():
+    result = run_daily_loop()
+    agents = [item["agent"] for item in result["runs"]]
+    assert "mailer_digest_agent" in agents
+    digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
+    assert digest_runs[0]["result_json"]["email_sent"] is False
+    assert result["live_outreach"] is False
+    _cleanup(digest_runs[0]["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_digest_agent_does_not_send_warmup_or_outreach():
+    run = run_agent("mailer_digest_agent")
+    result = run["result_json"]
+    assert result["state"]["warmup_sent_count"] == 0
+    assert result["state"]["live_outreach_sent_count"] == 0
+    assert result["email_sent"] is False
+    _cleanup(result["owner_report_action"]["id"])
+
+
+def test_mailer_digest_agent_records_agent_run_evidence():
+    run = run_agent("mailer_digest_agent")
+    row = fetch_one("SELECT agent, status FROM agent_runs WHERE id = %s", (run["id"],))
+    assert row["agent"] == "mailer_digest_agent"
+    assert row["status"] == "completed"
+    _cleanup(run["result_json"]["owner_report_action"]["id"])
