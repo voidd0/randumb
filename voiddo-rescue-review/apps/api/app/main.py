@@ -52,6 +52,7 @@ from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot,
 from .mailer_control_room import mailer_control_room_summary, monitoring_control_room_summary, write_owner_status_report
 from .mailer_autonomy_ledger import mailer_autonomy_ledger
 from .mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, process_mailer_action_queue, send_customer_mail, transport_dry_run
+from .mailer_closed_loop import mailer_closed_loop_summary, run_mailer_closed_loop
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
@@ -602,6 +603,17 @@ async def mailer_action_queue_transport_dry_run(request: Request):
 async def mailer_action_queue_send_customer_mail(request: Request):
     payload = await request.json()
     return {"ok": True, "result": send_customer_mail(int(payload.get("limit", 10)))}
+
+
+@app.get("/admin/mailer/closed-loop", dependencies=[Depends(require_admin)])
+def mailer_closed_loop_get():
+    return {"ok": True, "closed_loop": mailer_closed_loop_summary()}
+
+
+@app.post("/admin/mailer/closed-loop/run", dependencies=[Depends(require_admin)])
+async def mailer_closed_loop_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "result": run_mailer_closed_loop(int(payload.get("limit", 10)))}
 
 
 @app.post("/admin/mailer/owner-status-report", dependencies=[Depends(require_admin)])

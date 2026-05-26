@@ -35,24 +35,84 @@ def _count(sql: str, params: tuple = ()) -> int:
     return int(row["count"]) if row else 0
 
 
+def _idempotency_key(action_type: str, recipient_hash: str, template_key: str, payload: dict[str, Any]) -> str:
+    if action_type not in CUSTOMER_MAIL_ACTIONS:
+        return ""
+    parts = [
+        action_type,
+        recipient_hash,
+        template_key or "",
+        str(payload.get("customer_id", "")),
+        str(payload.get("source_event", "")),
+        str(payload.get("paddle_transaction_id", "")),
+        str(payload.get("paddle_subscription_id", "")),
+        str(payload.get("fix_request_id", "")),
+        str(payload.get("mode", "")),
+        str(payload.get("product_key", "")),
+    ]
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
+def record_send_ledger(action: dict[str, Any], status: str, gate: dict[str, Any] | None = None, result: dict[str, Any] | None = None) -> dict[str, Any]:
+    row = execute(
+        """
+        INSERT INTO mailer_send_ledger(action_id, action_type, mailbox, recipient_hash, template_key, status, gate_result_json, result_json)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (action_id) DO UPDATE
+          SET status = EXCLUDED.status,
+              gate_result_json = EXCLUDED.gate_result_json,
+              result_json = EXCLUDED.result_json,
+              updated_at = now()
+        RETURNING id, action_id, action_type, mailbox, recipient_hash, template_key, status, gate_result_json, result_json, created_at, updated_at
+        """,
+        (
+            action["id"],
+            action["action_type"],
+            action.get("mailbox", ""),
+            action.get("recipient_hash", ""),
+            action.get("template_key", ""),
+            status,
+            Jsonb(json_safe(gate or {})),
+            Jsonb(json_safe(result or {})),
+        ),
+    )
+    return json_safe(dict(row))
+
+
 def enqueue_mailer_action(payload: dict[str, Any]) -> dict[str, Any]:
     action_type = str(payload.get("action_type", "owner_report")).strip().lower()
     risk_level = str(payload.get("risk_level") or ("HIGH_RISK" if action_type in HIGH_RISK_ACTIONS else "MEDIUM_RISK" if action_type in MEDIUM_RISK_ACTIONS else "SAFE_AUTO"))
     recipient_hash = _hash_recipient(str(payload.get("recipient_email", "")))
+    template_key = str(payload.get("template_key", ""))
+    safe_payload = json_safe({k: v for k, v in payload.items() if k != "recipient_email"})
+    idempotency_key = _idempotency_key(action_type, recipient_hash, template_key, safe_payload)
+    if idempotency_key:
+        existing = fetch_one(
+            """
+            SELECT id, action_type, risk_level, status, mailbox, recipient_hash, template_key, idempotency_key,
+                   send_after, attempt_count, created_at, updated_at
+            FROM mailer_action_queue
+            WHERE idempotency_key = %s
+            """,
+            (idempotency_key,),
+        )
+        if existing:
+            return json_safe(dict(existing))
     row = execute(
         """
-        INSERT INTO mailer_action_queue(action_type, risk_level, mailbox, recipient_hash, template_key, payload_json, send_after)
-        VALUES (%s, %s, %s, %s, %s, %s, NULLIF(%s, '')::timestamptz)
-        RETURNING id, action_type, risk_level, status, mailbox, recipient_hash, template_key, send_after, attempt_count, created_at, updated_at
+        INSERT INTO mailer_action_queue(action_type, risk_level, mailbox, recipient_hash, template_key, payload_json, send_after, idempotency_key)
+        VALUES (%s, %s, %s, %s, %s, %s, NULLIF(%s, '')::timestamptz, %s)
+        RETURNING id, action_type, risk_level, status, mailbox, recipient_hash, template_key, idempotency_key, send_after, attempt_count, created_at, updated_at
         """,
         (
             action_type,
             risk_level,
             payload.get("mailbox", "audit@voiddorescue.com"),
             recipient_hash,
-            payload.get("template_key", ""),
-            Jsonb(json_safe({k: v for k, v in payload.items() if k != "recipient_email"})),
+            template_key,
+            Jsonb(safe_payload),
             payload.get("send_after", ""),
+            idempotency_key,
         ),
     )
     return json_safe(dict(row))
@@ -307,6 +367,7 @@ def send_customer_mail(limit: int = 10) -> dict[str, Any]:
                 """,
                 (Jsonb(json_safe(gate)), Jsonb(json_safe(result)), row["id"]),
             )
+            record_send_ledger(dict(updated), "transport_blocked", gate, result)
             actions.append(dict(updated))
             continue
         try:
@@ -332,6 +393,7 @@ def send_customer_mail(limit: int = 10) -> dict[str, Any]:
                     """,
                     (Jsonb(json_safe({**gate, "transport_blocker": result["blockers"][0]})), Jsonb(json_safe(result)), row["id"]),
                 )
+                record_send_ledger(dict(updated), "transport_blocked", {**gate, "transport_blocker": result["blockers"][0]}, result)
                 actions.append(dict(updated))
                 continue
             result = {
@@ -354,6 +416,7 @@ def send_customer_mail(limit: int = 10) -> dict[str, Any]:
                 (Jsonb(json_safe(result)), row["id"]),
             )
             record_throttle_send("customer_mail", row.get("mailbox", "support@voiddorescue.com"), "customer_mail_sent")
+            record_send_ledger(dict(updated), "sent", gate, result)
             actions.append(dict(updated))
         except Exception as exc:
             result = {
@@ -376,6 +439,7 @@ def send_customer_mail(limit: int = 10) -> dict[str, Any]:
                 """,
                 (Jsonb(json_safe(result)), row["id"]),
             )
+            record_send_ledger(dict(updated), "failed", gate, result)
             actions.append(dict(updated))
     return json_safe(
         {
@@ -425,6 +489,12 @@ def mailer_action_queue_summary() -> dict[str, Any]:
             "transport_blocked": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'transport_blocked'"),
             "failed": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'failed'"),
             "dry_run_recorded": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'dry_run_recorded'"),
+            "send_ledger": {
+                "total": _count("SELECT count(*) FROM mailer_send_ledger"),
+                "sent": _count("SELECT count(*) FROM mailer_send_ledger WHERE status = 'sent'"),
+                "blocked": _count("SELECT count(*) FROM mailer_send_ledger WHERE status = 'transport_blocked'"),
+                "failed": _count("SELECT count(*) FROM mailer_send_ledger WHERE status = 'failed'"),
+            },
             "ledger_blockers": ledger["gates"]["blockers"],
             "raw_recipient_addresses_included": False,
             "send_mail": False,

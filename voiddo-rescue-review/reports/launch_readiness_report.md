@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-26 21:50 IDT
+Generated: 2026-05-26 22:01 IDT
 
 ## Decision
 
@@ -13,6 +13,7 @@ P23 connected Paddle provisioning to customer mail actions for onboarding, fix-r
 P24 added customer-mail send-ready evidence under clean mocked gates while keeping real transport disabled.
 P25 added customer-mail transport dry-run records. The endpoint is protected and does not call SMTP.
 P26 added the protected customer-mail real-send gate. Real SMTP transport remains blocked by default and requires explicit flags plus clean mail QA/signals/throttle/template QA.
+P27 added the autonomous mailer closed-loop executor, idempotency keys, and send ledger. The executor records evidence but still sends nothing under default gates.
 
 ## Passed Gates
 
@@ -28,11 +29,13 @@ P26 added the protected customer-mail real-send gate. Real SMTP transport remain
 - customer mail send-ready gate: implemented
 - customer mail transport dry-run: implemented
 - customer mail real-send gate: implemented and disabled by default
+- autonomous mailer closed-loop executor: implemented
+- customer mail send ledger: implemented
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: PASS or non-blocking warning
-- API tests: `196 passed`
+- API tests: `202 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -47,6 +50,7 @@ P26 added the protected customer-mail real-send gate. Real SMTP transport remain
 - mailer ledger blockers: `outreach_paused_env`, `first_live_send_flag_false`, `auto_replies_paused_env`, `recent_bounce_or_dsn`, `recent_rate_limit`
 - customer mail sending flag: `false`
 - customer mail real-send flag: `false`
+- recent mailer send ledger rows after test cleanup: `0`
 
 ## Next Exact Action
 

@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 21:50 IDT
+Generated: 2026-05-26 22:01 IDT
 
 ## Canonical Latest State
 
@@ -56,10 +56,13 @@ Generated: 2026-05-26 21:50 IDT
 - customer mail sending flag: `false`
 - customer mail real-send flag: `false`
 - P26 real transport endpoint: implemented and protected
+- P27 closed-loop executor: implemented and protected
+- mailer send ledger rows: `0`
+- autonomous mailer executor agent runs: `7`
 
 ## Verification
 
-- API tests: `196 passed`
+- API tests: `202 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including admin transition panel
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers

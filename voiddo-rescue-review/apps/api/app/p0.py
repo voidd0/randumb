@@ -427,13 +427,29 @@ def enqueue_customer_mail_action(
         "source_event": source_event,
         **(payload or {}),
     }
+    idempotency_parts = [
+        action_type,
+        _customer_mail_hash(customer_email),
+        template_key,
+        customer_id,
+        source_event,
+        str(safe_payload.get("paddle_transaction_id", "")),
+        str(safe_payload.get("paddle_subscription_id", "")),
+        str(safe_payload.get("fix_request_id", "")),
+        str(safe_payload.get("mode", "")),
+        product_key,
+    ]
+    idempotency_key = hashlib.sha256("|".join(idempotency_parts).encode("utf-8")).hexdigest()
+    existing = fetch_one("SELECT id FROM mailer_action_queue WHERE idempotency_key = %s", (idempotency_key,))
+    if existing:
+        return str(existing["id"])
     row = execute(
         """
-        INSERT INTO mailer_action_queue(action_type, risk_level, mailbox, recipient_hash, template_key, payload_json)
-        VALUES (%s, 'SAFE_AUTO', 'support@voiddorescue.com', %s, %s, %s)
+        INSERT INTO mailer_action_queue(action_type, risk_level, mailbox, recipient_hash, template_key, payload_json, idempotency_key)
+        VALUES (%s, 'SAFE_AUTO', 'support@voiddorescue.com', %s, %s, %s, %s)
         RETURNING id
         """,
-        (action_type, _customer_mail_hash(customer_email), template_key, Jsonb(json_safe(safe_payload))),
+        (action_type, _customer_mail_hash(customer_email), template_key, Jsonb(json_safe(safe_payload)), idempotency_key),
     )
     return str(row["id"])
 

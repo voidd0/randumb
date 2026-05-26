@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 21:50 IDT
+Generated: 2026-05-26 22:01 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `196 passed`
+- API tests: `202 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -48,6 +48,12 @@ PASS
 - mocked customer SMTP send records sent: PASS
 - customer SMTP failure records failed: PASS
 - customer mail real-send summaries omit raw email: PASS
+- customer mail idempotency dedupes: PASS
+- customer mail send ledger records blocked transport: PASS
+- customer mail send ledger is idempotent per action: PASS
+- closed-loop executor records agent run: PASS
+- closed-loop summary and endpoint omit raw recipients: PASS
+- closed-loop endpoint requires auth: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 
