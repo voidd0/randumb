@@ -47,4 +47,7 @@ Confirmation:
 - GitHub `main`/`master` is not modified; this review content lives on the dedicated branch only.
 
 Commit SHA:
-- Artifact import commit: 
+- Artifact import commit: `590b1519a8e05e9de92351f61710bfb3532f3c8c`
+
+Note:
+- The final branch HEAD commit SHA is returned in the operator response. A commit cannot contain its own final SHA without changing that SHA.
