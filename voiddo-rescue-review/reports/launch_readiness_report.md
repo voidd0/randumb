@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 02:31 IDT
+Generated: 2026-05-27 02:49 IDT
 
 ## Decision
 
@@ -20,8 +20,9 @@ Generated: 2026-05-27 02:31 IDT
 - latest admin visual gate from P52: `PASS`
 - mailer daily retention-history evidence: `PASS`
 - protected admin daily digest evidence: `PASS`
-- tests: `284 passed`
-- smoke: `284 passed, ok`
+- mailer digest trend guard: `PASS_NO_SEND`
+- tests: `287 passed`
+- smoke: `287 passed, ok`
 
 ## Current Runtime Counts
 
@@ -30,6 +31,7 @@ Generated: 2026-05-27 02:31 IDT
 - mailer queue rows: `0`
 - mailer retention history rows: `1`
 - mailer digest history rows: `1`
+- mailer digest trend regressions: `0`
 
 ## Remaining Launch Gates
 

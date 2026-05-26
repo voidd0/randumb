@@ -1,30 +1,33 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 02:31 IDT
+Generated: 2026-05-27 02:49 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - review folder: `voiddo-rescue-review/`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- pass: `P52 mailer digest retention-history admin visibility`
+- pass: `P53 mailer digest trend guard`
 
-## P52 Summary
+## P53 Summary
 
-- Protected admin Daily Digest Evidence now displays sanitized mailer ops retention-history evidence.
-- The digest surface shows ops retention row count, latest no-send state, retained real count, raw-recipient omission, and secret omission.
-- Backend tests prove digest summary exposes the retention-history evidence without enabling SMTP, live outreach, or raw recipient data.
+- Added a protected no-send mailer digest trend guard.
+- The guard compares recent digest history, ops-retention history, and queue hygiene.
+- It fails closed if digest history shows email/warmup/live-outreach sends, if retention history shows SMTP/live flags, if privacy/secret flags regress, or if queue/ledger/resolver rows are present.
+
+## P52 Carry-Forward
+
+- Protected admin Daily Digest Evidence displays sanitized ops-retention history evidence.
+- Huanshu and secondary visual QA passed for the admin surface in P52.
 
 ## Verification
 
-- targeted P52 tests: `34 passed`
-- full API tests: `284 passed`
-- smoke tests: `284 passed, ok`
-- Next production build: `PASS`
-- Huanshu visual gate: `PASS`
-- Playwright desktop/mobile: `PASS`
-- axe violations: `0`
-- pa11y issues: `0`
+- targeted P53 tests: `39 passed`
+- full API tests: `287 passed`
+- smoke tests: `287 passed, ok`
+- P53 runtime endpoint decision: `PASS_NO_SEND`
+- P53 runtime regressions: `0`
+- latest Huanshu visual gate: `PASS` from P52 admin UI change
 
 ## Runtime Counts After Cleanup
 

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
-from app.mailer_control_room import cleanup_mailer_digest_history, mailer_digest_summary, write_owner_status_report
+from app.mailer_control_room import cleanup_mailer_digest_history, mailer_digest_summary, mailer_digest_trend_guard, write_owner_status_report
 from app.mailer_ops_actions import run_mailer_ops_action
 from app.main import app
 
@@ -16,6 +16,12 @@ client = TestClient(app)
 
 def admin_headers() -> dict[str, str]:
     return {"X-Admin-Token": os.environ["ADMIN_AUTH_TOKEN"]}
+
+
+def clean_trend_guard_runtime() -> None:
+    execute("DELETE FROM mailer_send_ledger")
+    execute("DELETE FROM recipient_resolver_audit")
+    execute("DELETE FROM mailer_action_queue")
 
 
 def test_digest_summary_endpoint_requires_auth_and_exposes_evidence():
@@ -142,6 +148,73 @@ def test_digest_summary_endpoint_exposes_ops_retention_history_behind_auth():
     assert history["secrets_included"] is False
     execute("DELETE FROM mailer_ops_retention_reports WHERE id = %s", (run["result_json"]["ops_retention_agent_report"]["history_id"],))
     execute("DELETE FROM agent_runs WHERE id = %s", (run["id"],))
+    execute("DELETE FROM mailer_ops_runs WHERE id = %s", (real["run"]["id"],))
+
+
+def test_digest_trend_guard_passes_clean_no_send_history():
+    clean_trend_guard_runtime()
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    retention_run = run_agent("mailer_ops_retention_agent")
+    digest_run = run_agent("mailer_digest_agent")
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (digest_run["result_json"]["owner_report_action"]["id"],))
+    guard = mailer_digest_trend_guard()
+    assert guard["decision"] == "PASS_NO_SEND"
+    assert guard["regressions"] == []
+    assert guard["send_mail"] is False
+    assert guard["smtp_called"] is False
+    assert guard["live_outreach_allowed"] is False
+    assert guard["raw_recipient_addresses_included"] is False
+    assert guard["secrets_included"] is False
+    assert guard["queue_hygiene"]["mailer_action_queue_rows"] == 0
+    assert "owner-private@" not in str(guard)
+    assert "SMTP_PASSWORD" not in str(guard)
+    execute("DELETE FROM mailer_digest_reports WHERE id = %s", (digest_run["result_json"]["digest_agent_report"]["history_id"],))
+    execute("DELETE FROM mailer_ops_retention_reports WHERE id = %s", (retention_run["result_json"]["ops_retention_agent_report"]["history_id"],))
+    execute("DELETE FROM agent_runs WHERE id IN (%s, %s)", (digest_run["id"], retention_run["id"]))
+    execute("DELETE FROM mailer_ops_runs WHERE id = %s", (real["run"]["id"],))
+
+
+def test_digest_trend_guard_blocks_queue_regression():
+    clean_trend_guard_runtime()
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    retention_run = run_agent("mailer_ops_retention_agent")
+    digest_run = run_agent("mailer_digest_agent")
+    action = execute(
+        """
+        INSERT INTO mailer_action_queue(action_type, risk_level, status, payload_json)
+        VALUES ('owner_report', 'SAFE_AUTO', 'queued', '{"source":"p53-trend-regression"}'::jsonb)
+        RETURNING id
+        """
+    )
+    guard = mailer_digest_trend_guard()
+    assert guard["decision"] == "FAIL_BLOCK_LAUNCH"
+    assert "mailer_action_queue_not_empty" in guard["regressions"]
+    assert guard["send_mail"] is False
+    execute("DELETE FROM mailer_action_queue WHERE id IN (%s, %s)", (action["id"], digest_run["result_json"]["owner_report_action"]["id"]))
+    execute("DELETE FROM mailer_digest_reports WHERE id = %s", (digest_run["result_json"]["digest_agent_report"]["history_id"],))
+    execute("DELETE FROM mailer_ops_retention_reports WHERE id = %s", (retention_run["result_json"]["ops_retention_agent_report"]["history_id"],))
+    execute("DELETE FROM agent_runs WHERE id IN (%s, %s)", (digest_run["id"], retention_run["id"]))
+    execute("DELETE FROM mailer_ops_runs WHERE id = %s", (real["run"]["id"],))
+
+
+def test_digest_trend_guard_endpoint_requires_auth_and_is_no_send():
+    clean_trend_guard_runtime()
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    retention_run = run_agent("mailer_ops_retention_agent")
+    digest_run = run_agent("mailer_digest_agent")
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (digest_run["result_json"]["owner_report_action"]["id"],))
+    assert client.get("/admin/mailer/digest-trend-guard").status_code == 401
+    response = client.get("/admin/mailer/digest-trend-guard", headers=admin_headers())
+    assert response.status_code == 200
+    guard = response.json()["trend_guard"]
+    assert guard["decision"] == "PASS_NO_SEND"
+    assert guard["send_mail"] is False
+    assert guard["live_outreach_allowed"] is False
+    assert guard["raw_recipient_addresses_included"] is False
+    assert guard["secrets_included"] is False
+    execute("DELETE FROM mailer_digest_reports WHERE id = %s", (digest_run["result_json"]["digest_agent_report"]["history_id"],))
+    execute("DELETE FROM mailer_ops_retention_reports WHERE id = %s", (retention_run["result_json"]["ops_retention_agent_report"]["history_id"],))
+    execute("DELETE FROM agent_runs WHERE id IN (%s, %s)", (digest_run["id"], retention_run["id"]))
     execute("DELETE FROM mailer_ops_runs WHERE id = %s", (real["run"]["id"],))
 
 

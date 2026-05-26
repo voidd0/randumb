@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-27 02:31 IDT
+Generated: 2026-05-27 02:49 IDT
 
 ## Canonical Latest State
 
@@ -25,6 +25,8 @@ Generated: 2026-05-27 02:31 IDT
 - daily digest admin surfaces ops retention history rows: `true`
 - daily digest admin surfaces ops retention no-send state: `true`
 - daily digest admin surfaces ops retention privacy/secrets flags: `true`
+- mailer digest trend guard decision: `PASS_NO_SEND`
+- mailer digest trend guard regressions: `0`
 - daily loop surfaces retention history evidence: `true`
 - owner report includes retention history evidence: `true`
 - raw recipient addresses included: `false`
@@ -40,9 +42,9 @@ Generated: 2026-05-27 02:31 IDT
 
 ## Verification
 
-- targeted P52 digest/admin tests: `34 passed`
-- API tests: `284 passed`
-- smoke test: `284 passed, ok`
+- targeted P53 digest/admin/trend tests: `39 passed`
+- API tests: `287 passed`
+- smoke test: `287 passed, ok`
 - Next production build: `PASS`
 - Huanshu admin visual gate: `PASS`
 - Playwright desktop/mobile + axe + pa11y: `PASS`

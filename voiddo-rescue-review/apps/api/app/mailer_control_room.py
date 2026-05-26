@@ -217,6 +217,102 @@ def mailer_digest_summary() -> dict[str, Any]:
     )
 
 
+def mailer_digest_trend_guard(limit: int = 8) -> dict[str, Any]:
+    capped = max(1, min(int(limit or 8), 25))
+    digest_rows = _rows(
+        """
+        SELECT id, agent_run_id, report_path, owner_report_action_id, email_sent,
+               warmup_sent_count, live_outreach_sent_count, bounce_or_dsn_count_24h,
+               rate_limit_signal_count_24h, blockers_json, created_at
+        FROM mailer_digest_reports
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (capped,),
+    )
+    retention_rows = _rows(
+        """
+        SELECT id, agent_run_id, report_path, deleted_synthetic_count, retained_real_count,
+               retained_synthetic_count, send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM mailer_ops_retention_reports
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (capped,),
+    )
+    digest_count = fetch_one("SELECT count(*) AS count FROM mailer_digest_reports")
+    retention_count = fetch_one("SELECT count(*) AS count FROM mailer_ops_retention_reports")
+    action_queue = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
+    send_ledger = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
+    resolver_audit = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
+
+    regressions: list[str] = []
+    if not digest_rows:
+        regressions.append("missing_digest_history")
+    if not retention_rows:
+        regressions.append("missing_ops_retention_history")
+    if any(bool(row.get("email_sent")) for row in digest_rows):
+        regressions.append("digest_history_email_sent")
+    if any(int(row.get("warmup_sent_count") or 0) > 0 for row in digest_rows):
+        regressions.append("digest_history_warmup_sent")
+    if any(int(row.get("live_outreach_sent_count") or 0) > 0 for row in digest_rows):
+        regressions.append("digest_history_live_outreach_sent")
+    if any(bool(row.get("send_mail")) for row in retention_rows):
+        regressions.append("ops_retention_send_mail_true")
+    if any(bool(row.get("smtp_called")) for row in retention_rows):
+        regressions.append("ops_retention_smtp_called")
+    if any(bool(row.get("live_outreach_allowed")) for row in retention_rows):
+        regressions.append("ops_retention_live_outreach_allowed")
+    if any(bool(row.get("raw_recipient_addresses_included")) for row in retention_rows):
+        regressions.append("ops_retention_raw_recipients")
+    if any(bool(row.get("secrets_included")) for row in retention_rows):
+        regressions.append("ops_retention_secrets")
+    if int((action_queue or {}).get("count", 0) or 0) > 0:
+        regressions.append("mailer_action_queue_not_empty")
+    if int((send_ledger or {}).get("count", 0) or 0) > 0:
+        regressions.append("mailer_send_ledger_not_empty")
+    if int((resolver_audit or {}).get("count", 0) or 0) > 0:
+        regressions.append("recipient_resolver_audit_not_empty")
+
+    decision = "PASS_NO_SEND" if not regressions else "FAIL_BLOCK_LAUNCH"
+    return json_safe(
+        {
+            "decision": decision,
+            "regressions": regressions,
+            "limit": capped,
+            "digest_history": {
+                "count": int((digest_count or {}).get("count", 0) or 0),
+                "rows_checked": len(digest_rows),
+                "latest": digest_rows[0] if digest_rows else None,
+                "email_sent_seen": any(bool(row.get("email_sent")) for row in digest_rows),
+                "warmup_sent_seen": any(int(row.get("warmup_sent_count") or 0) > 0 for row in digest_rows),
+                "live_outreach_sent_seen": any(int(row.get("live_outreach_sent_count") or 0) > 0 for row in digest_rows),
+            },
+            "ops_retention_history": {
+                "count": int((retention_count or {}).get("count", 0) or 0),
+                "rows_checked": len(retention_rows),
+                "latest": retention_rows[0] if retention_rows else None,
+                "send_mail_seen": any(bool(row.get("send_mail")) for row in retention_rows),
+                "smtp_called_seen": any(bool(row.get("smtp_called")) for row in retention_rows),
+                "live_outreach_allowed_seen": any(bool(row.get("live_outreach_allowed")) for row in retention_rows),
+                "raw_recipient_addresses_included": any(bool(row.get("raw_recipient_addresses_included")) for row in retention_rows),
+                "secrets_included": any(bool(row.get("secrets_included")) for row in retention_rows),
+            },
+            "queue_hygiene": {
+                "mailer_action_queue_rows": int((action_queue or {}).get("count", 0) or 0),
+                "mailer_send_ledger_rows": int((send_ledger or {}).get("count", 0) or 0),
+                "recipient_resolver_audit_rows": int((resolver_audit or {}).get("count", 0) or 0),
+            },
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )
+
+
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     state = runtime_state_snapshot()
