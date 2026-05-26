@@ -1,20 +1,19 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 21:34 IDT
+Generated: 2026-05-26 21:46 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - target folder: `voiddo-rescue-review/`
-- file count: `247`
+- file count: `250`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## P24 Summary
+## P25 Summary
 
-- Added customer mail send-ready gate.
-- Added monitoring setup reminder email template.
-- Customer mail actions can become `send_ready` under mocked clean gates with customer mail sending enabled.
-- Runtime transport remains disabled and sends no mail.
+- Added protected customer mail transport dry-run endpoint.
+- Dry-run converts send-ready actions to sanitized transport evidence.
+- Dry-run never calls SMTP and keeps send_mail=false.
 - Live outreach sent: `0`.
 - Warmup sent: `0`.
 
@@ -24,10 +23,8 @@ Excluded from review/export: `.env`, `*.env`, mailbox passwords, private keys, `
 
 ## Verification
 
-- API tests: `186 passed`.
+- API tests: `190 passed`.
 - Smoke script: PASS.
-- Huanshu: PASS on money-facing/public/admin/customer routes.
-- Extra design/accessibility/regression plugins: PASS with `0` blockers.
 - Secret/artifact scan: run before push/export; no committed runtime artifacts intended.
 
 ## Notes

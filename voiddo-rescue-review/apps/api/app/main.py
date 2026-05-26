@@ -51,7 +51,7 @@ from .mailer_readiness import mailbox_health_score, run_clean_window_transition,
 from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mailer_control_room import mailer_control_room_summary, monitoring_control_room_summary, write_owner_status_report
 from .mailer_autonomy_ledger import mailer_autonomy_ledger
-from .mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, process_mailer_action_queue
+from .mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, process_mailer_action_queue, transport_dry_run
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
@@ -590,6 +590,12 @@ async def mailer_action_queue_create(request: Request):
 async def mailer_action_queue_process(request: Request):
     payload = await request.json()
     return {"ok": True, "result": process_mailer_action_queue(int(payload.get("limit", 10)))}
+
+
+@app.post("/admin/mailer/action-queue/transport-dry-run", dependencies=[Depends(require_admin)])
+async def mailer_action_queue_transport_dry_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "result": transport_dry_run(int(payload.get("limit", 10)))}
 
 
 @app.post("/admin/mailer/owner-status-report", dependencies=[Depends(require_admin)])

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from email.utils import make_msgid
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -160,6 +161,49 @@ def process_mailer_action_queue(limit: int = 10) -> dict[str, Any]:
     return json_safe({"processed": len(processed), "actions": processed, "send_mail": False, "live_outreach_allowed": False})
 
 
+def transport_dry_run(limit: int = 10) -> dict[str, Any]:
+    rows = [
+        dict(row)
+        for row in fetch_all(
+            """
+            SELECT *
+            FROM mailer_action_queue
+            WHERE status = 'send_ready'
+            ORDER BY updated_at, created_at
+            LIMIT %s
+            """,
+            (limit,),
+        )
+    ]
+    recorded = []
+    for row in rows:
+        preview = render_customer_mail_preview(row)
+        result = {
+            "status": "dry_run_recorded",
+            "message_id": make_msgid(domain="voiddorescue.local"),
+            "subject_length": len(preview["rendered"]["subject"]),
+            "body_length": len(preview["rendered"]["text"]),
+            "template_key": preview["rendered"]["template_key"],
+            "send_mail": False,
+            "smtp_called": False,
+            "raw_recipient_included": False,
+        }
+        updated = execute(
+            """
+            UPDATE mailer_action_queue
+            SET status = 'dry_run_recorded',
+                result_json = %s,
+                attempt_count = attempt_count + 1,
+                updated_at = now()
+            WHERE id = %s
+            RETURNING id, action_type, risk_level, status, mailbox, recipient_hash, template_key, result_json, attempt_count, updated_at
+            """,
+            (Jsonb(json_safe(result)), row["id"]),
+        )
+        recorded.append(dict(updated))
+    return json_safe({"processed": len(recorded), "actions": recorded, "send_mail": False, "smtp_called": False, "live_outreach_allowed": False})
+
+
 def mailer_action_queue_summary() -> dict[str, Any]:
     rows = [
         dict(row)
@@ -194,6 +238,7 @@ def mailer_action_queue_summary() -> dict[str, Any]:
             "blocked": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'blocked'"),
             "send_ready": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'send_ready'"),
             "sent": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'sent'"),
+            "dry_run_recorded": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'dry_run_recorded'"),
             "ledger_blockers": ledger["gates"]["blockers"],
             "raw_recipient_addresses_included": False,
             "send_mail": False,

@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 21:33 IDT
+Generated: 2026-05-26 21:45 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `186 passed`
+- API tests: `190 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -39,6 +39,9 @@ PASS
 - customer mail becomes send-ready under mocked clean gates: PASS
 - customer mail throttle failure blocks send-ready: PASS
 - customer mail templates pass email QA: PASS
+- customer mail transport dry-run does not call SMTP: PASS
+- customer mail transport dry-run records sanitized result: PASS
+- customer mail transport endpoint requires auth: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

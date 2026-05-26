@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 21:33 IDT
+Generated: 2026-05-26 21:45 IDT
 
 ## Canonical Latest State
 
@@ -46,6 +46,7 @@ Generated: 2026-05-26 21:33 IDT
 - prepared: `0`
 - blocked: `0`
 - send_ready: `0`
+- dry_run_recorded: `0`
 - sent: `0`
 - raw recipient addresses included: `false`
 - send_mail: `false`
@@ -55,7 +56,7 @@ Generated: 2026-05-26 21:33 IDT
 
 ## Verification
 
-- API tests: `186 passed`
+- API tests: `190 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including admin transition panel
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
