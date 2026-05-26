@@ -30,6 +30,7 @@ from .p0 import (
     queue_outreach_preview,
     store_owner_command,
     transport_gate_status,
+    effective_pause_state,
 )
 from .outreach import outreach_allowed, render_template
 from .scanner import deterministic_safe_scan
@@ -59,7 +60,7 @@ def health():
         "dry_run": settings.outreach_dry_run,
         "kill_switch": settings.global_kill_switch,
         "outreach_paused": settings.outreach_paused,
-        "scanning_paused": settings.scanning_paused,
+        "scanning_paused": effective_pause_state("scanner", settings.scanning_paused),
     }
 
 
@@ -72,7 +73,7 @@ def admin_metrics():
 def scan(request: ScanRequest):
     if settings.global_kill_switch:
         return {"ok": False, "status": "blocked", "reason": "global_kill_switch"}
-    if settings.scanning_paused and not request.dry_run:
+    if effective_pause_state("scanner", settings.scanning_paused) and not request.dry_run:
         return {"ok": False, "status": "blocked", "reason": "scanning_paused"}
     result = deterministic_safe_scan(str(request.url), request.business_name)
     return {"ok": True, "result": result.model_dump()}
@@ -83,7 +84,7 @@ def scanner_job_create(request: ScanRequest):
     if settings.global_kill_switch:
         return {"ok": False, "status": "blocked", "reason": "global_kill_switch"}
     job = create_scanner_job(str(request.url), request.business_name, request.dry_run)
-    return {"ok": True, "job": job, "processing_paused": settings.scanning_paused}
+    return {"ok": True, "job": job, "processing_paused": effective_pause_state("scanner", settings.scanning_paused)}
 
 
 @app.get("/scanner/jobs/{job_id}")

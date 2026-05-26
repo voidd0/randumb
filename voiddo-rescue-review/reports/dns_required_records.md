@@ -32,15 +32,9 @@ Owner reported these as configured in Namecheap and live DNS readback confirms t
 | `@` | MX | `10 mail.voiddorescue.com.` | `10 mail.voiddorescue.com.` |
 | `@` | TXT | `v=spf1 mx ~all` | `v=spf1 mx ~all` |
 
-## DMARC Correction Needed
+## DMARC Status
 
-Observed DNS currently includes `TTL: Automatic` inside the TXT value:
-
-```text
-v=DMARC1; p=none; rua=mailto:dmarc@voiddorescue.com; fo=1; adkim=r; aspf=r TTL: Automatic
-```
-
-Namecheap should contain exactly this value, without the trailing `TTL: Automatic` text:
+Current checks no longer show the previous stray `TTL: Automatic` text. Namecheap should continue to contain exactly this value:
 
 ```text
 v=DMARC1; p=none; rua=mailto:dmarc@voiddorescue.com; fo=1; adkim=r; aspf=r
@@ -56,13 +50,13 @@ Namecheap TXT record:
 | --- | --- | --- |
 | `dkim._domainkey` | TXT | `v=DKIM1;k=rsa;t=s;s=email;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwKOa2h7Hj0wWxFq/JDpaGE+TQ2ugGg4lm6lbH5nop7D0vnV5HML04UjGOPh/0c/gASIJqAMiPXmWkSRAbyOwYrXk5YkfJ8VhL6yY9JoRKDxh88yKHVsa596lqQlnUCbE1lWQpJeP0N736stt54Lw3r6hYtq5+zjrPEadC9ysDgFacmK89YDTU9PASVF9MI3sWLAGYSbcDk3za07ehPPkx2L3gkp3IY/+u9FIo1L8OltEc4E+iExffhP5A2K2vmePfbBIyP6aLbqUmOK3Brep7LtD3PLALIvw+BP0Ox4TCZemHBk3P12LX2FEFkS+bXreY8u6R2fRnOQu6nDy6zQs6QIDAQAB` |
 
-Observed DKIM DNS: not published yet.
+Observed DKIM DNS: published.
 
 ## SRV
 
 SRV records are not required for MVP. Use direct settings:
 
-- SMTP host: `mail.voiddorescue.com`
+- SMTP host: `mail.voiddo.com`
 - SMTP port: `587`
-- IMAP host: `mail.voiddorescue.com`
+- IMAP host: `mail.voiddo.com`
 - IMAP port: `993`

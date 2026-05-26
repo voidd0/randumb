@@ -21,8 +21,7 @@ export function middleware(request: NextRequest) {
   const authorization = request.headers.get("authorization") || "";
   const bearer = authorization.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
   const basic = tokenFromBasic(authorization);
-  const queryToken = request.nextUrl.searchParams.get("token") || "";
-  if (bearer === expected || basic === expected || queryToken === expected) {
+  if (bearer === expected || basic === expected) {
     return NextResponse.next();
   }
   return new NextResponse("admin auth required", {

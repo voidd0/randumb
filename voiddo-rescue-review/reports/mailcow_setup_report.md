@@ -55,20 +55,17 @@ Value: v=DKIM1;k=rsa;t=s;s=email;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw
 - `CNAME autodiscover.voiddorescue.com`: OK
 - `MX voiddorescue.com`: OK
 - `TXT SPF`: OK
-- `TXT DMARC`: published but contains trailing `TTL: Automatic`; needs correction in Namecheap.
-- `TXT DKIM`: missing until owner adds record above.
+- `TXT DMARC`: published; no trailing `TTL: Automatic` observed in current checks.
+- `TXT DKIM`: published.
 
 ## SMTP/IMAP Tests
 
-- Strict TLS SMTP/IMAP login failed because the mail-service certificate currently presents `mail.voiddo.com` and is not valid for `mail.voiddorescue.com`.
-- Diagnostic login with TLS verification disabled passed:
-  - `audit@voiddorescue.com` SMTP: OK
-  - `audit@voiddorescue.com` IMAP: OK
-  - `support@voiddorescue.com` SMTP: OK
-  - `support@voiddorescue.com` IMAP: OK
+- Strict TLS SMTP/IMAP login now passes via `mail.voiddo.com`.
+- Rescue sending identities remain on `voiddorescue.com`.
+- `voiddorescue.com` MVP mailboxes passed strict IMAP login after the TLS fix.
 
 ## Remaining Blockers
 
-1. Add DKIM TXT in Namecheap.
-2. Correct DMARC TXT by removing trailing `TTL: Automatic`.
-3. Decide whether to update Mailcow mail-service TLS certificate for `mail.voiddorescue.com` or configure the Rescue app with an explicit trusted/internal mail transport policy.
+1. Provide approved deliverability test inbox pool.
+2. Provide approved warmup recipient pool.
+3. Configure Paddle checkout base/client flow.

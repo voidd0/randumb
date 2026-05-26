@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+
 from fastapi import Header, HTTPException, Request
 
 from .config import get_settings
@@ -12,6 +14,12 @@ def _token_from_header(authorization: str | None, x_admin_token: str | None) -> 
         value = authorization.strip()
         if value.lower().startswith("bearer "):
             return value[7:].strip()
+        if value.lower().startswith("basic "):
+            try:
+                decoded = base64.b64decode(value[6:].strip()).decode("utf-8")
+            except Exception:
+                return ""
+            return decoded.split(":", 1)[1] if ":" in decoded else ""
     return ""
 
 

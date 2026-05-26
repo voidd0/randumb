@@ -1,6 +1,6 @@
 # Warmup Readiness Report
 
-Updated: 2026-05-26 11:10 IDT
+Updated: 2026-05-26 12:05 IDT
 
 ## Status
 
@@ -9,7 +9,7 @@ Warmup is prepared in dry-run only and has not started.
 Current blocker:
 
 - Owner has not provided an approved warmup recipient pool.
-- Mail QA is not PASS because strict SMTP/IMAP TLS still fails.
+- Deliverability test pool is missing.
 
 ## Daily Cap Model
 
@@ -19,6 +19,14 @@ Current blocker:
 - Day 4-7: 25-40
 
 The implemented dry-run planner stores the conservative lower bound for each day.
+
+## Implemented
+
+- `WARMUP_RECIPIENT_POOL` env/config support.
+- Protected import endpoint: `POST /warmup/recipients/import`.
+- Suppression-list filtering.
+- Dry-run schedule preview.
+- Owner command `PREPARE WARMUP` uses real env+DB approved pool count.
 
 ## Stop Conditions
 

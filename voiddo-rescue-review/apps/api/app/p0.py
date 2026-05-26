@@ -12,7 +12,10 @@ import imaplib
 import subprocess
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from email.message import EmailMessage
 from email.utils import parseaddr
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -30,6 +33,72 @@ from .inbox import classify_reply
 ONETIME_FIX_PRODUCTS = {"audit_onetime", "contact_form_repair", "emergency_fix"}
 EXCLUDED_NICHES = {"banks", "bank", "government", "hospital", "hospitals", "gambling", "adult", "crypto", "political"}
 OWNER_EMAIL_FALLBACK = ""
+RUNTIME_PAUSE_KEYS = {
+    "scanner": "pause_scanner",
+    "outreach": "pause_outreach",
+    "warmup": "pause_warmup",
+    "auto_replies": "pause_auto_replies",
+    "workers": "pause_workers",
+}
+
+
+def _split_config_emails(raw: str) -> list[str]:
+    seen: set[str] = set()
+    emails: list[str] = []
+    for item in re.split(r"[\s,;]+", raw or ""):
+        email = item.strip().lower()
+        if not email or "@" not in email or email in seen:
+            continue
+        seen.add(email)
+        emails.append(email)
+    return emails
+
+
+def runtime_control_enabled(key: str) -> bool:
+    row = fetch_one("SELECT value FROM runtime_controls WHERE key = %s", (key,))
+    return bool(row and row["value"])
+
+
+def set_runtime_control(key: str, value: bool, source: str, reason: str = "") -> dict[str, Any]:
+    row = execute(
+        """
+        INSERT INTO runtime_controls(key, value, source, reason)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (key) DO UPDATE
+          SET value = EXCLUDED.value,
+              source = EXCLUDED.source,
+              reason = EXCLUDED.reason,
+              updated_at = now()
+        RETURNING key, value, source, reason, updated_at
+        """,
+        (key, value, source, reason),
+    )
+    return dict(row)
+
+
+def effective_pause_state(area: str, configured: bool = False) -> bool:
+    key = RUNTIME_PAUSE_KEYS.get(area, area)
+    return bool(configured or runtime_control_enabled(key))
+
+
+def approved_test_inbox_emails(settings: Settings | None = None) -> list[str]:
+    settings = settings or get_settings()
+    emails = _split_config_emails(settings.test_inboxes) + _split_config_emails(settings.test_inbox_pool)
+    db_rows = fetch_all("SELECT email FROM test_inboxes WHERE status = 'approved'")
+    emails.extend(str(row["email"]).lower() for row in db_rows)
+    return sorted(set(email for email in emails if "@" in email))
+
+
+def approved_warmup_recipient_emails(settings: Settings | None = None) -> list[str]:
+    settings = settings or get_settings()
+    emails = _split_config_emails(settings.warmup_recipient_pool)
+    db_rows = fetch_all("SELECT email FROM warmup_recipients WHERE status = 'approved_test_pool'")
+    emails.extend(str(row["email"]).lower() for row in db_rows)
+    suppressed = {
+        str(row["email"]).lower()
+        for row in fetch_all("SELECT email FROM suppression_list WHERE email IS NOT NULL")
+    }
+    return sorted(set(email for email in emails if "@" in email and email not in suppressed))
 
 
 def create_scanner_job(url: str, business_name: str | None, dry_run: bool = False) -> dict[str, Any]:
@@ -151,9 +220,11 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,
-            "scanning": get_settings().scanning_paused,
-            "outreach": get_settings().outreach_paused,
-            "auto_replies": get_settings().auto_replies_paused,
+            "scanning": effective_pause_state("scanner", get_settings().scanning_paused),
+            "outreach": effective_pause_state("outreach", get_settings().outreach_paused),
+            "warmup": effective_pause_state("warmup", False),
+            "auto_replies": effective_pause_state("auto_replies", get_settings().auto_replies_paused),
+            "workers": effective_pause_state("workers", False),
             "paddle_provisioning": get_settings().paddle_provisioning_paused,
         },
     }
@@ -448,12 +519,17 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
     risk = parsed["risk_level"]
     if risk == "HIGH_RISK":
         result = {"ok": False, "action": "review_required", "reason": "high_risk_command_blocked"}
-    elif command in {"STATUS", "REPORT TODAY"}:
+    elif command == "STATUS":
         result = {"ok": True, "action": "metrics", "metrics": admin_metrics_from_db()}
+    elif command == "REPORT TODAY":
+        result = {"ok": True, "action": "report_today", "report": write_owner_daily_report()}
     elif command == "PAUSE ALL":
-        result = {"ok": True, "action": "pause_recorded", "paused": ["scanner", "outreach", "warmup", "auto_replies", "workers"]}
+        paused = [set_runtime_control(key, True, "owner_command", "PAUSE ALL") for key in RUNTIME_PAUSE_KEYS.values()]
+        result = {"ok": True, "action": "pause_recorded", "paused": paused}
     elif command.startswith("PAUSE "):
-        result = {"ok": True, "action": "pause_recorded", "paused": command.replace("PAUSE ", "").lower()}
+        area = command.replace("PAUSE ", "").lower().replace(" ", "_")
+        key = RUNTIME_PAUSE_KEYS.get(area, f"pause_{area}")
+        result = {"ok": True, "action": "pause_recorded", "paused": set_runtime_control(key, True, "owner_command", command)}
     elif command == "SHOW HUMAN REVIEW":
         result = {"ok": True, "action": "human_review", "items": fetch_all("SELECT mailbox, classification, last_message_preview FROM inbox_threads WHERE human_review_required ORDER BY updated_at DESC LIMIT 20")}
     elif command == "SHOW PAYMENTS":
@@ -465,7 +541,7 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
     elif command == "RUN VISUAL QA":
         result = {"ok": True, "action": "visual_qa", "run": record_visual_qa("app_visual_agent", get_settings().app_base_url, "")}
     elif command == "PREPARE WARMUP":
-        pool_count = int(fetch_one("SELECT count(*) AS c FROM warmup_recipients WHERE status = 'approved_test_pool'")["c"])
+        pool_count = len(approved_warmup_recipient_emails())
         result = {"ok": True, "action": "warmup_prepare", "warmup": prepare_warmup(pool_count, 1)}
     elif command == "PREPARE LEADS":
         result = {"ok": True, "action": "lead_prepare_dry_run", "args": parsed.get("args_json", {}), "live_send": False}
@@ -476,6 +552,27 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
         ("owner_command.executed", "info" if result.get("ok") else "warning", command, Jsonb(json_safe({"risk_level": risk, "result": result}))),
     )
     return json_safe(result)
+
+
+def write_owner_daily_report() -> dict[str, Any]:
+    metrics = admin_metrics_from_db()
+    report_dir = Path(get_settings().storage_root) / "reports" / "owner"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc)
+    path = report_dir / f"owner-report-{now.strftime('%Y%m%d')}.json"
+    payload = {
+        "created_at": now.isoformat(),
+        "metrics": metrics,
+        "launch_decision": "NOT_LAUNCH_READY",
+        "live_outreach_sent": 0,
+        "warmup_sent": 0,
+    }
+    path.write_text(json.dumps(payload, indent=2, default=str))
+    execute(
+        "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
+        ("owner_command.report_today", "info", "Owner daily report created", Jsonb({"path": str(path)})),
+    )
+    return {"path": str(path), "created_at": payload["created_at"]}
 
 
 def huanshu_adapter_status() -> dict[str, Any]:
@@ -549,6 +646,7 @@ def run_mail_qa() -> dict[str, Any]:
     ctx = ssl.create_default_context()
     smtp_status = "not_configured"
     imap_status = "not_configured"
+    smtp_ready = False
     try:
         if settings.smtp_username and settings.smtp_password:
             with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
@@ -557,6 +655,7 @@ def run_mail_qa() -> dict[str, Any]:
                 smtp.ehlo()
                 smtp.login(settings.smtp_username, settings.smtp_password)
             smtp_status = "ok"
+            smtp_ready = True
     except Exception as exc:
         smtp_status = f"fail:{type(exc).__name__}"
         issues.append("smtp_strict_tls_login_failed")
@@ -573,11 +672,12 @@ def run_mail_qa() -> dict[str, Any]:
 
     checks["smtp_strict_tls_login"] = smtp_status
     checks["imap_strict_tls_login"] = imap_status
-    configured_test_inboxes = [item.strip() for item in settings.test_inboxes.split(",") if item.strip()]
-    db_test_inboxes = fetch_one("SELECT count(*) AS c FROM test_inboxes WHERE status = 'approved'")
-    checks["approved_test_inboxes"] = len(configured_test_inboxes) + int(db_test_inboxes["c"] if db_test_inboxes else 0)
+    approved_test_inboxes = approved_test_inbox_emails(settings)
+    checks["approved_test_inboxes"] = len(approved_test_inboxes)
     if checks["approved_test_inboxes"] <= 0:
         issues.append("approved_test_inbox_pool_missing")
+    deliverability = run_deliverability_diagnostics(settings, approved_test_inboxes, smtp_ready) if approved_test_inboxes else {"sent": 0, "skipped": "no_approved_test_inboxes"}
+    checks["deliverability_diagnostics"] = deliverability
     decision = "PASS" if not issues else "FAIL_BLOCK_LAUNCH"
     row = execute(
         """
@@ -590,10 +690,65 @@ def run_mail_qa() -> dict[str, Any]:
     return dict(row)
 
 
+def run_deliverability_diagnostics(settings: Settings, recipients: list[str], smtp_ready: bool) -> dict[str, Any]:
+    if not smtp_ready:
+        return {"sent": 0, "skipped": "smtp_not_ready"}
+    sent = 0
+    skipped = 0
+    errors: list[str] = []
+    with connect_dict() as conn:
+        with conn.cursor() as cur:
+            pending: list[str] = []
+            for email in recipients:
+                row = cur.execute(
+                    """
+                    INSERT INTO test_inboxes(email, status)
+                    VALUES (%s, 'approved')
+                    ON CONFLICT (email) DO UPDATE SET status = 'approved'
+                    RETURNING email, last_test_at
+                    """,
+                    (email,),
+                ).fetchone()
+                if row and row["last_test_at"]:
+                    skipped += 1
+                else:
+                    pending.append(email)
+            if pending:
+                ctx = ssl.create_default_context()
+                try:
+                    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+                        smtp.ehlo()
+                        smtp.starttls(context=ctx)
+                        smtp.ehlo()
+                        smtp.login(settings.smtp_username, settings.smtp_password)
+                        for email in pending:
+                            msg = EmailMessage()
+                            msg["Subject"] = "Vøiddo Rescue mail diagnostic"
+                            msg["From"] = settings.smtp_from_default
+                            msg["To"] = email
+                            msg.set_content("Neutral mail setup diagnostic for voiddorescue.com. No action is required.")
+                            smtp.send_message(msg)
+                            sent += 1
+                            cur.execute(
+                                """
+                                UPDATE test_inboxes
+                                SET last_test_at = now(), result_json = %s
+                                WHERE lower(email) = lower(%s)
+                                """,
+                                (Jsonb({"status": "sent", "message": "neutral_diagnostic"}), email),
+                            )
+                except Exception as exc:
+                    errors.append(type(exc).__name__)
+            conn.commit()
+    result: dict[str, Any] = {"sent": sent, "skipped_previously_tested": skipped, "policy": "neutral_diagnostic_max_one_per_mailbox"}
+    if errors:
+        result["errors"] = errors
+    return result
+
+
 def prepare_warmup(recipient_pool_count: int = 0, day_number: int = 1) -> dict[str, Any]:
     if recipient_pool_count <= 0:
-        row = fetch_one("SELECT count(*) AS c FROM warmup_recipients WHERE status = 'approved_test_pool'")
-        recipient_pool_count = int(row["c"] if row else 0)
+        recipient_pool_count = len(approved_warmup_recipient_emails())
     caps = {1: 5, 2: 10, 3: 15}
     cap = caps.get(day_number, 25 if day_number <= 7 else 40)
     status = "ready_dry_run" if recipient_pool_count > 0 else "blocked_no_recipient_pool"
@@ -604,7 +759,14 @@ def prepare_warmup(recipient_pool_count: int = 0, day_number: int = 1) -> dict[s
         VALUES (%s, %s, %s, %s, %s, %s)
         RETURNING id, status, day_number, planned_daily_cap, recipient_pool_count, stop_conditions_json
         """,
-        (status, day_number, cap, recipient_pool_count, Jsonb({"dry_run": True, "no_sending": True}), Jsonb(stop_conditions)),
+        (
+            status,
+            day_number,
+            cap,
+            recipient_pool_count,
+            Jsonb({"dry_run": True, "no_sending": True, "daily_cap": cap, "pool_preview_count": recipient_pool_count}),
+            Jsonb(stop_conditions),
+        ),
     )
     return dict(row)
 
@@ -678,7 +840,7 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
     body = payload.get("body") or ""
     checks = {
         "outreach_dry_run": settings.outreach_dry_run,
-        "outreach_paused": settings.outreach_paused,
+        "outreach_paused": effective_pause_state("outreach", settings.outreach_paused),
         "first_live_send_flag": settings.first_live_send_flag,
         "mail_qa_decision": latest_decision("mail_qa_runs"),
         "visual_qa_decision": latest_decision("visual_qa_runs"),
@@ -690,7 +852,7 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
         checks["suppressed"] = bool(row)
     if settings.outreach_dry_run:
         return {"allowed": False, "reason": "outreach_dry_run_enabled", "checks": checks}
-    if settings.outreach_paused or not settings.first_live_send_flag:
+    if checks["outreach_paused"] or not settings.first_live_send_flag:
         return {"allowed": False, "reason": "live_outreach_not_approved", "checks": checks}
     if checks["mail_qa_decision"] != "PASS":
         return {"allowed": False, "reason": "mail_qa_not_passed", "checks": checks}

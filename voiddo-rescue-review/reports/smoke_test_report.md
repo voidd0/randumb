@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Updated: 2026-05-26 11:10 IDT
+Updated: 2026-05-26 12:05 IDT
 
 ## Commands
 
@@ -8,7 +8,7 @@ Updated: 2026-05-26 11:10 IDT
 - `docker compose exec -T api sh -lc 'python -m py_compile app/*.py'`: PASS
 - `docker compose exec -T worker sh -lc 'python -m py_compile worker/*.py'`: PASS
 - `docker compose exec -T api python -m app.db`: PASS
-- `docker compose exec -T api python -m pytest -q`: PASS, `26 passed`
+- `docker compose exec -T api python -m pytest -q`: PASS, `30 passed`
 - `bash scripts/run_smoke_tests.sh`: PASS
 
 ## Runtime Health
@@ -27,6 +27,9 @@ Updated: 2026-05-26 11:10 IDT
 - `https://audit.rescue.voiddo.com/r/demo`: `200`
 - `https://go.rescue.voiddo.com/unsubscribe/test`: `200`
 - `https://status.rescue.voiddo.com/`: `200`
+- `https://app.rescue.voiddo.com/admin?token=...`: `401` expected
+- `https://app.rescue.voiddo.com/admin` with Bearer auth: `200`
+- `https://app.rescue.voiddo.com/admin` with Basic auth: `200`
 
 ## Functional Smoke
 
@@ -47,7 +50,6 @@ Updated: 2026-05-26 11:10 IDT
 
 ## Blocked Gates
 
-- Strict SMTP/IMAP TLS login fails.
 - Deliverability test is blocked until approved test inbox pool exists.
 - Warmup is blocked until approved recipient pool exists.
 - Live outreach is not launch-ready.

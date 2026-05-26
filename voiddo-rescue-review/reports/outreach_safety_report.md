@@ -40,7 +40,7 @@ Dry-run preview checked:
 - Generated preview passed email QA.
 
 Launch blockers:
-- DKIM TXT is not published.
-- DMARC TXT must be corrected to remove stray `TTL: Automatic`.
-- Strict TLS for SMTP/IMAP fails on the current Mailcow certificate.
-- Live sending must remain disabled until DNS, DKIM, TLS, suppression, unsubscribe, rate limits, visual gate, and Paddle webhook tests all pass on public domains.
+- Approved deliverability test inbox pool is missing.
+- Approved warmup recipient pool is missing.
+- Paddle checkout config is missing.
+- Live sending must remain disabled until deliverability diagnostics, warmup prep, suppression, unsubscribe, rate limits, visual gate, and Paddle checkout tests all pass on public domains.

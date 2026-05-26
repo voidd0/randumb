@@ -27,12 +27,15 @@ def price_id_for(settings, product_key: str) -> str:
 
 def checkout_config_status(settings) -> dict[str, object]:
     missing = [key for key in PRODUCTS if not price_id_for(settings, key)]
+    checkout_base_configured = bool(settings.paddle_hosted_checkout_base_url)
     return {
         "environment": settings.paddle_environment,
         "api_key_configured": bool(settings.paddle_api_key),
         "webhook_secret_configured": bool(settings.paddle_webhook_secret),
+        "hosted_checkout_base_url_configured": checkout_base_configured,
         "missing_price_keys": missing,
-        "ready": bool(settings.paddle_api_key and settings.paddle_webhook_secret and not missing),
+        "products": {key: {"price_id_configured": bool(price_id_for(settings, key)), **value} for key, value in PRODUCTS.items()},
+        "ready": bool(settings.paddle_api_key and settings.paddle_webhook_secret and checkout_base_configured and not missing),
     }
 
 
@@ -41,9 +44,10 @@ def hosted_checkout_url(settings, product_key: str, audit_slug: str = "", email:
     base = settings.paddle_hosted_checkout_base_url.rstrip("?&")
     if not base or not price_id:
         return ""
-    params = {"price_id": price_id}
+    params = {"price_id": price_id, "product_key": product_key}
     if audit_slug:
         params["utm_content"] = audit_slug
+        params["audit"] = audit_slug
     if email:
         params["user_email"] = email
     separator = "&" if "?" in base else "?"

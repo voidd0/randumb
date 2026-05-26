@@ -1,6 +1,6 @@
 # Owner Command Inbox Report
 
-Updated: 2026-05-26 11:10 IDT
+Updated: 2026-05-26 12:05 IDT
 
 ## Implemented
 
@@ -56,3 +56,5 @@ Arbitrary shell execution is not supported. Shell-like command text is classifie
 - Sample `RUN SHELL rm -rf /` command was stored as `HIGH_RISK` / `review_required`.
 - API command intake now generates a unique uid/message id when an owner command arrives without IMAP ids, avoiding collisions between ad-hoc command submissions.
 - Tests verify `RUN SHELL` is `HIGH_RISK` and blocked for review.
+- `REPORT TODAY` creates a private runtime report artifact.
+- `PAUSE ALL` writes persistent runtime pause controls for scanner, outreach, warmup, auto-replies, and workers.

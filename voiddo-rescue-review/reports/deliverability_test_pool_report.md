@@ -1,6 +1,6 @@
 # Deliverability Test Pool Report
 
-Updated: 2026-05-26 11:10 IDT
+Updated: 2026-05-26 12:05 IDT
 
 ## Status
 
@@ -9,6 +9,7 @@ No deliverability test pool has been provided by the owner.
 ## Implemented
 
 - `TEST_INBOXES` config support.
+- `TEST_INBOX_POOL` config support.
 - `test_inboxes` DB table.
 - Protected API endpoint: `POST /deliverability/test-inboxes/import`.
 - `deliverability_agent` uses approved test inboxes only.
@@ -22,7 +23,9 @@ No deliverability test pool has been provided by the owner.
 Reason:
 
 - approved test recipient pool missing
-- strict SMTP/IMAP TLS still failing
+- no approved test inboxes in env or DB
+
+Strict SMTP/IMAP TLS now passes.
 
 ## Live Sends
 

@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Updated: 2026-05-26 11:10 IDT
+Updated: 2026-05-26 12:05 IDT
 
 ## Decision
 
@@ -28,14 +28,15 @@ Updated: 2026-05-26 11:10 IDT
 - Huanshu local adapter is installed and visual agents pass on public/container routes.
 - Mail DNS auth records are present, including DKIM.
 - DMARC typo `TTL: Automatic` is not present.
+- Strict SMTP TLS login now passes.
+- Strict IMAP TLS login now passes.
+- Web admin query-token auth removed; `/admin?token=...` returns 401.
 - Warmup planner exists and is dry-run only.
 - Lead batch importer exists and is dry-run only.
-- Smoke tests pass: `26 passed` on 2026-05-26 11:10 IDT.
+- Smoke/P2 tests pass: `30 passed` on 2026-05-26 12:05 IDT.
 
 ## Blocking Gates
 
-- Strict SMTP TLS login fails with certificate verification error.
-- Strict IMAP TLS login fails with certificate verification error.
 - Deliverability test inbox pool is missing.
 - Warmup recipient pool is missing.
 - Paddle hosted checkout base URL is not configured.
@@ -54,4 +55,4 @@ Updated: 2026-05-26 11:10 IDT
 - Warmup sent: `0`
 - Customer-facing auto-replies: paused
 
-Launch must remain blocked until Mailcow strict TLS, deliverability test pool, warmup recipient pool, and Paddle checkout configuration are resolved.
+Launch must remain blocked until deliverability test pool, warmup recipient pool, and Paddle checkout configuration are resolved.

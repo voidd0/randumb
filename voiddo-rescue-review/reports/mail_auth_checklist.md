@@ -1,6 +1,6 @@
 # Vøiddo Rescue Mail Auth Checklist
 
-Updated: 2026-05-26 IDT
+Updated: 2026-05-26 12:05 IDT
 
 ## Production Host Decision
 
@@ -23,12 +23,12 @@ Updated: 2026-05-26 IDT
 
 ## Strict TLS Login
 
-- SMTP strict TLS login using `mail.voiddo.com:587`: FAIL, `SSLCertVerificationError`
-- IMAP strict TLS login using `mail.voiddo.com:993`: FAIL, `SSLCertVerificationError`
+- SMTP strict TLS login using `mail.voiddo.com:587`: PASS after P2 Mailcow TLS fix.
+- IMAP strict TLS login using `mail.voiddo.com:993`: PASS after P2 Mailcow TLS fix.
 
 ## Launch Gate
 
-Live outreach remains blocked until strict TLS login passes.
+Live outreach remains blocked until approved deliverability test inbox pool, warmup recipient pool, and Paddle checkout config pass.
 
 Current safety flags:
 

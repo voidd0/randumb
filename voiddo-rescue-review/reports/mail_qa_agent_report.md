@@ -1,6 +1,6 @@
 # Mail QA Agent Report
 
-Updated: 2026-05-26 11:10 IDT
+Updated: 2026-05-26 12:05 IDT
 
 ## Host Decision
 
@@ -9,13 +9,13 @@ Updated: 2026-05-26 11:10 IDT
 - TLS verification: `true`
 - Sending identities remain on `voiddorescue.com`, e.g. `audit@voiddorescue.com`
 
-## TLS Root Cause
+## TLS Fix
 
-Strict TLS fails because Mailcow presents a self-signed certificate:
+Strict TLS previously failed because Mailcow presented a self-signed certificate. P2 fixed this by copying the existing trusted Let’s Encrypt certificate for `mail.voiddo.com` into Mailcow `data/assets/ssl/` and restarting only:
 
-- Subject/CN: `mail.voiddo.com`
-- Issuer: same self-signed Mailcow certificate
-- OpenSSL verify return code: `18 (self-signed certificate)`
+- `postfix-mailcow`
+- `dovecot-mailcow`
+- `nginx-mailcow`
 
 Mailcow config discovery:
 
@@ -23,11 +23,17 @@ Mailcow config discovery:
 - `SKIP_LETS_ENCRYPT=y`
 - `ADDITIONAL_SAN=`
 
+Current served certificate:
+
+- Subject/CN: `mail.voiddo.com`
+- Issuer: Let’s Encrypt E7
+- OpenSSL verify return code: `0 (ok)`
+
 ## Agent Results
 
 - `dns_mail_auth_agent`: PASS
-- `smtp_agent`: FAIL_BLOCK_LAUNCH
-- `imap_agent`: FAIL_BLOCK_LAUNCH
+- `smtp_agent`: PASS
+- `imap_agent`: PASS
 - `deliverability_agent`: FAIL_BLOCK_LAUNCH
 - `reply_classifier_agent`: PASS
 - `outreach_safety_agent`: PASS
@@ -40,27 +46,23 @@ Mailcow config discovery:
 
 ## Strict Login Checks
 
-- SMTP strict TLS login: FAIL, certificate verification error.
-- IMAP strict TLS login: FAIL, certificate verification error.
+- SMTP strict TLS login: PASS.
+- IMAP strict TLS login: PASS.
 
-## Exact Fix Path
+## Mailbox Checks
 
-Do not disable TLS verification.
+- Rescue `audit@voiddorescue.com`: strict SMTP/IMAP login PASS via app mail QA.
+- All `voiddorescue.com` MVP mailboxes: strict IMAP login PASS.
+- Existing `em@voiddo.com`: strict SMTP/IMAP login PASS.
 
-Fix Mailcow certificate by enabling a trusted certificate for `mail.voiddo.com` and, if desired, `mail.voiddorescue.com`:
+## Remaining Blocker
 
-1. Set `SKIP_LETS_ENCRYPT=n` in Mailcow config or install a trusted certificate into Mailcow's expected SSL path.
-2. If using the Rescue mail hostname, set `ADDITIONAL_SAN=mail.voiddorescue.com`.
-3. Run Mailcow ACME/certificate renewal following Mailcow procedure.
-4. Restart/reload only the Mailcow services required by Mailcow's certificate procedure.
-5. Re-run `smtp_agent` and `imap_agent`.
-
-No Mailcow restart or certificate mutation was performed in this pass.
+Approved deliverability test inbox pool is missing.
 
 ## Decision
 
 `FAIL_BLOCK_LAUNCH`
 
-Latest agent run: `FAIL_BLOCK_LAUNCH` with `smtp_strict_tls_login_failed`, `imap_strict_tls_login_failed`, and `approved_test_inbox_pool_missing`.
+Latest agent run: `FAIL_BLOCK_LAUNCH` with only `approved_test_inbox_pool_missing`.
 
-Live outreach remains blocked. Mailcow certificate repair requires explicit approval before touching the shared Mailcow runtime.
+Live outreach remains blocked until the approved test inbox pool exists and deliverability diagnostics are run.

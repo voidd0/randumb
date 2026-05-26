@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     admin_auth_token: str = ""
     owner_command_email: str = ""
     test_inboxes: str = ""
+    test_inbox_pool: str = ""
+    warmup_recipient_pool: str = ""
     huanshu_cli: str = ""
 
 
