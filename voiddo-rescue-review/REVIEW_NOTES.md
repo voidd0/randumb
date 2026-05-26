@@ -1,41 +1,38 @@
-# Vøiddo Rescue P11 Review Notes
+# Vøiddo Rescue P12 Review Notes
 
-Generated: 2026-05-26 18:44 IDT
+Generated: 2026-05-26 18:59 IDT
 
-Runtime tree: `/opt/voiddo-rescue`
-Export target: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p11-warmup-spacing-2026-05-26.zip`
-Review branch: `voiddo-rescue-mvp-review-20260526-files`
+## Source
+
+Original runtime tree: `/opt/voiddo-rescue`
 Review folder: `voiddo-rescue-review/`
+Branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## Included
+## P12 Summary
 
-- Docker Compose and `.env.example`
-- API, worker, web, WP plugin, packages, scripts, migrations
-- Redacted reports
-- P11 provider-spacing warmup planner and tests
-- Test suite and smoke scripts
+P12 adds a safe provider-spacing application gate and rollback support for the warmup calendar, expands synthetic revenue scenario tests, and keeps the autonomous mailer blocked on recent mail-signal risk.
 
-## Excluded
+## Excluded From Review Tree And Export
 
-- `.env`, `*.env` except `.env.example`
-- mailbox passwords, API keys, private keys
+- `.env`, `*.env`, mailbox passwords, private keys
 - `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`
 - `node_modules`, `.next`, `.lighthouseci`
-- runtime storage, exports, screenshots, logs, backups
-- PNG/JPG/WebP runtime visual artifacts
+- runtime `storage`, `logs`, `backups`, `screenshots`, `exports`
+- generated visual screenshots and PNG/JPG/WEBP artifacts
+
+## Secret And Artifact Scan Result
+
+No raw secrets, env files, mailbox passwords, private keys, virtualenvs, cache directories, node_modules, Next build output, runtime storage, screenshots, or exported ZIP files are intentionally included in this review tree.
 
 ## Verification
 
-- Full pytest: `112 passed`
-- Smoke: `112 passed`, `ok`
-- Huanshu: PASS for landing, audit demo, customer, status, unsubscribe, authenticated admin screenshots
-- Extra visual/design plugins: axe PASS, pa11y PASS, pixelmatch PASS, Lighthouse CI PASS_WITH_WARNINGS
-- Daily loop: 15 agents, no sends
-- Provider spacing plan: current adjacent same-provider `16`, proposed `3`, applied=false
-- Secret/artifact scan: no raw secrets, no private keys, no `.env`, no runtime visual artifacts detected in review tree
-- Live outreach sent: `0`
-- Warmup sent: `0`
+- API tests: `118 passed`
+- smoke: PASS
+- Huanshu: PASS
+- extra QA plugins: PASS or non-blocking warning
+- warmup sent: `0`
+- live outreach sent: `0`
 
-## Launch Decision
+## Commit SHA
 
-Not live-outreach-ready. Launch readiness remains `WARMUP_SCHEDULED_NO_OUTREACH` because recent bounce/DSN and SMTP rate-limit signals still block warmup and outreach.
+Final pushed commit SHA is reported in the handoff response after Git creates it. This file cannot embed its own final commit SHA without changing that SHA again.

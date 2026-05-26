@@ -1,77 +1,12 @@
 # Visual QA Agent Report
 
-Updated: 2026-05-26 12:45 IDT
+Generated: 2026-05-26 18:58 IDT
 
-## Agents
+## Canonical Gate
 
-- `landing_visual_agent`
-- `app_visual_agent`
-- `audit_page_visual_agent`
-- `screenshot_evidence_agent`
-- `email_visual_agent`
-- `checkout_visual_agent`
+Huanshu local adapter is the canonical visual gate for Rescue. Extra design/accessibility plugins are secondary evidence, not a replacement.
 
-## Checks Implemented
-
-- Playwright desktop screenshot.
-- Playwright mobile screenshot.
-- Console error capture.
-- Horizontal overflow check.
-- CTA above-fold check.
-- Broken image check.
-- Placeholder/lorem text check against visible text.
-- Raw JSON visibility check.
-- Unresolved template variable check against visible text.
-- DOM bounding-box overlap heuristic with parent/child elements excluded.
-- Huanshu local adapter execution against generated screenshot artifacts.
-
-## Huanshu Adapter
-
-- Spelling normalized to `Huanshu`.
-- Host executable installed:
-  - `/usr/local/bin/huanshu`
-  - `/usr/local/bin/huashu` symlink
-- Container executables installed:
-  - API: `/app/app/huanshu_cli.py`
-  - Worker: `/app/worker/huanshu_cli.py`
-- Version output verified:
-  - `huanshu-local-adapter 0.1.0 (huashu-design verify compatible)`
-- Adapter basis: local Huashu/Huanshu design plugin assets plus Playwright-backed artifact checks.
-- This is not a remote Huanshu SaaS/API integration.
-
-## Latest Route Coverage
-
-Latest worker visual run covered:
-
-- landing `/`
-- audit demo `/r/demo`
-- one real audit slug
-- admin `/admin` with tokenized access
-- customer `/customer`
-- EN email preview
-- scanner screenshot evidence route
-- Paddle.js checkout page
-
-Latest decisions:
-
-- `landing_visual_agent`: `PASS`, Huanshu `PASS`
-- `audit_page_visual_agent`: `PASS`, Huanshu `PASS`
-- `app_visual_agent`: `PASS`, Huanshu `PASS`
-- `email_visual_agent`: `PASS`, Huanshu `PASS`
-- `screenshot_evidence_agent`: `PASS`, Huanshu `PASS`
-- `checkout_visual_agent`: `PASS`, Huanshu `PASS`
-
-P3 checkout visual smoke captured the public checkout page with no horizontal overflow and no console errors.
-
-## Notes
-
-The previous `BLOCKED_HUANSHU_NOT_AVAILABLE` state is resolved for the local Rescue P1 gate. Live-domain/public-route visual QA now passes on the Rescue subdomains listed in `reverse_proxy_rescue_routes_report.md`.
-
-## Production Autonomy Visual Recheck
-
-Updated: 2026-05-26 15:18 IDT
-
-After the production-autonomy visual rebuild, Huanshu local adapter was rerun on:
+## Huanshu Results
 
 - landing `/`: PASS
 - audit demo `/r/demo`: PASS
@@ -80,13 +15,22 @@ After the production-autonomy visual rebuild, Huanshu local adapter was rerun on
 - unsubscribe `/unsubscribe/demo-token`: PASS
 - authenticated admin `/admin`: PASS
 
-The authenticated admin route also passed the extra DOM design gate:
+## Additional Plugin Results
 
-- no horizontal overflow
-- no unresolved template variables
-- no placeholder/lorem text
-- no raw JSON
-- CTA visible above fold on desktop and mobile
-- no console errors
+- `axe-core-playwright`: PASS
+- `pa11y`: PASS
+- `pixelmatch`: PASS
+- `lighthouse-ci`: PASS_WITH_WARNINGS, no blocker
 
-Screenshots were captured inside runtime storage only and are excluded from review/export packages.
+## Design Review Notes
+
+- no unresolved template variables detected by plugin run
+- no accessibility blockers detected
+- no broken-image blocker detected
+- no horizontal-overflow blocker detected
+- admin route was checked with bearer auth, not public token query auth
+
+## Decision
+
+PASS for P12. Continue to require Huanshu plus secondary plugin gates on every money-facing visual change.
+

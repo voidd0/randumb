@@ -55,7 +55,7 @@ from .revenue_simulation import run_synthetic_lead_simulation
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 from .scout_quality import run_scout_self_check, score_scout_provenance
 from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, process_scout_run
-from .warmup_planner import plan_provider_spaced_warmup
+from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup, rollback_latest_spacing_repair
 from .self_operating import (
     create_self_fix_task,
     queue_self_build,
@@ -505,6 +505,17 @@ def sender_rotation_run():
 async def warmup_provider_spacing_plan(request: Request):
     payload = await request.json()
     return {"ok": True, "plan": plan_provider_spaced_warmup(int(payload.get("limit", 50)), bool(payload.get("apply", False)))}
+
+
+@app.post("/admin/warmup/provider-spacing-apply", dependencies=[Depends(require_admin)])
+async def warmup_provider_spacing_apply(request: Request):
+    payload = await request.json()
+    return {"ok": True, "repair": apply_provider_spacing_when_safe(int(payload.get("limit", 50)))}
+
+
+@app.post("/admin/warmup/provider-spacing-rollback", dependencies=[Depends(require_admin)])
+def warmup_provider_spacing_rollback():
+    return {"ok": True, "rollback": rollback_latest_spacing_repair()}
 
 
 @app.post("/admin/replies/action-plan", dependencies=[Depends(require_admin)])

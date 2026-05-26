@@ -1,278 +1,51 @@
 # Launch Readiness Report
 
-Updated: 2026-05-26 14:02 IDT
+Generated: 2026-05-26 18:58 IDT
 
 ## Decision
 
-`CHECKOUT_READY_NOT_WARMED`
+Launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-This is not live outreach ready.
+Vøiddo Rescue is not approved for cold outreach. Checkout, mail auth, visual QA, and core application tests pass, but recent delivery signals still block warmup execution and outreach.
 
-## Passed
+## Passed Gates
 
-- Existing non-Rescue projects were not modified.
-- Rescue Docker services are healthy.
-- DB migrations are applied, including P4 deliverability/warmup columns.
-- Public Rescue routes work.
-- Admin route is protected; query-token auth remains rejected.
-- API health remains public.
-- Scanner job pipeline writes audits/issues/screenshots.
-- Dynamic audit pages read real API audit data.
-- Admin metrics read DB state.
-- Paddle checkout is ready through Paddle.js.
-- Strict SMTP TLS login passes.
-- Strict IMAP TLS login passes.
-- Mail DNS auth records are present, including DKIM and DMARC.
-- Huanshu/visual QA is available and passes from prior P3 gate.
-- Warmup day-1 executor exists and enforces cap `5`.
-- Deliverability diagnostic executor exists and enforces max one diagnostic per approved test inbox.
-- Owner command gates are implemented for P4 commands.
-- Smoke tests pass: `36 passed`.
-
-## Blocking Gates
-
-- Deliverability diagnostics hit Mailcow/Rspamd rate limit.
-- Bounce/DSN messages were observed after diagnostics.
-- Warmup day 1 sent `0` and remains blocked.
-- One typo address was corrected; the corrected Gmail diagnostic was sent and awaits owner inbox/spam observation.
-- Autonomous warmup calendar is configured at `2/day`, with no cold outreach and no sales copy.
-
-## Safety Flags
-
-- `OUTREACH_DRY_RUN=true`
-- `OUTREACH_PAUSED=true`
-- `AUTO_REPLIES_PAUSED=true`
-- `FIRST_LIVE_SEND_FLAG=false`
-- `PADDLE_PROVISIONING_PAUSED=true`
-
-## Live Activity
-
-- Deliverability diagnostic sends: `7`
-- Warmup sends: `0`
-- Live outreach sends: `0`
-- Bounce count: `2`
-- Spam signal count: `0` observed; inbox placement cannot be measured without approved test inboxes.
-- Inbox poll: completed, `3` messages seen.
-
-Live outreach remains blocked. Warmup is scheduled as an autonomous low-volume internal/test-recipient calendar.
-
-## P5 Update
-
-Updated: 2026-05-26 14:21 IDT
-
-Decision: `WARMUP_SCHEDULED_NO_OUTREACH`, not live-outreach-ready.
-
-P5 adds a hard pre-send safety gate to every scheduled warmup send. The gate blocks if any bounce/DSN or SMTP rate-limit signal exists in the last 24 hours, if latest mail QA is not PASS, if warmup is paused, if the global worker kill switch is active, if the recipient is suppressed, if sender credentials are unavailable, or if the daily cap is reached.
-
-Current P5 counters:
-
-- approved test inboxes: `7`
-- approved warmup recipients: `7`
-- scheduled warmup messages: `28`
-- warmup sent: `0`
-- live outreach sent: `0`
-- bounce/DSN signals in last 24h: `2`
-- SMTP rate-limit signals in last 24h: `1`
-- spam signals in last 24h: `0`
-
-Next allowed action: wait for the 24-hour bounce/rate-limit window to clear, rerun mail QA, then let the warmup timer proceed through the gate. Cold outreach remains blocked.
-
-## P5 Cleanup Update
-
-Updated: 2026-05-26 14:52 IDT
-
-Review/export hygiene is now PASS: `.venv`, `.pytest_cache`, `__pycache__`, `*.pyc`, runtime storage, logs, screenshots, `.env`, and private keys are excluded from the clean review package.
-
-Functional state after cleanup:
-
-- tests: `46 passed`
+- checkout: READY
+- SPF/DKIM/DMARC: PASS
+- strict SMTP TLS: PASS
+- strict IMAP TLS: PASS
+- mail QA latest decision: PASS
+- Huanshu visual QA: PASS
+- extra visual/accessibility plugins: PASS or non-blocking warning
+- API tests: `118 passed`
 - smoke: PASS
-- services: API/web/worker/postgres/redis healthy
-- warmup sent: `0`
+- admin auth: enforced
 - live outreach sent: `0`
-- launch readiness: `WARMUP_SCHEDULED_NO_OUTREACH`
-
-## Production Autonomy Build Update
-
-Updated: 2026-05-26 15:18 IDT
-
-Decision: `WARMUP_SCHEDULED_NO_OUTREACH`, not production-ready and not live-outreach-ready.
-
-New passed gates:
-
-- Scout import/agent foundation exists.
-- Lead scoring exists and explains scores.
-- Campaign preview exists and remains dry-run.
-- Email template system renders and QA-checks 17 samples.
-- Agent run table exists and latest safe daily loop completed 7/7 agents.
-- Mail throttle blocks sends on recent bounce/DSN and SMTP rate-limit signals.
-- Checkout scenario tests pass for configured/unconfigured flows and Paddle webhook mocks.
-- Onboarding/fix workflow tables exist and are populated by mock payment events.
-- Huanshu visual checks pass for landing, audit demo, customer, status, unsubscribe, and authenticated admin.
-- Full pytest count is now `61 passed`; smoke script also passes.
-
-Still blocking:
-
-- Recent bounce/DSN signals in last 24h: `2`.
-- Recent SMTP rate-limit signal in last 24h: `1`.
-- Warmup sent remains `0`.
-- Live outreach sent remains `0`.
-- Production external lead discovery is not yet connected beyond import scouts.
-- Full production customer auth/WP-plugin connection is not complete.
-
-No launch flag was enabled.
-
-## P6 Self-Operating Update
-
-Updated: 2026-05-26 17:43 IDT
-
-Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
-
-New passes:
-
-- economics engine: PASS
-- autonomous mailer decision loop: PASS, sends `0`
-- self-audit/self-fix/self-learning/self-building foundation: PASS
-- Huanshu canonical visual gate: PASS
-- additional quality plugins:
-  - axe-core/playwright: PASS
-  - pa11y: PASS
-  - pixelmatch: PASS
-  - Lighthouse CI: PASS_WITH_WARNINGS
-- tests: `71 passed`
-- smoke: PASS
-- safe daily loop: 10 agents completed
-
-Still blocking launch:
-
-- bounce/DSN count, last 24h: `2`
-- SMTP rate-limit count, last 24h: `1`
 - warmup sent: `0`
-- live outreach sent: `0`
+- non-Rescue projects touched: `0`
 
-No cold outreach was sent. No manual warmup send was forced.
+## Blocking Conditions
 
-## P10 Mail Clean Window + Readiness Update
+- bounce/DSN count in last 24h: `2`
+- SMTP rate-limit count in last 24h: `1`
 
-Updated: 2026-05-26 18:34 IDT
+These signals block:
 
-Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
+- warmup sends
+- diagnostic sends
+- live outreach
+- automatic provider-spacing application
 
-New passes:
+## P12 Gate Result
 
-- Clean-window transition state exists and is no-send.
-- `run_mail_qa()` can be rerun in no-deliverability-send mode for autonomous transition checks.
-- Mailbox health scoring exists.
-- Sender rotation readiness exists.
-- Admin dashboard exposes clean transitions, mailbox health, and sender rotation counters.
-- Daily loop completed 14 agents with no sends.
-- Tests: `107 passed`.
-- Smoke: PASS.
-- Huanshu and extra quality plugin gates pass.
+The P12 provider-spacing apply gate ran and returned `blocked_safety_gate`. It did not change the schedule and did not send mail.
 
-Still blocking:
+## Next Exact Action
 
-- bounce/DSN count, last 24h: `2`
-- SMTP rate-limit count, last 24h: `1`
-- sender rotation readiness: `blocked`
-- provider spacing: `needs_spacing`
+After the 24h signal window clears:
 
-No cold outreach was sent. No manual warmup send was forced. The transition agent started `0` sends.
+1. rerun mail QA without deliverability diagnostic sends
+2. rerun provider-spacing apply gate
+3. allow the existing warmup timer to send only if the natural slot is due and all pre-send gates pass
+4. keep `OUTREACH_PAUSED=true` and `FIRST_LIVE_SEND_FLAG=false`
 
-## P11 Sender Rotation + Warmup Spacing Update
-
-Updated: 2026-05-26 18:44 IDT
-
-Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
-
-New passes:
-
-- Provider-spaced warmup planner exists.
-- Planner records repair proposals with recipient hashes only.
-- Planner can reduce real current adjacent same-provider slots from `16` to `3`.
-- Planner default/agent mode is no-apply and no-send.
-- Admin dashboard exposes spacing repair count.
-- Daily loop completed 15 agents with no sends.
-- Tests: `112 passed`.
-- Smoke: PASS.
-- Huanshu and extra quality plugin gates pass.
-
-Still blocking:
-
-- bounce/DSN count, last 24h: `2`
-- SMTP rate-limit count, last 24h: `1`
-- spacing plan was not applied because mail safety is still blocked
-
-No cold outreach was sent. No manual warmup send was forced.
-
-## P7 Revenue Simulation Update
-
-Updated: 2026-05-26 17:56 IDT
-
-Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
-
-New passes:
-
-- Synthetic lead -> scanner job -> audit -> score -> campaign preview simulation.
-- Campaign economics gate with expected revenue/cost/margin/risk.
-- Mail clean-window watcher.
-- Safe mailer draft persistence with recipient hashing.
-- Tests: `81 passed`.
-- Smoke: PASS.
-- Huanshu and extra quality plugin gates pass.
-
-Still blocking:
-
-- bounce/DSN count, last 24h: `2`
-- SMTP rate-limit count, last 24h: `1`
-
-No live outreach was sent. Warmup was not manually forced.
-
-## P8 Real Source + Quality Update
-
-Updated: 2026-05-26 18:12 IDT
-
-Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
-
-New passes:
-
-- Domain-list and directory-row source adapters.
-- Scout self-check persistence.
-- Audit strength scoring.
-- Public/customer language gate blocking AI/operator/build traces.
-- Admin metrics for the new P8 checks.
-- Tests: `92 passed`.
-- Smoke: PASS.
-- Huanshu and extra quality plugin gates pass.
-
-Still blocking:
-
-- bounce/DSN count, last 24h: `2`
-- SMTP rate-limit count, last 24h: `1`
-
-No cold outreach was sent. No manual warmup send was forced. Launch readiness is not overstated.
-
-## P9 Campaign + Mailer Control Update
-
-Updated: 2026-05-26 18:24 IDT
-
-Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
-
-New passes:
-
-- Campaign readiness snapshots combine lead count, audit strength, economics, mail safety, visual safety, and blockers.
-- Outbound mailer decisions persist action/refusal reason per message payload.
-- Reply action plans persist classification, confidence, safe action, and review requirement.
-- Scout provenance scoring persists source quality.
-- Admin dashboard exposes new counts.
-- Daily loop completed 12 agents with no sends.
-- Tests: `100 passed`.
-- Smoke: PASS.
-- Huanshu and extra quality plugin gates pass.
-
-Still blocking:
-
-- bounce/DSN count, last 24h: `2`
-- SMTP rate-limit count, last 24h: `1`
-
-No cold outreach was sent. No manual warmup send was forced.

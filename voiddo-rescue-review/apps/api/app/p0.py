@@ -341,6 +341,7 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "mailbox_health_scores": scalar("SELECT count(*) FROM mailbox_health_scores"),
         "sender_rotation_readiness": scalar("SELECT count(*) FROM sender_rotation_readiness"),
         "warmup_schedule_repairs": scalar("SELECT count(*) FROM warmup_schedule_repairs"),
+        "warmup_schedule_rollbacks": scalar("SELECT count(*) FROM warmup_schedule_rollbacks"),
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,

@@ -5,8 +5,8 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
-from .db import execute, fetch_all
-from .p0 import email_provider, recipient_hash
+from .db import execute, fetch_all, fetch_one
+from .p0 import email_provider, latest_mail_qa_decision, mail_signal_summary, recipient_hash, run_mail_qa
 
 
 def _adjacent_same(providers: list[str]) -> int:
@@ -96,5 +96,113 @@ def plan_provider_spaced_warmup(limit: int = 50, apply: bool = False) -> dict[st
             Jsonb(issues),
             Jsonb({"entries": proposed, "policy": "no_send_provider_spacing_repair"}),
         ),
+    )
+    return dict(row)
+
+
+def apply_provider_spacing_when_safe(limit: int = 50) -> dict[str, Any]:
+    signals = mail_signal_summary(24)
+    issues: list[dict[str, Any]] = []
+    if signals["bounce_or_dsn_count"] or signals["rate_limit_count"] or signals["spam_signal_count"]:
+        issues.append({"code": "recent_mail_signals", "severity": "high", "signals": signals})
+    mail_qa = latest_mail_qa_decision()
+    if mail_qa != "PASS" and not issues:
+        mail_qa = run_mail_qa(allow_deliverability_send=False)["decision"]
+    if mail_qa != "PASS":
+        issues.append({"code": "mail_qa_not_pass", "severity": "high", "decision": mail_qa})
+    due = fetch_one("SELECT count(*) AS count FROM warmup_schedule WHERE status = 'scheduled' AND scheduled_for <= now()")
+    due_count = int(due["count"]) if due else 0
+    if due_count:
+        issues.append({"code": "due_warmup_rows_present", "severity": "high", "count": due_count})
+    if issues:
+        row = execute(
+            """
+            INSERT INTO warmup_schedule_repairs(
+              status, applied, inspected_count, current_adjacent_same_provider,
+              proposed_adjacent_same_provider, issues_json, proposed_json
+            )
+            VALUES ('blocked_safety_gate', false, 0, 0, 0, %s, %s)
+            RETURNING *
+            """,
+            (Jsonb(issues), Jsonb({"policy": "no_send_provider_spacing_application", "signals": signals, "mail_qa_decision": mail_qa, "due_now": due_count})),
+        )
+        return dict(row)
+    plan = plan_provider_spaced_warmup(limit=limit, apply=False)
+    if plan["inspected_count"] <= 0 or plan["proposed_adjacent_same_provider"] > plan["current_adjacent_same_provider"]:
+        execute("UPDATE warmup_schedule_repairs SET status = 'blocked_no_safe_improvement' WHERE id = %s", (plan["id"],))
+        plan["status"] = "blocked_no_safe_improvement"
+        return plan
+    entries = plan["proposed_json"].get("entries", [])
+    for entry in entries:
+        execute(
+            """
+            UPDATE warmup_schedule
+            SET scheduled_for = %s::timestamptz,
+                result_json = jsonb_set(result_json, '{p12_spacing_repair}', %s::jsonb, true),
+                updated_at = now()
+            WHERE id = %s AND status = 'scheduled'
+            """,
+            (entry["new_scheduled_for"], Jsonb({"repair_id": str(plan["id"]), "old_scheduled_for": entry["old_scheduled_for"], "recipient_hash": entry["recipient_hash"]}), entry["schedule_id"]),
+        )
+    updated = execute(
+        """
+        UPDATE warmup_schedule_repairs
+        SET status = 'applied_safe_gate', applied = true,
+            proposed_json = jsonb_set(proposed_json, '{application}', %s::jsonb, true)
+        WHERE id = %s
+        RETURNING *
+        """,
+        (Jsonb({"mail_qa_decision": mail_qa, "signals": signals, "sends_started": False, "rollback_ready": True}), plan["id"]),
+    )
+    return dict(updated)
+
+
+def rollback_latest_spacing_repair() -> dict[str, Any]:
+    repair = fetch_one(
+        """
+        SELECT *
+        FROM warmup_schedule_repairs
+        WHERE applied = true AND status = 'applied_safe_gate'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    if not repair:
+        row = execute(
+            """
+            INSERT INTO warmup_schedule_rollbacks(status, restored_count, skipped_count, rollback_json)
+            VALUES ('nothing_to_rollback', 0, 0, %s)
+            RETURNING *
+            """,
+            (Jsonb({"reason": "no_applied_spacing_repair"}),),
+        )
+        return dict(row)
+    restored = 0
+    skipped = 0
+    entries = repair["proposed_json"].get("entries", [])
+    for entry in entries:
+        result = execute(
+            """
+            UPDATE warmup_schedule
+            SET scheduled_for = %s::timestamptz,
+                result_json = result_json - 'p12_spacing_repair',
+                updated_at = now()
+            WHERE id = %s AND status = 'scheduled'
+            RETURNING id
+            """,
+            (entry["old_scheduled_for"], entry["schedule_id"]),
+        )
+        if result:
+            restored += 1
+        else:
+            skipped += 1
+    execute("UPDATE warmup_schedule_repairs SET status = 'rolled_back', applied = false WHERE id = %s", (repair["id"],))
+    row = execute(
+        """
+        INSERT INTO warmup_schedule_rollbacks(repair_id, status, restored_count, skipped_count, rollback_json)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING *
+        """,
+        (repair["id"], "rolled_back", restored, skipped, Jsonb({"entries": len(entries), "sends_started": False})),
     )
     return dict(row)

@@ -1,30 +1,27 @@
 # Warmup Calendar Health Report
 
-Generated: 2026-05-26T14:21:21+03:00
+Generated: 2026-05-26 18:58 IDT
 
-- scheduled total: 28
-- due now: 0
-- sent today: 0
-- blocked today: 0
-- skipped suppressed: 0
-- latest mail QA decision: PASS
-- recent bounce/DSN count, last 24h: 2
-- recent rate-limit count, last 24h: 1
-- next scheduled send time: 2026-05-27 10:15 Asia/Jerusalem
-- launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
-- live outreach sent count: 0
+## State
 
-Decision: warmup calendar remains scheduled, but pre-send gate will block sends while any bounce/DSN or SMTP rate-limit signal exists in the last 24 hours.
+- scheduled total: `28`
+- warmup sent today: `0`
+- warmup sent total: `0`
+- live outreach sent total: `0`
+- latest mail QA decision: `PASS`
+- recent bounce/DSN count, last 24h: `2`
+- recent SMTP rate-limit count, last 24h: `1`
+- recent spam signal count, last 24h: `0`
+- launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-Raw recipient addresses are intentionally omitted.
+## P12 Schedule Gate
 
-## Cleanup Verification
+- provider-spacing apply status: `blocked_safety_gate`
+- reason: recent mail signals
+- schedule changed: `false`
+- sends started: `false`
 
-Generated: 2026-05-26T14:52:52+03:00
+## Next Allowed Action
 
-- scheduled rows: 28
-- sent rows: 0
-- due now: 0
-- recent bounce/DSN count: 2
-- recent SMTP rate-limit count: 1
-- pre-send decision: block while recent risk signals remain inside the 24-hour window
+No warmup send should be attempted until the recent bounce/DSN and rate-limit window clears and mail QA is rechecked. The existing systemd warmup timer remains safe because every due send is pre-gated.
+
