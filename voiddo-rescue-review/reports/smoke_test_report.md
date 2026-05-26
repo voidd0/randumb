@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 22:19 IDT
+Generated: 2026-05-26 22:38 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `214 passed`
+- API tests: `218 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -66,6 +66,10 @@ PASS
 - customer mail simulation templates pass QA: PASS
 - customer mail simulation endpoint requires auth: PASS
 - customer mail simulation agent records no-send run: PASS
+- closed-loop summary exposes resolver audit counts: PASS
+- customer mail simulation summary is admin safe: PASS
+- mailer visibility endpoints require auth and return counts: PASS
+- visibility payloads keep sending disabled: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 
@@ -76,3 +80,7 @@ PASS
 - live outreach sent count: `0`
 - recent bounce/DSN count: `2`
 - recent SMTP rate-limit count: `1`
+- customer mail real SMTP sent count: `0`
+- mailer action queue after cleanup: `0`
+- mailer send ledger after cleanup: `0`
+- recipient resolver audit after cleanup: `0`

@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 22:19 IDT
+Generated: 2026-05-26 22:38 IDT
 
 ## Canonical Latest State
 
@@ -64,15 +64,17 @@ Generated: 2026-05-26 22:19 IDT
 - customer mail simulation cases: `126`
 - customer mail simulation blocking failures: `0`
 - autonomous mailer executor agent runs: `7`
+- P30 admin visibility panel: implemented and protected
+- P30 raw recipients in admin summaries: `false`
 
 ## Verification
 
-- API tests: `214 passed`
+- API tests: `218 passed`
 - smoke test: PASS
-- Huanshu local adapter: PASS including admin transition panel
+- Huanshu local adapter: PASS including authenticated admin mailer gate panel
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
 - API/web/worker/postgres/redis: healthy
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P31 Mailer Ops Action Controls`.

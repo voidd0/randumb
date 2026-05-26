@@ -13,3 +13,20 @@ export async function fetchJson(path: string, forwardedHeaders: Record<string, s
   }
   return response.json();
 }
+
+export async function postJson(path: string, body: Record<string, unknown> = {}, forwardedHeaders: Record<string, string> = {}) {
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...forwardedHeaders };
+  if (path.startsWith("/admin/") && process.env.ADMIN_AUTH_TOKEN) {
+    headers["X-Admin-Token"] = process.env.ADMIN_AUTH_TOKEN;
+  }
+  const response = await fetch(`${apiBase()}${path}`, {
+    method: "POST",
+    cache: "no-store",
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    return null;
+  }
+  return response.json();
+}

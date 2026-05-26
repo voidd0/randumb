@@ -126,6 +126,7 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
   background: rgba(255, 255, 255, 0.025);
   font-size: 14px;
 }
+.row > * { min-width: 0; overflow-wrap: anywhere; }
 .tag { color: var(--accent-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .status { color: var(--muted); }
 .score { color: var(--accent); font-weight: 800; }
@@ -135,14 +136,15 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
 .tile h2, .tile h3 { margin: 0 0 8px; font-size: 18px; }
 .tile p { margin: 0; color: var(--muted); line-height: 1.5; }
 .dashboard {
+  width: 100%;
   max-width: 1240px;
   margin: 0 auto;
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: calc(100vh - 75px);
 }
-.sidebar { border-right: 1px solid var(--line); padding: 24px; }
-.content { padding: 24px; }
+.sidebar { border-right: 1px solid var(--line); padding: 24px; min-width: 0; }
+.content { padding: 24px; min-width: 0; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .metric, .panel {
   border: 1px solid var(--line);
@@ -265,6 +267,7 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
   .nav { align-items: flex-start; gap: 14px; flex-direction: column; }
   .row { grid-template-columns: 1fr; }
   h1 { font-size: 46px; }
-  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); width: 100%; }
+  .content { width: 100%; }
   .screenshot-grid { grid-template-columns: 1fr; }
 }

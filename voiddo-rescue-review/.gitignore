@@ -25,3 +25,6 @@ backups/*
 !storage/exports/.gitkeep
 !logs/.gitkeep
 !backups/.gitkeep
+
+reports/visual_qa_p30/
+*.png

@@ -61,6 +61,11 @@ def mailer_closed_loop_summary() -> dict[str, Any]:
                 "failed": _count("SELECT count(*) FROM mailer_send_ledger WHERE status = 'failed'"),
                 "latest": latest_ledger,
             },
+            "resolver_audit": {
+                "total": _count("SELECT count(*) FROM recipient_resolver_audit"),
+                "resolved": _count("SELECT count(*) FROM recipient_resolver_audit WHERE status = 'resolved'"),
+                "blocked": _count("SELECT count(*) FROM recipient_resolver_audit WHERE status = 'blocked'"),
+            },
             "inbound": {
                 "human_review_required": _count("SELECT count(*) FROM inbox_threads WHERE human_review_required"),
                 "unresolved": unresolved_threads,

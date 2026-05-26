@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-26 22:19 IDT
+Generated: 2026-05-26 22:38 IDT
 
 ## Decision
 
@@ -16,6 +16,7 @@ P26 added the protected customer-mail real-send gate. Real SMTP transport remain
 P27 added the autonomous mailer closed-loop executor, idempotency keys, and send ledger. The executor records evidence but still sends nothing under default gates.
 P28 added the private customer recipient resolver boundary. Raw addresses are resolved only inside transport and omitted from summaries/audits.
 P29 added customer mail simulation across all paid products, lifecycle actions, and gate scenarios without real SMTP.
+P30 added protected admin visibility for the customer-mail gate, resolver audit, send ledger, and simulation state. Raw recipients remain hidden.
 
 ## Passed Gates
 
@@ -35,11 +36,12 @@ P29 added customer mail simulation across all paid products, lifecycle actions, 
 - customer mail send ledger: implemented
 - private customer recipient resolver boundary: implemented
 - customer mail simulation matrix: implemented
+- customer mailer admin visibility panel: implemented
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: PASS or non-blocking warning
-- API tests: `214 passed`
+- API tests: `218 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -57,7 +59,8 @@ P29 added customer mail simulation across all paid products, lifecycle actions, 
 - recent mailer send ledger rows after test cleanup: `0`
 - recent recipient resolver audit rows after test cleanup: `0`
 - customer mail simulation blocking failures: `0`
+- raw recipients in admin summaries: `false`
 
 ## Next Exact Action
 
-Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
+Continue the self-written build cycle with `P31 Mailer Ops Action Controls`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.

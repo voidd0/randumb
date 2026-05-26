@@ -1,4 +1,4 @@
-import { fetchJson } from "../lib/api";
+import { fetchJson, postJson } from "../lib/api";
 import { headers } from "next/headers";
 
 const labels: Record<string, string> = {
@@ -21,6 +21,8 @@ export default async function AdminPage() {
   const postWindowData = await fetchJson("/admin/mailer/post-window-recheck", authorization ? { Authorization: authorization } : {});
   const ledgerData = await fetchJson("/admin/mailer/autonomy-ledger", authorization ? { Authorization: authorization } : {});
   const actionQueueData = await fetchJson("/admin/mailer/action-queue", authorization ? { Authorization: authorization } : {});
+  const closedLoopData = await fetchJson("/admin/mailer/closed-loop", authorization ? { Authorization: authorization } : {});
+  const simulationData = await postJson("/admin/mailer/customer-simulation", { write_report: false }, authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
@@ -28,6 +30,8 @@ export default async function AdminPage() {
   const postWindow = postWindowData?.summary || {};
   const ledger = ledgerData?.ledger || {};
   const actionQueue = actionQueueData?.queue || {};
+  const closedLoop = closedLoopData?.closed_loop || {};
+  const simulation = simulationData?.simulation || {};
   const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
@@ -45,6 +49,8 @@ export default async function AdminPage() {
   const ledgerThrottle = ledger.throttle || {};
   const actionCounts = Array.isArray(actionQueue.counts) ? actionQueue.counts : [];
   const customerMailCounts = actionCounts.filter((item: any) => ["customer_onboarding", "fix_request_created", "monitoring_report"].includes(item.action_type));
+  const sendLedger = closedLoop.send_ledger || actionQueue.send_ledger || {};
+  const closedLoopSignals = closedLoop.signals || {};
   const monitoringStatuses = monitoring.target_statuses || [];
   const monitoringRuns = monitoring.latest_runs || [];
   const ops = [
@@ -168,6 +174,19 @@ export default async function AdminPage() {
             {customerMailCounts.length ? customerMailCounts.slice(0, 5).map((item: any) => (
               <div className="row" key={`${item.action_type}-${item.status}`}><span className="tag">{item.status}</span><span>{String(item.action_type).replaceAll("_", " ")}</span><span className="score">{item.count}</span></div>
             )) : <div className="row"><span className="tag">customer</span><span>customer mail actions</span><span className="score">0</span></div>}
+          </div>
+          <div className="panel">
+            <h2>Customer Mail Gate</h2>
+            <div className="row"><span className="tag">sim</span><span>customer mail simulation cases</span><span className="score">{simulation.case_count ?? 0}</span></div>
+            <div className="row"><span className="tag">products</span><span>paid products covered</span><span className="score">{simulation.product_count ?? 0}</span></div>
+            <div className="row"><span className="tag">failures</span><span>simulation blocking failures</span><span className="score">{simulation.blocking_failures ?? 0}</span></div>
+            <div className="row"><span className="tag">resolver</span><span>recipient resolver audit rows</span><span className="score">{closedLoop.resolver_audit?.total ?? 0}</span></div>
+            <div className="row"><span className="tag">ledger</span><span>customer mail send ledger rows</span><span className="score">{sendLedger.total ?? 0}</span></div>
+            <div className="row"><span className="tag">blocked</span><span>transport-blocked customer sends</span><span className="score">{sendLedger.transport_blocked ?? sendLedger.blocked ?? 0}</span></div>
+            <div className="row"><span className="tag">failed</span><span>failed customer transport attempts</span><span className="score">{sendLedger.failed ?? 0}</span></div>
+            <div className="row"><span className="tag">signals</span><span>recent bounce or rate-limit blockers</span><span className="score">{(closedLoopSignals.bounce_or_dsn_count ?? 0) + (closedLoopSignals.rate_limit_count ?? 0)}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in admin summaries</span><span className="score">{closedLoop.raw_recipient_addresses_included || simulation.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">send</span><span>real customer SMTP</span><span className="score">{simulation.real_smtp_called ? "called" : "off"}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>

@@ -1,6 +1,6 @@
 # Warmup Calendar Health Report
 
-Generated: 2026-05-26 20:47 IDT
+Generated: 2026-05-26 22:38 IDT
 
 ## State
 
@@ -13,6 +13,7 @@ Generated: 2026-05-26 20:47 IDT
 - recent SMTP rate-limit count, last 24h: `1`
 - recent spam signal count, last 24h: `0`
 - launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
+- P30 admin visibility: PASS, no send unlock
 
 ## P12 Schedule Gate
 

@@ -1,43 +1,72 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 22:19 IDT
+Generated: 2026-05-26 22:38 IDT
 
-## Package
+## Branch
+
+- repository: `voidd0/randumb`
+- branch: `voiddo-rescue-mvp-review-20260526-files`
+- review folder: `voiddo-rescue-review/`
+- current pass: `P30 Mailer Admin Visibility Panel`
+
+## Package State
 
 - source path: `/opt/voiddo-rescue`
-- target folder: `voiddo-rescue-review/`
-- file count after manifest regeneration: `267`
-- branch: `voiddo-rescue-mvp-review-20260526-files`
+- clean review path: `/tmp/randumb-rescue-review/voiddo-rescue-review`
+- tree file count: `270`
+- tree manifest hash: see `ARCHIVE_SHA256.txt`
+- final commit SHA: see branch HEAD returned in the operator final output. The exact final SHA cannot be embedded into the same commit before Git computes that commit hash.
 
-## P29 Summary
+## Exclusions
 
-- Added customer lifecycle mail simulation matrix.
-- Covered all 6 paid product keys.
-- Covered 3 customer mail action types.
-- Covered 7 gate/transport scenarios.
-- Added protected endpoint:
-  - `POST /admin/mailer/customer-simulation`
-- Added `customer_mail_simulation_agent` to agent registry/daily loop.
+The review tree excludes:
+
+- `.env` and `*.env`
+- mailbox passwords
+- private keys
+- `.venv/`, `venv/`
+- `.pytest_cache/`
+- `__pycache__/`, `*.pyc`
+- `node_modules/`
+- `.next/`
+- runtime `storage/`
+- runtime `logs/`
+- `backups/`
+- screenshot artifacts, including P30 visual QA PNGs
+- export archives
+
+## P30 Summary
+
+P30 added protected admin visibility for the autonomous customer-mail safety state:
+
+- customer mail simulation summary
+- paid product coverage
+- resolver audit counts
+- send ledger counts
+- customer transport blocked/failed counts
+- recent bounce and rate-limit blockers
+- real customer SMTP flag state
+
+Raw recipient addresses are not included in the admin summary, reports, archive manifest, or review package.
 
 ## Verification
 
-- focused P29 tests: `7 passed`
-- full API tests: `214 passed`
-- smoke script: PASS
-- docker compose config: PASS
-- Docker services: API/web/worker/postgres/redis healthy
+- focused P30/P29 tests: `11 passed`
+- full API suite: `218 passed`
+- smoke script: PASS, output `ok`
+- Huanshu local adapter: PASS
+- Playwright desktop/mobile admin screenshots: nonblank
+- axe-core: PASS, 0 violations
+- pa11y: PASS, 0 issues
+- horizontal overflow: `false`
+- broken images: `0`
+- unresolved template variables: `false`
+- raw email-like text in admin summary: `false`
+- secret/artifact scan: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
 - real customer SMTP sends: `0`
 
-## Exclusions
+## Runtime Decision
 
-Excluded from review/export: `.env`, `*.env`, mailbox passwords, private keys, `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`, `node_modules`, `.next`, runtime storage, screenshots, exports, backups, logs.
-
-## Secret And Artifact Scan
-
-Secret/artifact scan is run before push/export. No secrets, private keys, raw mailbox passwords, virtualenv, cache directories, runtime storage, screenshots, or export artifacts are intended for the review tree.
-
-## Notes
-
-This package is still not launch-ready. Simulation proves the customer mail path, but real sends remain blocked by flags and recent mail-signal gates.
+Launch remains blocked for cold outreach. Warmup remains scheduled but not sending because recent bounce/DSN and SMTP rate-limit signals still exist inside the 24-hour safety window.

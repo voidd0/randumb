@@ -1,6 +1,6 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-26 21:33 IDT
+Generated: 2026-05-26 22:38 IDT
 
 ## Canonical Gate
 
@@ -26,3 +26,17 @@ Huanshu local adapter remains the canonical visual gate for Rescue.
 ## P24 Notes
 
 The authenticated admin panel, including post-window timer/readiness evidence, mailer ledger, mailer action queue, customer mail task counts, and send-ready evidence, was screenshot-tested with auth headers. Blocking visual issues: `0`.
+
+## P30 Notes
+
+The authenticated admin panel now includes the customer-mail gate visibility panel. It was screenshot-tested on desktop and mobile with auth headers.
+
+- Huanshu local adapter: PASS
+- Playwright screenshots: 2, both nonblank
+- `axe-core-playwright`: PASS, 0 violations
+- `pa11y`: PASS, 0 issues
+- horizontal overflow: `false`
+- broken images: `0`
+- unresolved template variables: `false`
+- raw recipient exposure: `false`
+- blocking visual issues: `0`
