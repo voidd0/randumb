@@ -1,6 +1,6 @@
-# Vøiddo Rescue P14 Review Notes
+# Vøiddo Rescue P15 Review Notes
 
-Generated: 2026-05-26 19:26 IDT
+Generated: 2026-05-26 19:36 IDT
 
 ## Source
 
@@ -8,9 +8,9 @@ Original runtime tree: `/opt/voiddo-rescue`
 Review folder: `voiddo-rescue-review/`
 Branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## P14 Summary
+## P15 Summary
 
-P14 adds customer journey snapshots, paid fix request to Codex task linking, protected customer journey admin endpoint, admin mailer control-room status, and reply handling matrix hardening. Live outreach and forced warmup remain blocked.
+P15 adds customer-safe token access and a safe monitoring loop: token hashing, public token dashboard API, protected access-token and monitoring endpoints, monitoring run persistence, and dry-run safe monitoring checks. Live outreach and forced warmup remain blocked.
 
 ## Excluded From Review Tree And Export
 
@@ -26,7 +26,7 @@ No raw secrets, env files, mailbox passwords, private keys, virtualenvs, cache d
 
 ## Verification
 
-- API tests: `132 passed`
+- API tests: `138 passed`
 - smoke: PASS
 - Huanshu: PASS
 - extra QA plugins: PASS or non-blocking warning

@@ -51,6 +51,8 @@ export default async function AdminPage() {
     ["mail lessons", metrics.mail_signal_lessons ?? 0],
     ["clean recoveries", metrics.clean_window_recovery_runs ?? 0],
     ["customer journeys", metrics.customer_journey_snapshots ?? 0],
+    ["customer tokens", metrics.customer_access_tokens ?? 0],
+    ["monitoring runs", metrics.monitoring_runs ?? 0],
     ["scout checks", metrics.scout_self_checks ?? 0],
     ["scout provenance", metrics.scout_provenance_scores ?? 0],
     ["audit strength", metrics.audit_strength_scores ?? 0],

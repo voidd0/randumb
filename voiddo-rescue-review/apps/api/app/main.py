@@ -51,6 +51,8 @@ from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot,
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
+from .customer_access import customer_dashboard_by_token, ensure_customer_access_token
+from .monitoring import ensure_monitoring_target, run_monitoring_check
 from .language_gate import check_no_ai_public_language
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
@@ -528,6 +530,31 @@ def mailer_template_qa_run():
 @app.get("/admin/customers/{customer_id}/journey", dependencies=[Depends(require_admin)])
 def customer_journey_get(customer_id: str):
     return {"ok": True, "journey": customer_journey_snapshot(customer_id=customer_id)}
+
+
+@app.post("/admin/customers/{customer_id}/access-token", dependencies=[Depends(require_admin)])
+def customer_access_token_create(customer_id: str):
+    return {"ok": True, "access": ensure_customer_access_token(customer_id)}
+
+
+@app.get("/customer/dashboard/{token}")
+def customer_dashboard_token_get(token: str):
+    try:
+        return {"ok": True, "dashboard": customer_dashboard_by_token(token)}
+    except ValueError:
+        return Response(status_code=404)
+
+
+@app.post("/admin/customers/{customer_id}/monitoring-targets", dependencies=[Depends(require_admin)])
+async def monitoring_target_create(customer_id: str, request: Request):
+    payload = await request.json()
+    return {"ok": True, "target": ensure_monitoring_target(customer_id, payload.get("site_url", ""))}
+
+
+@app.post("/admin/monitoring/{target_id}/run", dependencies=[Depends(require_admin)])
+async def monitoring_run_create(target_id: str, request: Request):
+    payload = await request.json()
+    return {"ok": True, "run": run_monitoring_check(target_id, bool(payload.get("dry_run", True)))}
 
 
 @app.post("/admin/warmup/provider-spacing-plan", dependencies=[Depends(require_admin)])

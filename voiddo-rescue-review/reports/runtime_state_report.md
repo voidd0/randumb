@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 19:25 IDT
+Generated: 2026-05-26 19:35 IDT
 
 ## Canonical Latest State
 
@@ -16,27 +16,20 @@ Generated: 2026-05-26 19:25 IDT
 - live outreach sent count: `0`
 - bounce/DSN count, last 24h: `2`
 - SMTP rate-limit signal count, last 24h: `1`
-- spam signal count, last 24h: `0`
 - launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-## Autonomous Mailer
+## Customer And Monitoring
 
-- latest mailer status: `blocked_recent_mail_signals`
-- next safe action: `wait_until_recent_signal_window_clears`
-- clean-window recovery: `blocked_recent_signals`
-- recovery sends started: `false`
-- signal learning: active
-
-## Customer Journey
-
-- customer journey snapshots table: present
-- paid fix request to Codex task linking: implemented
-- protected customer journey endpoint: implemented
-- customer-facing token access: not yet implemented, assigned to P15
+- customer journey snapshots: implemented
+- customer access token table: implemented
+- token dashboard API: implemented
+- monitoring targets: implemented
+- monitoring runs: implemented
+- monitoring scheduler worker: not yet implemented, assigned to P16
 
 ## Verification
 
-- API tests: `132 passed`
+- API tests: `138 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS
 - secondary QA plugins: PASS or non-blocking warning

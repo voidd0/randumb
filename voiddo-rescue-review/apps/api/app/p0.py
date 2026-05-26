@@ -347,6 +347,8 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "mail_signal_lessons": scalar("SELECT count(*) FROM mail_signal_lessons"),
         "clean_window_recovery_runs": scalar("SELECT count(*) FROM clean_window_recovery_runs"),
         "customer_journey_snapshots": scalar("SELECT count(*) FROM customer_journey_snapshots"),
+        "customer_access_tokens": scalar("SELECT count(*) FROM customer_access_tokens"),
+        "monitoring_runs": scalar("SELECT count(*) FROM monitoring_runs"),
         "latest_mailer_status": dict(latest_mailer) if latest_mailer else {},
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {

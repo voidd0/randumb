@@ -58,6 +58,9 @@ def ensure_fix_codex_task(fix_request_id: str) -> dict[str, Any]:
 
 def customer_journey_snapshot(customer_id: str | None = None, email: str | None = None, paddle_customer_id: str | None = None) -> dict[str, Any]:
     customer = _customer_lookup(customer_id, email, paddle_customer_id)
+    from .customer_access import ensure_customer_access_token
+
+    access = ensure_customer_access_token(str(customer["id"]))
     payments = [dict(row) for row in fetch_all("SELECT product_key, status, amount, currency, created_at FROM payments WHERE customer_id = %s ORDER BY created_at DESC", (customer["id"],))]
     subscriptions = [dict(row) for row in fetch_all("SELECT product_key, status, current_period_start, current_period_end, created_at FROM subscriptions WHERE customer_id = %s ORDER BY created_at DESC", (customer["id"],))]
     fix_requests = [dict(row) for row in fetch_all("SELECT * FROM fix_requests WHERE customer_id = %s ORDER BY created_at DESC", (customer["id"],))]
@@ -86,6 +89,7 @@ def customer_journey_snapshot(customer_id: str | None = None, email: str | None 
             "fix_requests": enriched_fix_requests,
             "onboarding": onboarding,
             "monitoring": monitoring,
+            "access": {"token_ready": True, "new_token_created": access["token_created"], "token_id": access["token_id"]},
             "dashboard_ready": True,
         }
     )

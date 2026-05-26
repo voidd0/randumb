@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 19:25 IDT
+Generated: 2026-05-26 19:35 IDT
 
 ## Result
 
@@ -8,8 +8,8 @@ PASS
 
 ## Test Results
 
-- API tests: `132 passed`
-- smoke script: PASS, includes `132 passed`
+- API tests: `138 passed`
+- smoke script: PASS, includes `138 passed`
 - API health: PASS
 - web health: PASS
 - Docker services: healthy

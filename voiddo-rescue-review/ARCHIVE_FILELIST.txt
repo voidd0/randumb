@@ -16,6 +16,7 @@ voiddo-rescue-review/apps/api/app/campaign_control.py
 voiddo-rescue-review/apps/api/app/campaign_economics.py
 voiddo-rescue-review/apps/api/app/codex_tasks.py
 voiddo-rescue-review/apps/api/app/config.py
+voiddo-rescue-review/apps/api/app/customer_access.py
 voiddo-rescue-review/apps/api/app/customer_journey.py
 voiddo-rescue-review/apps/api/app/db.py
 voiddo-rescue-review/apps/api/app/economics.py
@@ -33,6 +34,7 @@ voiddo-rescue-review/apps/api/app/mailer_readiness.py
 voiddo-rescue-review/apps/api/app/mailer_throttle.py
 voiddo-rescue-review/apps/api/app/main.py
 voiddo-rescue-review/apps/api/app/models.py
+voiddo-rescue-review/apps/api/app/monitoring.py
 voiddo-rescue-review/apps/api/app/outreach.py
 voiddo-rescue-review/apps/api/app/p0.py
 voiddo-rescue-review/apps/api/app/quality_plugins.py
@@ -64,6 +66,7 @@ voiddo-rescue-review/apps/api/migrations/015_warmup_spacing_planner.sql
 voiddo-rescue-review/apps/api/migrations/016_warmup_spacing_rollback.sql
 voiddo-rescue-review/apps/api/migrations/017_mailer_autonomy.sql
 voiddo-rescue-review/apps/api/migrations/018_p14_customer_journey.sql
+voiddo-rescue-review/apps/api/migrations/019_p15_customer_access_monitoring.sql
 voiddo-rescue-review/apps/api/requirements.txt
 voiddo-rescue-review/apps/api/tests/test_core.py
 voiddo-rescue-review/apps/api/tests/test_p0_integration.py
@@ -72,6 +75,7 @@ voiddo-rescue-review/apps/api/tests/test_p11_warmup_spacing.py
 voiddo-rescue-review/apps/api/tests/test_p12_spacing_apply_revenue.py
 voiddo-rescue-review/apps/api/tests/test_p13_mailer_autonomy.py
 voiddo-rescue-review/apps/api/tests/test_p14_customer_reply_journey.py
+voiddo-rescue-review/apps/api/tests/test_p15_customer_access_monitoring.py
 voiddo-rescue-review/apps/api/tests/test_p1_launch_gate.py
 voiddo-rescue-review/apps/api/tests/test_p5_warmup_safety.py
 voiddo-rescue-review/apps/api/tests/test_p6_self_operating.py
@@ -157,7 +161,9 @@ voiddo-rescue-review/reports/p13_autonomous_mailer_report.md
 voiddo-rescue-review/reports/p13_next_self_written_tz.md
 voiddo-rescue-review/reports/p14_customer_journey_reply_report.md
 voiddo-rescue-review/reports/p14_next_self_written_tz.md
+voiddo-rescue-review/reports/p15_customer_token_monitoring_report.md
 voiddo-rescue-review/reports/p15_next_self_written_tz.md
+voiddo-rescue-review/reports/p16_next_self_written_tz.md
 voiddo-rescue-review/reports/p1_launch_gate_fix_report.md
 voiddo-rescue-review/reports/p2_mail_checkout_warmup_report.md
 voiddo-rescue-review/reports/p3_checkout_deliverability_warmup_report.md
