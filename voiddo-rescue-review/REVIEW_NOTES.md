@@ -1,40 +1,52 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 23:14 IDT
+Generated: 2026-05-26 23:24 IDT
 
 ## Branch
 
 - repository: `voidd0/randumb`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
 - review folder: `voiddo-rescue-review/`
-- current pass: `P34 Mailer Ops Daily Digest Hook`
+- current pass: `P35 Mailer Ops Digest UI Surface`
 
 ## Package State
 
 - source path: `/opt/voiddo-rescue`
 - clean review path: `/tmp/randumb-rescue-review/voiddo-rescue-review`
-- tree file count: `285`
+- tree file count: `288`
 - tree manifest hash: see `ARCHIVE_SHA256.txt`
 - final commit SHA: see branch HEAD returned in the operator final output.
 
 ## Exclusions
 
-The review tree excludes `.env`, mailbox passwords, private keys, virtualenvs, caches, `node_modules`, `.next`, runtime storage/logs/backups, screenshots, export archives, and P30-P33 visual QA PNGs.
+The review tree excludes `.env`, mailbox passwords, private keys, virtualenvs, caches, `node_modules`, `.next`, runtime storage/logs/backups, screenshots, export archives, and P30-P35 visual QA PNGs.
 
-## P34 Summary
+## P35 Summary
 
-P34 integrated mailer ops evidence into the owner/daily status reporting path while keeping it no-send:
+P35 exposed daily digest mailer ops evidence in the protected admin UI:
 
-- owner report includes mailer ops real/synthetic/blocked counts
-- owner report draft action is queued through the no-send mailer action queue
-- generated report sends no email
-- no raw recipients are included
+- protected `GET /admin/mailer/digest-summary`
+- Daily Digest Evidence panel in `/admin`
+- owner report draft status
+- mailer ops real/synthetic/blocked counts
+- latest owner report generated state
+- no-send digest email state
+- raw-recipient privacy state
 
 ## Verification
 
-- focused P17/P34 tests: `10 passed`
-- full API suite: `234 passed`
+- focused P34/P35 tests: `8 passed`
+- full API suite: `238 passed`
 - smoke script: PASS, output `ok`
+- Next production build: PASS
+- Huanshu local adapter: PASS
+- Playwright desktop/mobile admin screenshots: nonblank
+- axe-core: PASS, 0 violations
+- pa11y: PASS, 0 issues
+- horizontal overflow: `false`
+- broken images: `0`
+- unresolved template variables: `false`
+- raw email-like text in admin summary: `false`
 - secret/artifact scan: PASS
 - live outreach sent: `0`
 - warmup sent: `0`

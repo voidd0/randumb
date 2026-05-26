@@ -131,6 +131,43 @@ def monitoring_control_room_summary() -> dict[str, Any]:
     )
 
 
+def mailer_digest_summary() -> dict[str, Any]:
+    ops = mailer_ops_action_summary()
+    latest_report = fetch_one(
+        """
+        SELECT id, severity, message, payload_json, created_at
+        FROM system_events
+        WHERE type = 'owner_report.generated'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    latest_action = fetch_one(
+        """
+        SELECT id, action_type, risk_level, status, mailbox, recipient_hash, template_key,
+               payload_json, gate_result_json, result_json, created_at, updated_at
+        FROM mailer_action_queue
+        WHERE action_type = 'owner_report'
+          AND payload_json::text LIKE %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        ("%daily_digest_hook%",),
+    )
+    return json_safe(
+        {
+            "mailer_ops": ops,
+            "latest_owner_report": dict(latest_report) if latest_report else None,
+            "latest_owner_report_action": dict(latest_action) if latest_action else None,
+            "owner_report_action_status": latest_action["status"] if latest_action else "none",
+            "email_sent": bool((latest_report or {}).get("payload_json", {}).get("email_sent", False)) if latest_report else False,
+            "send_mail": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+        }
+    )
+
+
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     state = runtime_state_snapshot()

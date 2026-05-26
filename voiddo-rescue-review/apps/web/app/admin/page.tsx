@@ -31,6 +31,7 @@ export default async function AdminPage() {
   const closedLoopData = await fetchJson("/admin/mailer/closed-loop", authorization ? { Authorization: authorization } : {});
   const simulationData = await postJson("/admin/mailer/customer-simulation", { write_report: false }, authorization ? { Authorization: authorization } : {});
   const opsActionData = await fetchJson("/admin/mailer/ops-actions", authorization ? { Authorization: authorization } : {});
+  const digestData = await fetchJson("/admin/mailer/digest-summary", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
@@ -41,6 +42,8 @@ export default async function AdminPage() {
   const closedLoop = closedLoopData?.closed_loop || {};
   const simulation = simulationData?.simulation || {};
   const opsActions = opsActionData?.ops_actions || {};
+  const digest = digestData?.digest || {};
+  const digestOps = digest.mailer_ops || {};
   const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
@@ -230,6 +233,16 @@ export default async function AdminPage() {
             {Array.isArray(opsActions.latest) && opsActions.latest.length ? opsActions.latest.slice(0, 3).map((item: any) => (
               <div className="row" key={item.id}><span className="tag">{item.is_synthetic ? "test" : item.status}</span><span>{String(item.action).replaceAll("_", " ")}</span><span className="score">{item.send_mail ? "send" : "no-send"}</span></div>
             )) : <div className="row"><span className="tag">idle</span><span>no ops actions recorded yet</span><span className="score">0</span></div>}
+          </div>
+          <div className="panel">
+            <h2>Daily Digest Evidence</h2>
+            <div className="row"><span className="tag">draft</span><span>daily digest owner report action status</span><span className="score">{digest.owner_report_action_status ?? "none"}</span></div>
+            <div className="row"><span className="tag">real</span><span>mailer ops real count in digest</span><span className="score">{digestOps.real_count ?? 0}</span></div>
+            <div className="row"><span className="tag">test</span><span>mailer ops synthetic count in digest</span><span className="score">{digestOps.synthetic_count ?? 0}</span></div>
+            <div className="row"><span className="tag">blocked</span><span>blocked unsafe ops count in digest</span><span className="score">{digestOps.blocked_unsafe_count ?? 0}</span></div>
+            <div className="row"><span className="tag">latest</span><span>latest owner report generated state</span><span className="score">{digest.latest_owner_report ? "generated" : "none"}</span></div>
+            <div className="row"><span className="tag">send</span><span>daily digest email send state</span><span className="score">{digest.email_sent ? "sent" : "no-send"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in digest summary</span><span className="score">{digest.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>

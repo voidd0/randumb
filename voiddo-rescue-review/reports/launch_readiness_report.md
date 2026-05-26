@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-26 23:14 IDT
+Generated: 2026-05-26 23:24 IDT
 
 ## Decision
 
@@ -21,6 +21,7 @@ P31 added protected admin controls for safe no-send mailer operations. The contr
 P32 added dedicated `mailer_ops_runs` persistence for no-send mailer ops results.
 P33 added real/synthetic retention separation for mailer ops runs and safe synthetic cleanup.
 P34 added mailer ops evidence to the no-send owner/daily digest path.
+P35 exposed mailer ops daily digest evidence in the protected admin dashboard.
 
 ## Passed Gates
 
@@ -45,11 +46,12 @@ P34 added mailer ops evidence to the no-send owner/daily digest path.
 - mailer ops result persistence: implemented
 - mailer ops real/synthetic retention: implemented
 - mailer ops daily digest hook: implemented
+- mailer ops digest UI surface: implemented
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: PASS or non-blocking warning
-- API tests: `234 passed`
+- API tests: `238 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -73,4 +75,4 @@ P34 added mailer ops evidence to the no-send owner/daily digest path.
 
 ## Next Exact Action
 
-Continue the self-written build cycle with `P35 Mailer Ops Digest UI Surface`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
+Continue the self-written build cycle with `P36 Mailer Digest Scheduler Agent`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.

@@ -1,6 +1,6 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-26 23:08 IDT
+Generated: 2026-05-26 23:24 IDT
 
 ## Canonical Gate
 
@@ -84,4 +84,20 @@ The authenticated admin panel now displays real/synthetic mailer ops run separat
 - unresolved template variables: `false`
 - raw recipient exposure: `false`
 - real/synthetic counters visible: `true`
+- blocking visual issues: `0`
+
+## P35 Notes
+
+The authenticated admin panel now includes Daily Digest Evidence with owner-report draft status and latest owner report state.
+
+- Huanshu local adapter: PASS
+- Playwright screenshots: 2, both nonblank
+- `axe-core-playwright`: PASS, 0 violations
+- `pa11y`: PASS, 0 issues
+- horizontal overflow: `false`
+- broken images: `0`
+- unresolved template variables: `false`
+- raw recipient exposure: `false`
+- daily digest panel visible: `true`
+- no-send status visible: `true`
 - blocking visual issues: `0`

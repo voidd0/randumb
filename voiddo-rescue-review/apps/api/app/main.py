@@ -49,7 +49,7 @@ from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_au
 from .mailer_control import evaluate_outbound_message
 from .mailer_readiness import mailbox_health_score, run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
-from .mailer_control_room import mailer_control_room_summary, monitoring_control_room_summary, write_owner_status_report
+from .mailer_control_room import mailer_control_room_summary, mailer_digest_summary, monitoring_control_room_summary, write_owner_status_report
 from .mailer_autonomy_ledger import mailer_autonomy_ledger
 from .mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, process_mailer_action_queue, send_customer_mail, transport_dry_run
 from .mailer_closed_loop import mailer_closed_loop_summary, run_mailer_closed_loop
@@ -652,6 +652,11 @@ def mailer_ops_actions_cleanup_synthetic():
 async def mailer_owner_status_report(request: Request):
     payload = await request.json()
     return {"ok": True, "report": write_owner_status_report(bool(payload.get("send_if_safe", False)))}
+
+
+@app.get("/admin/mailer/digest-summary", dependencies=[Depends(require_admin)])
+def mailer_digest_summary_get():
+    return {"ok": True, "digest": mailer_digest_summary()}
 
 
 @app.get("/admin/customers/{customer_id}/journey", dependencies=[Depends(require_admin)])

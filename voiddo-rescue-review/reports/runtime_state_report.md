@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 23:14 IDT
+Generated: 2026-05-26 23:24 IDT
 
 ## Canonical Latest State
 
@@ -72,10 +72,11 @@ Generated: 2026-05-26 23:14 IDT
 - P32 mailer ops run rows after cleanup: `0`
 - P33 mailer ops real/synthetic retention: implemented
 - P34 mailer ops daily digest hook: implemented
+- P35 mailer ops digest UI surface: implemented
 
 ## Verification
 
-- API tests: `234 passed`
+- API tests: `238 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including authenticated admin mailer ops controls
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
@@ -83,4 +84,4 @@ Generated: 2026-05-26 23:14 IDT
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P35 Mailer Ops Digest UI Surface`.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P36 Mailer Digest Scheduler Agent`.
