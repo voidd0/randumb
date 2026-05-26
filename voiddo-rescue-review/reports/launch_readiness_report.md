@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-26 22:12 IDT
+Generated: 2026-05-26 22:19 IDT
 
 ## Decision
 
@@ -15,6 +15,7 @@ P25 added customer-mail transport dry-run records. The endpoint is protected and
 P26 added the protected customer-mail real-send gate. Real SMTP transport remains blocked by default and requires explicit flags plus clean mail QA/signals/throttle/template QA.
 P27 added the autonomous mailer closed-loop executor, idempotency keys, and send ledger. The executor records evidence but still sends nothing under default gates.
 P28 added the private customer recipient resolver boundary. Raw addresses are resolved only inside transport and omitted from summaries/audits.
+P29 added customer mail simulation across all paid products, lifecycle actions, and gate scenarios without real SMTP.
 
 ## Passed Gates
 
@@ -33,11 +34,12 @@ P28 added the private customer recipient resolver boundary. Raw addresses are re
 - autonomous mailer closed-loop executor: implemented
 - customer mail send ledger: implemented
 - private customer recipient resolver boundary: implemented
+- customer mail simulation matrix: implemented
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: PASS or non-blocking warning
-- API tests: `207 passed`
+- API tests: `214 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -54,6 +56,7 @@ P28 added the private customer recipient resolver boundary. Raw addresses are re
 - customer mail real-send flag: `false`
 - recent mailer send ledger rows after test cleanup: `0`
 - recent recipient resolver audit rows after test cleanup: `0`
+- customer mail simulation blocking failures: `0`
 
 ## Next Exact Action
 

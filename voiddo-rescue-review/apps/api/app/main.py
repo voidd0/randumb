@@ -56,6 +56,7 @@ from .mailer_closed_loop import mailer_closed_loop_summary, run_mailer_closed_lo
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
+from .customer_mail_simulation import run_customer_mail_simulation
 from .customer_access import customer_dashboard_by_token, ensure_customer_access_token
 from .monitoring import ensure_monitoring_target, process_due_monitoring_targets, run_monitoring_check
 from .language_gate import check_no_ai_public_language
@@ -614,6 +615,12 @@ def mailer_closed_loop_get():
 async def mailer_closed_loop_run(request: Request):
     payload = await request.json()
     return {"ok": True, "result": run_mailer_closed_loop(int(payload.get("limit", 10)))}
+
+
+@app.post("/admin/mailer/customer-simulation", dependencies=[Depends(require_admin)])
+async def mailer_customer_simulation(request: Request):
+    payload = await request.json()
+    return {"ok": True, "simulation": run_customer_mail_simulation(bool(payload.get("write_report", True)))}
 
 
 @app.post("/admin/mailer/owner-status-report", dependencies=[Depends(require_admin)])

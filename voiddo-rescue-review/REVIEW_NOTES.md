@@ -1,30 +1,31 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 22:12 IDT
+Generated: 2026-05-26 22:19 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - target folder: `voiddo-rescue-review/`
-- file count after manifest regeneration: `263`
+- file count after manifest regeneration: `267`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## P28 Summary
+## P29 Summary
 
-- Added migration `024_recipient_resolver_audit.sql`.
-- Added private customer recipient resolver boundary.
-- Customer email is resolved from the private `customers` table only inside the transport path.
-- Resolver audit stores hash/status/reason only.
-- Transport now blocks cleanly on missing, invalid, unknown, or suppressed customers.
+- Added customer lifecycle mail simulation matrix.
+- Covered all 6 paid product keys.
+- Covered 3 customer mail action types.
+- Covered 7 gate/transport scenarios.
+- Added protected endpoint:
+  - `POST /admin/mailer/customer-simulation`
+- Added `customer_mail_simulation_agent` to agent registry/daily loop.
 
 ## Verification
 
-- focused P27-P28 tests: `11 passed`
-- full API tests: `207 passed`
+- focused P29 tests: `7 passed`
+- full API tests: `214 passed`
 - smoke script: PASS
 - docker compose config: PASS
 - Docker services: API/web/worker/postgres/redis healthy
-- migration `024_recipient_resolver_audit.sql`: applied
 - live outreach sent: `0`
 - warmup sent: `0`
 - real customer SMTP sends: `0`
@@ -39,4 +40,4 @@ Secret/artifact scan is run before push/export. No secrets, private keys, raw ma
 
 ## Notes
 
-This package is still not launch-ready. Recipient resolution is now available for future customer mail transport, but real sends remain blocked by flags and recent mail-signal gates.
+This package is still not launch-ready. Simulation proves the customer mail path, but real sends remain blocked by flags and recent mail-signal gates.

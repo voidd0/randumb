@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 22:12 IDT
+Generated: 2026-05-26 22:19 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `207 passed`
+- API tests: `214 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -59,6 +59,13 @@ PASS
 - suppressed customer blocks transport: PASS
 - resolver audit omits raw customer email: PASS
 - closed-loop default flags keep customer mail unsent: PASS
+- customer mail simulation covers all products: PASS
+- customer mail simulation covers required scenarios: PASS
+- customer mail simulation omits raw recipients: PASS
+- customer mail simulation never calls real SMTP or live outreach: PASS
+- customer mail simulation templates pass QA: PASS
+- customer mail simulation endpoint requires auth: PASS
+- customer mail simulation agent records no-send run: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

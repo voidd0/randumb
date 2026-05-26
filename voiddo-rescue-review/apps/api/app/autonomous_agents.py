@@ -18,6 +18,7 @@ from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
+from .customer_mail_simulation import run_customer_mail_simulation
 from .monitoring import process_due_monitoring_targets, run_monitoring_check
 from .p0 import (
     build_warmup_calendar,
@@ -88,6 +89,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "self_building_agent": lambda: self_operating_summary(),
         "autonomous_mailer_agent": lambda: run_autonomous_mailer_cycle(),
         "autonomous_mailer_executor_agent": lambda: run_mailer_closed_loop(int(payload.get("limit", 10))),
+        "customer_mail_simulation_agent": lambda: run_customer_mail_simulation(True),
         "outbound_mailer_gate_agent": lambda: evaluate_outbound_message({"email": "sample@example.test", "template_key": "first_audit_notice"}),
         "reply_action_agent": lambda: plan_reply_action("Price", "How much does it cost?", "audit@voiddorescue.com"),
         "quality_plugin_agent": lambda: latest_quality_summary(),
@@ -125,6 +127,7 @@ def run_daily_loop() -> dict[str, Any]:
         "economics_agent",
         "autonomous_mailer_agent",
         "autonomous_mailer_executor_agent",
+        "customer_mail_simulation_agent",
         "outbound_mailer_gate_agent",
         "reply_action_agent",
         "mail_clean_window_transition_agent",
