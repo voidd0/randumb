@@ -70,6 +70,24 @@ def test_ops_summary_exposes_retention_agent_evidence_without_send():
     _delete_run(real["run"]["id"])
 
 
+def test_ops_summary_exposes_retention_report_metadata_without_send():
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    run = run_agent("mailer_ops_retention_agent")
+    summary = mailer_ops_action_summary()
+    report = summary["retention_agent_report"]
+    assert report["exists"] is True
+    assert report["path_stored"] is True
+    assert report["modified_at"]
+    assert report["send_mail"] is False
+    assert report["smtp_called"] is False
+    assert report["live_outreach_allowed"] is False
+    assert report["raw_recipient_addresses_included"] is False
+    assert report["secrets_included"] is False
+    assert "gkorner@" not in str(report)
+    assert "SMTP_PASSWORD" not in str(report)
+    _delete_run(real["run"]["id"])
+
+
 def test_mailer_ops_retention_agent_writes_runtime_report_file():
     real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
     run = run_agent("mailer_ops_retention_agent")

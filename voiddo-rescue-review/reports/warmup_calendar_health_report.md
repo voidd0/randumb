@@ -1,6 +1,6 @@
 # Warmup Calendar Health Report
 
-Generated: 2026-05-27 01:13 IDT
+Generated: 2026-05-27 01:22 IDT
 
 ## State
 
@@ -29,6 +29,7 @@ Generated: 2026-05-27 01:13 IDT
 - P45 mailer ops retention agent evidence: PASS, no send unlock
 - P46 mailer ops retention admin summary: PASS, no send unlock
 - P47 mailer ops retention report file: PASS, no send unlock
+- P48 mailer ops retention report admin metadata: PASS, no send unlock
 
 ## P12 Schedule Gate
 

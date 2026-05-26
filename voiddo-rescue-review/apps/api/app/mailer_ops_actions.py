@@ -237,9 +237,29 @@ def mailer_ops_action_summary(limit: int = 8) -> dict[str, Any]:
             "latest_real": dict(latest_real) if latest_real else None,
             "retention_agent_runs": int(retention_agent_count["count"]) if retention_agent_count else 0,
             "latest_retention_agent": retention_agent,
+            "retention_agent_report": mailer_ops_retention_report_metadata(),
             "send_mail": False,
             "live_outreach_allowed": False,
             "raw_recipient_addresses_included": False,
+        }
+    )
+
+
+def mailer_ops_retention_report_metadata() -> dict[str, Any]:
+    path = Path(get_settings().storage_root) / "reports" / "mailer_ops_retention_agent_report.md"
+    exists = path.exists()
+    modified_at = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat() if exists else None
+    return json_safe(
+        {
+            "exists": exists,
+            "path": str(path) if exists else "",
+            "path_stored": bool(exists),
+            "modified_at": modified_at,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
         }
     )
 

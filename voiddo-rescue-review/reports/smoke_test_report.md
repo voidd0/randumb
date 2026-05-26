@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-27 01:13 IDT
+Generated: 2026-05-27 01:22 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `274 passed`
+- API tests: `275 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -130,6 +130,9 @@ PASS
 - mailer ops retention agent writes runtime report file: PASS
 - mailer ops retention agent report omits raw recipients and secrets: PASS
 - daily loop exposes mailer ops retention report metadata: PASS
+- mailer ops summary exposes retention report metadata without send: PASS
+- admin retention report metadata source assertion: PASS
+- admin retention report metadata visual assertion: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 
@@ -150,4 +153,5 @@ PASS
 - latest retained ops action: `digest_history_cleanup:completed:send=false`
 - latest retained ops agent: `completed:0:1:send=false`
 - latest retained ops report: `/app/storage/reports/mailer_ops_retention_agent_report.md`
+- latest retained ops report metadata: `stored`
 - digest report history rows retained: `2`

@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-27 01:13 IDT
+Generated: 2026-05-27 01:22 IDT
 
 ## Canonical Latest State
 
@@ -88,20 +88,22 @@ Generated: 2026-05-27 01:13 IDT
 - P45 mailer ops retention agent evidence: implemented
 - P46 mailer ops retention admin summary: implemented and protected
 - P47 mailer ops retention runtime report file: implemented
+- P48 mailer ops retention report admin metadata: implemented and protected
 - latest retained mailer ops action: `digest_history_cleanup:completed:send=false`
 - mailer ops synthetic rows: `0`
-- mailer ops retention agent runs: `54`
+- mailer ops retention agent runs: `77`
 - latest mailer ops retention agent: `completed:0:1:send=false`
 - latest mailer ops retention report: `/app/storage/reports/mailer_ops_retention_agent_report.md`
+- mailer ops retention report metadata in admin: `stored`
 
 ## Verification
 
-- API tests: `274 passed`
+- API tests: `275 passed`
 - smoke test: PASS
-- Huanshu local adapter: PASS including authenticated admin mailer ops retention summary
+- Huanshu local adapter: PASS including authenticated admin mailer ops retention report metadata
 - secondary QA plugins: Playwright/axe/pa11y PASS, 0 blockers
 - API/web/worker/postgres/redis: healthy
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P48 Mailer Ops Retention Report Admin Metadata`.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P49 Mailer Ops Retention Report History`.
