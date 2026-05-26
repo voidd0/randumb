@@ -1,54 +1,39 @@
-# Vøiddo Rescue MVP P0 Review Notes
+# Vøiddo Rescue P1 Launch-Gated Review Notes
 
-Updated: 2026-05-26 IDT
+Original ZIP path: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p1-launch-gated-2026-05-26.zip`
 
-## Source Archive
+SHA256: `9fe3be15adae0edb58892d61682bdb0fd6cbeac470b41c40a275b4343910a63c`
 
-- Original fixed ZIP path on VPS: /opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p0-fixed-2026-05-26.zip
-- SHA256: 0cf70fc0215559b12dd4f3722455897a933649307a79d60e266d714d4b5e3e46
-- Source tree staged from: /opt/voiddo-rescue
-- Target folder in branch: voiddo-rescue-review/
+Excluded folders/files:
 
-## Exclusions
-
-The review tree excludes runtime and secret-bearing artifacts:
-
-- .env
-- .env.* except .env.example
+- `.env`
 - mailbox passwords
-- venv/.venv
-- node_modules
-- .next
-- __pycache__ and *.pyc
-- runtime storage/audits, storage/screenshots, storage/exports contents
-- runtime logs and backups
-- PNG screenshots
+- `.venv/`
+- `node_modules/`
+- `.next/`
+- `__pycache__/`
+- runtime screenshots/audits/exports
+- visual QA PNG screenshots
 
-## Included
+Included:
 
-- .env.example
-- docker-compose.yml
-- API, worker, web, shared package files
-- migrations, including 002_p0_integration.sql
+- `.env.example`
+- `docker-compose.yml`
+- API/worker/web source
+- migrations
 - scripts
-- WP plugin
+- WP plugin skeleton
+- deployment nginx config copies
 - redacted reports
-- P0 integration, visual QA, mail QA, owner command, warmup, smoke, and launch readiness reports
 
-## Secret Scan
+Secret scan result: passed before push.
 
-Result: PASS
+Safety confirmations:
 
-No raw secrets, mailbox passwords, private keys, .env file, Paddle API key, GitHub token, NPM token, or OpenAI token were included.
+- live outreach sent: 0
+- warmup sent: 0
+- existing non-Rescue projects intentionally untouched
+- strict SMTP/IMAP TLS remains launch-blocking
+- Paddle hosted checkout base URL still required for live checkout redirects
 
-## Runtime Safety
-
-- Live outreach sent: 0
-- Warmup started: no
-- Existing non-Rescue projects touched: no
-- Launch readiness: NOT READY
-- Current blockers: strict SMTP/IMAP TLS certificate verification, Huanshu adapter unavailable, approved deliverability/warmup recipient pool missing
-
-## Commit Notes
-
-This file is committed before the final Git commit SHA exists. Use the branch HEAD returned by the operator as the exact final commit SHA for this export.
+Final commit SHA: reported after push in the operator final output.

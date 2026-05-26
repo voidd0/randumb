@@ -1,4 +1,4 @@
-from app.billing import checkout_config_status
+from app.billing import checkout_config_status, hosted_checkout_url
 from app.config import Settings
 from app.email_quality import check_email_quality
 from app.inbox import classify_reply
@@ -74,6 +74,25 @@ def test_billing_config_reports_missing_prices():
     )
     assert status["ready"] is False
     assert "monitor_monthly" in status["missing_price_keys"]
+
+
+def test_hosted_checkout_url_requires_configured_base_and_price():
+    missing = hosted_checkout_url(Settings(_env_file=None), "contact_form_repair", "demo")
+    assert missing == ""
+    url = hosted_checkout_url(
+        Settings(
+            _env_file=None,
+            paddle_hosted_checkout_base_url="https://pay.paddle.io/checkout/hsc_test",
+            paddle_price_contact_form_repair="pri_test_contact",
+        ),
+        "contact_form_repair",
+        "demo audit",
+        "buyer@example.com",
+    )
+    assert url.startswith("https://pay.paddle.io/checkout/hsc_test?")
+    assert "price_id=pri_test_contact" in url
+    assert "utm_content=demo+audit" in url
+    assert "user_email=buyer%40example.com" in url
 
 
 def test_email_quality_blocks_risky_copy():

@@ -22,12 +22,11 @@ AGENTS = {
 
 def _check_page(page) -> list[str]:
     issues: list[str] = []
-    html = page.content()
-    if "{{" in html or "}}" in html:
-        issues.append("unresolved_template_vars")
-    if "placeholder" in html.lower() or "lorem ipsum" in html.lower():
-        issues.append("placeholder_text")
     body_text = page.locator("body").inner_text(timeout=3000)
+    if "{{" in body_text or "}}" in body_text:
+        issues.append("unresolved_template_vars")
+    if "placeholder" in body_text.lower() or "lorem ipsum" in body_text.lower():
+        issues.append("placeholder_text")
     if body_text.lstrip().startswith("{") and body_text.rstrip().endswith("}"):
         issues.append("raw_json_visible")
     overflow = page.evaluate("() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2")
@@ -51,12 +50,13 @@ def _check_page(page) -> list[str]:
         """
         () => {
           const els = Array.from(document.querySelectorAll('a,button,.metric,.row,.issue,h1,h2,p'))
-            .map(el => el.getBoundingClientRect())
-            .filter(r => r.width > 0 && r.height > 0);
+            .map(el => ({el, r: el.getBoundingClientRect()}))
+            .filter(item => item.r.width > 0 && item.r.height > 0);
           let overlaps = 0;
           for (let i = 0; i < els.length; i++) {
             for (let j = i + 1; j < els.length; j++) {
-              const a = els[i], b = els[j];
+              if (els[i].el.contains(els[j].el) || els[j].el.contains(els[i].el)) continue;
+              const a = els[i].r, b = els[j].r;
               const x = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
               const y = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
               if (x * y > 120 && x > 8 && y > 8) overlaps++;
@@ -102,7 +102,9 @@ def run_visual_agent(agent: str, target_url: str) -> dict[str, Any]:
         issues.append(huanshu["status"])
     issues = sorted(set(issues))
     score = max(0, 100 - 15 * len(issues))
-    decision = "PASS" if score >= 90 and huanshu.get("passed") else ("PASS_WITH_WARNINGS" if score >= 75 and huanshu.get("passed") else "FAIL_BLOCK_LAUNCH")
+    hard_blockers = {"unresolved_template_vars", "raw_json_visible", "broken_images", "console_errors", "page_errors", "cta_not_visible_above_fold"}
+    has_hard_blocker = any(issue in hard_blockers or issue.startswith("BLOCKED_HUANSHU") for issue in issues)
+    decision = "FAIL_BLOCK_LAUNCH" if has_hard_blocker or not huanshu.get("passed") else ("PASS" if score >= 90 else "PASS_WITH_WARNINGS")
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(

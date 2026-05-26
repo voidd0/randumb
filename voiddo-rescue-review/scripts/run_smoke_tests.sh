@@ -5,7 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 docker compose config >/tmp/voiddo_rescue_compose_config.txt
-python3 -m py_compile apps/api/app/*.py apps/worker/worker/*.py
-PYTHONPATH="$ROOT/apps/api" python3 -m pytest -q apps/api/tests
+docker compose exec -T api sh -lc 'python -m py_compile app/*.py'
+docker compose exec -T worker sh -lc 'python -m py_compile worker/*.py'
+docker compose exec -T api python -m pytest -q
 
 echo "ok"

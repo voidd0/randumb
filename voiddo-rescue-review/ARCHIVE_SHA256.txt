@@ -1,2 +1,2 @@
-/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p0-fixed-2026-05-26.zip
-0cf70fc0215559b12dd4f3722455897a933649307a79d60e266d714d4b5e3e46
+/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p1-launch-gated-2026-05-26.zip
+9fe3be15adae0edb58892d61682bdb0fd6cbeac470b41c40a275b4343910a63c

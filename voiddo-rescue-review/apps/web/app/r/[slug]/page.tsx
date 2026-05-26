@@ -55,6 +55,10 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
             <div className="metric"><strong>{issues.length}</strong><span>top issues</span></div>
             <div className="metric"><strong>{new Date(audit.checked_at || audit.created_at).toLocaleDateString("en-GB")}</strong><span>checked</span></div>
           </div>
+          <div className="actions">
+            <a className="button primary" href={links.contact_form_repair || links.emergency_fix || "https://rescue.voiddo.com"}>Fix this issue today</a>
+            <a className="button secondary" href={links.monitor_monthly || "https://rescue.voiddo.com"}>Start monitoring</a>
+          </div>
           <div className="panel">
             <h2>Top Issues</h2>
             {issues.length ? issues.map((issue) => (
@@ -76,10 +80,6 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
                 </figure>
               )) : <p className="lede">Screenshot evidence will appear here after a real scanner job completes.</p>}
             </div>
-          </div>
-          <div className="actions">
-            <a className="button primary" href={links.contact_form_repair || links.emergency_fix || "https://rescue.voiddo.com"}>Fix this issue today</a>
-            <a className="button secondary" href={links.monitor_monthly || "https://rescue.voiddo.com"}>Start monitoring</a>
           </div>
           <p className="lede" style={{fontSize: 14}}>Legal note: this is a public non-invasive website check from a normal browser session. It does not claim hidden security vulnerabilities.</p>
         </section>

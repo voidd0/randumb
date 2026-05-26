@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from .billing import checkout_config_status
+from .billing import checkout_config_status, hosted_checkout_url, PRODUCTS
 from .codex_tasks import create_task
+from .auth import require_admin
 from .config import get_settings
 from .email_quality import check_email_quality
 from .inbox import classify_reply
@@ -22,7 +24,12 @@ from .p0 import (
     prepare_warmup,
     record_visual_qa,
     run_mail_qa,
+    import_warmup_recipients,
+    import_test_inboxes,
+    prepare_outreach_preview,
+    queue_outreach_preview,
     store_owner_command,
+    transport_gate_status,
 )
 from .outreach import outreach_allowed, render_template
 from .scanner import deterministic_safe_scan
@@ -56,7 +63,7 @@ def health():
     }
 
 
-@app.get("/admin/metrics")
+@app.get("/admin/metrics", dependencies=[Depends(require_admin)])
 def admin_metrics():
     return {"ok": True, **admin_metrics_from_db()}
 
@@ -157,7 +164,7 @@ async def inbox_persist(request: Request):
     return {"ok": True, **persist_inbound_message(payload)}
 
 
-@app.post("/owner/commands")
+@app.post("/owner/commands", dependencies=[Depends(require_admin)])
 async def owner_commands(request: Request):
     payload = await request.json()
     return {"ok": True, "command": store_owner_command(payload)}
@@ -166,6 +173,22 @@ async def owner_commands(request: Request):
 @app.get("/billing/config")
 def billing_config():
     return {"ok": True, **checkout_config_status(settings)}
+
+
+@app.get("/checkout/{product_key}")
+def checkout_redirect(product_key: str, request: Request):
+    audit_slug = request.query_params.get("audit", "")
+    email = request.query_params.get("email", "")
+    if product_key not in PRODUCTS:
+        return Response(status_code=404, content="unknown product")
+    target = hosted_checkout_url(settings, product_key, audit_slug, email)
+    if not target:
+        return Response(
+            status_code=503,
+            content="checkout_not_configured",
+            headers={"X-Voiddo-Rescue-Gate": "paddle_hosted_checkout_missing"},
+        )
+    return RedirectResponse(target, status_code=302)
 
 
 @app.post("/webhooks/paddle")
@@ -181,7 +204,7 @@ async def paddle_webhook(request: Request):
     return {"ok": True, "verified": True, "event_type": event_type, **result}
 
 
-@app.post("/qa/visual/run")
+@app.post("/qa/visual/run", dependencies=[Depends(require_admin)])
 async def visual_qa_run(request: Request):
     payload = await request.json()
     result = record_visual_qa(
@@ -192,18 +215,30 @@ async def visual_qa_run(request: Request):
     return {"ok": True, "run": result}
 
 
-@app.post("/qa/mail/run")
+@app.post("/qa/mail/run", dependencies=[Depends(require_admin)])
 def mail_qa_run():
     return {"ok": True, "run": run_mail_qa()}
 
 
-@app.post("/warmup/prepare")
+@app.post("/warmup/prepare", dependencies=[Depends(require_admin)])
 async def warmup_prepare(request: Request):
     payload = await request.json()
     return {"ok": True, "warmup": prepare_warmup(int(payload.get("recipient_pool_count", 0)), int(payload.get("day_number", 1)))}
 
 
-@app.post("/leads/batches/import")
+@app.post("/warmup/recipients/import", dependencies=[Depends(require_admin)])
+async def warmup_recipients_import(request: Request):
+    payload = await request.json()
+    return {"ok": True, "pool": import_warmup_recipients(payload.get("csv", ""), payload.get("mailbox", "audit@voiddorescue.com"))}
+
+
+@app.post("/deliverability/test-inboxes/import", dependencies=[Depends(require_admin)])
+async def deliverability_test_inboxes_import(request: Request):
+    payload = await request.json()
+    return {"ok": True, "pool": import_test_inboxes(payload.get("csv", ""))}
+
+
+@app.post("/leads/batches/import", dependencies=[Depends(require_admin)])
 async def lead_batch_import(request: Request):
     payload = await request.json()
     return {
@@ -218,15 +253,28 @@ async def lead_batch_import(request: Request):
     }
 
 
+@app.post("/outreach/preview-batch", dependencies=[Depends(require_admin)])
+async def outreach_preview_batch(request: Request):
+    payload = await request.json()
+    return {"ok": True, "preview": prepare_outreach_preview(int(payload.get("limit", 20)))}
+
+
+@app.post("/outreach/queue-preview", dependencies=[Depends(require_admin)])
+async def outreach_queue_preview(request: Request):
+    payload = await request.json()
+    return {"ok": True, "queued": queue_outreach_preview(int(payload.get("limit", 20)))}
+
+
 @app.post("/outreach/send")
 async def outreach_send(request: Request):
-    await request.json()
-    if not settings.first_live_send_flag or settings.outreach_dry_run or settings.outreach_paused:
-        return {"ok": False, "status": "blocked", "reason": "live_outreach_not_approved"}
-    return {"ok": False, "status": "blocked", "reason": "send_transport_not_enabled_in_mvp"}
+    payload = await request.json()
+    gate = transport_gate_status(payload)
+    if not gate["allowed"]:
+        return {"ok": False, "status": "blocked", "reason": gate["reason"], "checks": gate["checks"]}
+    return {"ok": False, "status": "blocked", "reason": "transport_worker_not_started_by_operator", "checks": gate["checks"]}
 
 
-@app.post("/codex-tasks")
+@app.post("/codex-tasks", dependencies=[Depends(require_admin)])
 async def codex_task(request: Request):
     payload = await request.json()
     path = create_task(

@@ -97,7 +97,12 @@ def run_agent(agent: str) -> dict[str, Any]:
         return _record(agent, "PASS" if not issues else "FAIL_BLOCK_LAUNCH", checks, issues)
 
     if agent == "deliverability_agent":
-        return _record(agent, "FAIL_BLOCK_LAUNCH", {"mode": "approved_test_inboxes_only", "sent": 0}, ["approved_test_recipient_pool_missing"])
+        configured = [item.strip() for item in os.environ.get("TEST_INBOXES", "").split(",") if item.strip()]
+        checks = {"mode": "approved_test_inboxes_only", "configured_test_inboxes": len(configured), "sent": 0}
+        issues = [] if configured else ["approved_test_recipient_pool_missing"]
+        if configured:
+            checks["diagnostic_policy"] = "max_one_message_per_mailbox_after_owner_approval"
+        return _record(agent, "PASS" if not issues else "FAIL_BLOCK_LAUNCH", checks, issues)
 
     if agent == "reply_classifier_agent":
         samples = {

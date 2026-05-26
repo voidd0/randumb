@@ -11,6 +11,10 @@ export default function CustomerPage() {
             <div className="tile"><h2>Fix Request</h2><p>Status, priority, evidence, and next action.</p></div>
             <div className="tile"><h2>Monitoring</h2><p>Recurring checks and reporting status.</p></div>
           </div>
+          <div className="actions">
+            <a className="button primary" href="mailto:support@voiddorescue.com">Support</a>
+            <a className="button secondary" href="/r/demo">View audit</a>
+          </div>
         </section>
       </main>
     </div>

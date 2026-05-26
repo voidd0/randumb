@@ -10,6 +10,7 @@ import ssl
 import smtplib
 import imaplib
 import subprocess
+import uuid
 from dataclasses import dataclass
 from email.utils import parseaddr
 from typing import Any
@@ -28,7 +29,7 @@ from .inbox import classify_reply
 
 ONETIME_FIX_PRODUCTS = {"audit_onetime", "contact_form_repair", "emergency_fix"}
 EXCLUDED_NICHES = {"banks", "bank", "government", "hospital", "hospitals", "gambling", "adult", "crypto", "political"}
-OWNER_EMAIL = "gkorner@gmail.com"
+OWNER_EMAIL_FALLBACK = ""
 
 
 def create_scanner_job(url: str, business_name: str | None, dry_run: bool = False) -> dict[str, Any]:
@@ -143,7 +144,10 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "visual_qa_runs": scalar("SELECT count(*) FROM visual_qa_runs"),
         "mail_qa_runs": scalar("SELECT count(*) FROM mail_qa_runs"),
         "warmup_runs": scalar("SELECT count(*) FROM warmup_runs"),
+        "warmup_recipients": scalar("SELECT count(*) FROM warmup_recipients WHERE status = 'approved_test_pool'"),
+        "test_inboxes": scalar("SELECT count(*) FROM test_inboxes WHERE status = 'approved'"),
         "lead_batches": scalar("SELECT count(*) FROM lead_batches"),
+        "outreach_preview_batches": scalar("SELECT count(*) FROM outreach_preview_batches"),
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,
@@ -347,6 +351,7 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
 
 
 def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = "", auth_results: str = "") -> dict[str, Any]:
+    owner_email = (get_settings().owner_command_email or OWNER_EMAIL_FALLBACK).lower()
     sender_email = parseaddr(sender)[1].lower()
     reply_email = parseaddr(reply_to)[1].lower() if reply_to else sender_email
     text = f"{subject}\n{body}".strip()
@@ -373,8 +378,8 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         risk = "HIGH_RISK"
 
     authenticated_hint = "pass" in auth_results.lower() or "dkim=pass" in auth_results.lower() or not auth_results
-    authorized = sender_email == OWNER_EMAIL and reply_email in {OWNER_EMAIL, sender_email} and authenticated_hint
-    status = "rejected_sender" if sender_email != OWNER_EMAIL else "received"
+    authorized = bool(owner_email) and sender_email == owner_email and reply_email in {owner_email, sender_email} and authenticated_hint
+    status = "rejected_sender" if sender_email != owner_email else "received"
     if authorized and risk == "SAFE_AUTO":
         status = "executed"
     elif authorized and risk == "MEDIUM_RISK":
@@ -401,7 +406,9 @@ def store_owner_command(message: dict[str, Any]) -> dict[str, Any]:
         message.get("reply_to", ""),
         message.get("authentication_results", ""),
     )
-    result = {"ok": parsed["authorized"], "action": parsed["status"]}
+    result = json_safe(execute_owner_command(parsed) if parsed["authorized"] else {"ok": False, "action": parsed["status"]})
+    uid = str(message.get("uid") or uuid.uuid4().hex)
+    message_id = str(message.get("message_id") or uid)
     row = execute(
         """
         INSERT INTO owner_commands(mailbox, uid, message_id, sender, reply_to, subject, body, command,
@@ -414,8 +421,8 @@ def store_owner_command(message: dict[str, Any]) -> dict[str, Any]:
         """,
         (
             message.get("mailbox", "owner"),
-            str(message.get("uid") or ""),
-            str(message.get("message_id") or message.get("uid") or ""),
+            uid,
+            message_id,
             parsed["sender_email"],
             parsed["reply_email"],
             message.get("subject", ""),
@@ -432,9 +439,49 @@ def store_owner_command(message: dict[str, Any]) -> dict[str, Any]:
     return dict(row)
 
 
+def json_safe(value: Any) -> Any:
+    return json.loads(json.dumps(value, default=str))
+
+
+def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
+    command = parsed["command"]
+    risk = parsed["risk_level"]
+    if risk == "HIGH_RISK":
+        result = {"ok": False, "action": "review_required", "reason": "high_risk_command_blocked"}
+    elif command in {"STATUS", "REPORT TODAY"}:
+        result = {"ok": True, "action": "metrics", "metrics": admin_metrics_from_db()}
+    elif command == "PAUSE ALL":
+        result = {"ok": True, "action": "pause_recorded", "paused": ["scanner", "outreach", "warmup", "auto_replies", "workers"]}
+    elif command.startswith("PAUSE "):
+        result = {"ok": True, "action": "pause_recorded", "paused": command.replace("PAUSE ", "").lower()}
+    elif command == "SHOW HUMAN REVIEW":
+        result = {"ok": True, "action": "human_review", "items": fetch_all("SELECT mailbox, classification, last_message_preview FROM inbox_threads WHERE human_review_required ORDER BY updated_at DESC LIMIT 20")}
+    elif command == "SHOW PAYMENTS":
+        result = {"ok": True, "action": "payments", "items": fetch_all("SELECT amount, currency, product_key, status, created_at FROM payments ORDER BY created_at DESC LIMIT 20")}
+    elif command == "SHOW REPLIES":
+        result = {"ok": True, "action": "replies", "items": fetch_all("SELECT mailbox, classification, last_message_preview, updated_at FROM inbox_threads ORDER BY updated_at DESC LIMIT 20")}
+    elif command == "RUN MAIL QA":
+        result = {"ok": True, "action": "mail_qa", "run": run_mail_qa()}
+    elif command == "RUN VISUAL QA":
+        result = {"ok": True, "action": "visual_qa", "run": record_visual_qa("app_visual_agent", get_settings().app_base_url, "")}
+    elif command == "PREPARE WARMUP":
+        pool_count = int(fetch_one("SELECT count(*) AS c FROM warmup_recipients WHERE status = 'approved_test_pool'")["c"])
+        result = {"ok": True, "action": "warmup_prepare", "warmup": prepare_warmup(pool_count, 1)}
+    elif command == "PREPARE LEADS":
+        result = {"ok": True, "action": "lead_prepare_dry_run", "args": parsed.get("args_json", {}), "live_send": False}
+    else:
+        result = {"ok": False, "action": "review_required", "reason": "unknown_command"}
+    execute(
+        "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
+        ("owner_command.executed", "info" if result.get("ok") else "warning", command, Jsonb(json_safe({"risk_level": risk, "result": result}))),
+    )
+    return json_safe(result)
+
+
 def huanshu_adapter_status() -> dict[str, Any]:
     candidates = [
         os.environ.get("HUANSHU_CLI", ""),
+        "/app/app/huanshu_cli.py",
         "/usr/local/bin/huanshu",
         "/usr/bin/huanshu",
     ]
@@ -458,7 +505,9 @@ def record_visual_qa(agent: str, target_url: str, html: str = "") -> dict[str, A
     if not huanshu["passed"]:
         issues.append(huanshu["status"])
     score = max(0, 100 - 25 * len(issues))
-    decision = "PASS" if score >= 90 and huanshu["passed"] else ("PASS_WITH_WARNINGS" if score >= 75 and huanshu["passed"] else "FAIL_BLOCK_LAUNCH")
+    hard_blockers = {"unresolved_template_vars", "raw_json_visible", "broken_images", "console_errors", "page_errors"}
+    has_hard_blocker = any(issue in hard_blockers or issue.startswith("BLOCKED_HUANSHU") for issue in issues)
+    decision = "FAIL_BLOCK_LAUNCH" if has_hard_blocker or not huanshu["passed"] else ("PASS" if score >= 90 else "PASS_WITH_WARNINGS")
     row = execute(
         """
         INSERT INTO visual_qa_runs(agent, target_url, status, huanshu_status, score, decision, issues_json, screenshots_json, completed_at)
@@ -524,6 +573,11 @@ def run_mail_qa() -> dict[str, Any]:
 
     checks["smtp_strict_tls_login"] = smtp_status
     checks["imap_strict_tls_login"] = imap_status
+    configured_test_inboxes = [item.strip() for item in settings.test_inboxes.split(",") if item.strip()]
+    db_test_inboxes = fetch_one("SELECT count(*) AS c FROM test_inboxes WHERE status = 'approved'")
+    checks["approved_test_inboxes"] = len(configured_test_inboxes) + int(db_test_inboxes["c"] if db_test_inboxes else 0)
+    if checks["approved_test_inboxes"] <= 0:
+        issues.append("approved_test_inbox_pool_missing")
     decision = "PASS" if not issues else "FAIL_BLOCK_LAUNCH"
     row = execute(
         """
@@ -537,6 +591,9 @@ def run_mail_qa() -> dict[str, Any]:
 
 
 def prepare_warmup(recipient_pool_count: int = 0, day_number: int = 1) -> dict[str, Any]:
+    if recipient_pool_count <= 0:
+        row = fetch_one("SELECT count(*) AS c FROM warmup_recipients WHERE status = 'approved_test_pool'")
+        recipient_pool_count = int(row["c"] if row else 0)
     caps = {1: 5, 2: 10, 3: 15}
     cap = caps.get(day_number, 25 if day_number <= 7 else 40)
     status = "ready_dry_run" if recipient_pool_count > 0 else "blocked_no_recipient_pool"
@@ -550,6 +607,159 @@ def prepare_warmup(recipient_pool_count: int = 0, day_number: int = 1) -> dict[s
         (status, day_number, cap, recipient_pool_count, Jsonb({"dry_run": True, "no_sending": True}), Jsonb(stop_conditions)),
     )
     return dict(row)
+
+
+def import_warmup_recipients(csv_text: str, mailbox: str = "audit@voiddorescue.com") -> dict[str, Any]:
+    reader = csv.DictReader(io.StringIO(csv_text))
+    accepted = 0
+    rejected = 0
+    with connect_dict() as conn:
+        with conn.cursor() as cur:
+            for row in reader:
+                email = (row.get("email") or "").strip().lower()
+                if not email or "@" not in email:
+                    rejected += 1
+                    continue
+                suppressed = cur.execute("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,)).fetchone()
+                if suppressed:
+                    rejected += 1
+                    continue
+                existing = cur.execute(
+                    "SELECT 1 FROM warmup_recipients WHERE lower(email) = lower(%s) AND mailbox = %s",
+                    (email, mailbox),
+                ).fetchone()
+                if existing:
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO warmup_recipients(email, mailbox, source, status, notes)
+                    VALUES (%s, %s, 'owner_pool', 'approved_test_pool', %s)
+                    """,
+                    (email, mailbox, row.get("notes", "")),
+                )
+                accepted += 1
+        conn.commit()
+    return {"accepted": accepted, "rejected": rejected, "dry_run_only": True, "sending_started": False}
+
+
+def import_test_inboxes(csv_text: str) -> dict[str, Any]:
+    reader = csv.DictReader(io.StringIO(csv_text))
+    accepted = 0
+    rejected = 0
+    with connect_dict() as conn:
+        with conn.cursor() as cur:
+            for row in reader:
+                email = (row.get("email") or "").strip().lower()
+                if not email or "@" not in email:
+                    rejected += 1
+                    continue
+                cur.execute(
+                    """
+                    INSERT INTO test_inboxes(email, provider, status)
+                    VALUES (%s, %s, 'approved')
+                    ON CONFLICT (email) DO UPDATE SET provider = EXCLUDED.provider, status = 'approved'
+                    """,
+                    (email, row.get("provider", "")),
+                )
+                accepted += 1
+        conn.commit()
+    return {"accepted": accepted, "rejected": rejected, "diagnostic_policy": "max_one_message_per_mailbox_after_owner_approval", "sent": 0}
+
+
+def latest_decision(table: str) -> str:
+    row = fetch_one(f"SELECT decision FROM {table} ORDER BY created_at DESC LIMIT 1")
+    return row["decision"] if row else "MISSING"
+
+
+def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    settings = get_settings()
+    email = (payload.get("email") or "").strip().lower()
+    body = payload.get("body") or ""
+    checks = {
+        "outreach_dry_run": settings.outreach_dry_run,
+        "outreach_paused": settings.outreach_paused,
+        "first_live_send_flag": settings.first_live_send_flag,
+        "mail_qa_decision": latest_decision("mail_qa_runs"),
+        "visual_qa_decision": latest_decision("visual_qa_runs"),
+        "has_unsubscribe": "unsubscribe" in body.lower(),
+        "suppressed": False,
+    }
+    if email:
+        row = fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,))
+        checks["suppressed"] = bool(row)
+    if settings.outreach_dry_run:
+        return {"allowed": False, "reason": "outreach_dry_run_enabled", "checks": checks}
+    if settings.outreach_paused or not settings.first_live_send_flag:
+        return {"allowed": False, "reason": "live_outreach_not_approved", "checks": checks}
+    if checks["mail_qa_decision"] != "PASS":
+        return {"allowed": False, "reason": "mail_qa_not_passed", "checks": checks}
+    if checks["visual_qa_decision"] != "PASS":
+        return {"allowed": False, "reason": "visual_qa_not_passed", "checks": checks}
+    if checks["suppressed"]:
+        return {"allowed": False, "reason": "recipient_suppressed", "checks": checks}
+    if not checks["has_unsubscribe"]:
+        return {"allowed": False, "reason": "missing_unsubscribe", "checks": checks}
+    return {"allowed": True, "reason": "all_gates_passed", "checks": checks}
+
+
+def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT l.id AS lead_id, l.email, b.name AS business_name, b.domain, a.public_slug, a.summary
+        FROM leads l
+        JOIN businesses b ON b.id = l.business_id
+        JOIN audits a ON a.business_id = b.id
+        WHERE l.score >= 70
+          AND l.email IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(s.email) = lower(l.email))
+        ORDER BY l.created_at DESC
+        LIMIT %s
+        """,
+        (limit,),
+    )
+    preview = []
+    for row in rows:
+        preview.append(
+            {
+                "lead_id": str(row["lead_id"]),
+                "email": row["email"],
+                "business_name": row["business_name"],
+                "domain": row["domain"],
+                "audit_url": f"{get_settings().audit_base_url}/r/{row['public_slug']}",
+                "main_issue_short": row["summary"],
+                "dry_run": True,
+            }
+        )
+    batch = execute(
+        """
+        INSERT INTO outreach_preview_batches(total_candidates, preview_json)
+        VALUES (%s, %s)
+        RETURNING id, status, total_candidates, preview_json
+        """,
+        (len(preview), Jsonb(preview)),
+    )
+    return dict(batch)
+
+
+def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
+    preview_batch = prepare_outreach_preview(limit)
+    created = 0
+    for item in preview_batch["preview_json"]:
+        body = (
+            f"Hi team,\n\nI checked {item['domain']} today and found a possible issue that may affect customer enquiries:\n\n"
+            f"{item['main_issue_short']}\n\nScreenshots and test details:\n{item['audit_url']}\n\n"
+            "Public non-invasive website check.\nUnsubscribe: https://go.rescue.voiddo.com/unsubscribe/preview"
+        )
+        execute(
+            """
+            INSERT INTO outreach_messages(lead_id, mailbox, subject, body, status)
+            VALUES (%s, 'audit@voiddorescue.com', %s, %s, 'preview')
+            """,
+            (item["lead_id"], f"Possible issue on {item['business_name']} website", body),
+        )
+        created += 1
+    return {"created": created, "dry_run_only": True, "preview_batch_id": str(preview_batch["id"])}
 
 
 def import_lead_batch(name: str, csv_text: str, country: str | None = None, niche: str | None = None, score_threshold: int = 70) -> dict[str, Any]:

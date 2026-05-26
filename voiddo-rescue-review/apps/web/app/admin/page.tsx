@@ -27,6 +27,10 @@ export default async function AdminPage() {
           <div className="eyebrow">Control room</div>
           <h1 style={{fontSize: 34, lineHeight: 1.05}}>Pipeline is gated</h1>
           <p className="lede" style={{fontSize: 15}}>Live sends, warmup, auto-replies, and Paddle customer-facing provisioning stay paused until P0 gates pass.</p>
+          <div className="actions">
+            <a className="button primary" href="/admin">Open pipeline</a>
+            <a className="button secondary" href="/r/demo">View audit</a>
+          </div>
         </aside>
         <section className="content">
           <div className="metric-grid">
@@ -55,6 +59,12 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">stored</span><span>gated inbox commands</span><span className="score">{metrics.owner_commands ?? 0}</span></div>
             <div className="row"><span className="tag">visual</span><span>QA runs</span><span className="score">{metrics.visual_qa_runs ?? 0}</span></div>
             <div className="row"><span className="tag">mail</span><span>QA runs</span><span className="score">{metrics.mail_qa_runs ?? 0}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Launch Pools</h2>
+            <div className="row"><span className="tag">warmup</span><span>approved recipient pool</span><span className="score">{metrics.warmup_recipients ?? 0}</span></div>
+            <div className="row"><span className="tag">test</span><span>approved deliverability inboxes</span><span className="score">{metrics.test_inboxes ?? 0}</span></div>
+            <div className="row"><span className="tag">preview</span><span>outreach preview batches</span><span className="score">{metrics.outreach_preview_batches ?? 0}</span></div>
           </div>
         </section>
       </main>

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 
 from fastapi.testclient import TestClient
@@ -118,8 +119,9 @@ def test_inbox_persistence_idempotency_and_unsubscribe_suppression():
 
 
 def test_owner_command_safe_auto_and_high_risk_blocked():
-    safe = parse_owner_command("gkorner@gmail.com", "STATUS", "", "gkorner@gmail.com", "dkim=pass")
-    risky = parse_owner_command("gkorner@gmail.com", "RUN SHELL", "ls -la", "gkorner@gmail.com", "dkim=pass")
+    owner = os.environ["OWNER_COMMAND_EMAIL"]
+    safe = parse_owner_command(owner, "STATUS", "", owner, "dkim=pass")
+    risky = parse_owner_command(owner, "RUN SHELL", "ls -la", owner, "dkim=pass")
     assert safe["risk_level"] == "SAFE_AUTO"
     assert safe["status"] == "executed"
     assert risky["risk_level"] == "HIGH_RISK"

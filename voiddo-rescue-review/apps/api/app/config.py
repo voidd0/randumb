@@ -48,12 +48,17 @@ class Settings(BaseSettings):
     paddle_price_audit_onetime: str = ""
     paddle_price_contact_form_repair: str = ""
     paddle_price_emergency_fix: str = ""
+    paddle_hosted_checkout_base_url: str = ""
 
     daily_send_limit: int = 20
     hourly_domain_send_limit: int = 5
     max_bounce_rate: float = 0.05
     email_qa_required: bool = True
     visual_qa_required: bool = True
+    admin_auth_token: str = ""
+    owner_command_email: str = ""
+    test_inboxes: str = ""
+    huanshu_cli: str = ""
 
 
 @lru_cache

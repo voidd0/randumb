@@ -3,7 +3,11 @@ export function apiBase() {
 }
 
 export async function fetchJson(path: string) {
-  const response = await fetch(`${apiBase()}${path}`, { cache: "no-store" });
+  const headers: Record<string, string> = {};
+  if (path.startsWith("/admin/") && process.env.ADMIN_AUTH_TOKEN) {
+    headers["X-Admin-Token"] = process.env.ADMIN_AUTH_TOKEN;
+  }
+  const response = await fetch(`${apiBase()}${path}`, { cache: "no-store", headers });
   if (!response.ok) {
     return null;
   }

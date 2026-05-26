@@ -4,9 +4,9 @@ Updated: 2026-05-26 IDT
 
 ## Implemented
 
-Owner command processor accepts commands only from:
+Owner command processor accepts commands only from the private runtime value:
 
-- `gkorner@gmail.com`
+- `OWNER_COMMAND_EMAIL`
 
 It records:
 
@@ -50,5 +50,9 @@ Arbitrary shell execution is not supported. Shell-like command text is classifie
 
 ## Verification
 
-- Sample `STATUS` command from `gkorner@gmail.com` with passing auth summary was stored as `SAFE_AUTO` / `executed`.
+- Sample `STATUS` command from `OWNER_COMMAND_EMAIL` with passing auth summary was stored as `SAFE_AUTO` / `executed`.
+- Sample `RUN MAIL QA` command was stored as `MEDIUM_RISK` / `prepared` and created a mail QA action.
+- Sample `RUN VISUAL QA` command was stored as `MEDIUM_RISK` / `prepared` and created a visual QA action.
+- Sample `RUN SHELL rm -rf /` command was stored as `HIGH_RISK` / `review_required`.
+- API command intake now generates a unique uid/message id when an owner command arrives without IMAP ids, avoiding collisions between ad-hoc command submissions.
 - Tests verify `RUN SHELL` is `HIGH_RISK` and blocked for review.

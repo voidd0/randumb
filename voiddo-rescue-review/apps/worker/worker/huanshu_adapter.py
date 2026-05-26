@@ -7,6 +7,7 @@ import subprocess
 def run_huanshu(target_path: str) -> dict:
     candidates = [
         os.environ.get("HUANSHU_CLI", ""),
+        "/app/worker/huanshu_cli.py",
         "/usr/local/bin/huanshu",
         "/usr/bin/huanshu",
     ]

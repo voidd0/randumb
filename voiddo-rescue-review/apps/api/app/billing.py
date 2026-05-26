@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 
 PRODUCTS = {
     "monitor_monthly": {"name": "Website Monitor Monthly", "amount": 19, "currency": "USD", "mode": "subscription"},
@@ -32,3 +34,17 @@ def checkout_config_status(settings) -> dict[str, object]:
         "missing_price_keys": missing,
         "ready": bool(settings.paddle_api_key and settings.paddle_webhook_secret and not missing),
     }
+
+
+def hosted_checkout_url(settings, product_key: str, audit_slug: str = "", email: str = "") -> str:
+    price_id = price_id_for(settings, product_key)
+    base = settings.paddle_hosted_checkout_base_url.rstrip("?&")
+    if not base or not price_id:
+        return ""
+    params = {"price_id": price_id}
+    if audit_slug:
+        params["utm_content"] = audit_slug
+    if email:
+        params["user_email"] = email
+    separator = "&" if "?" in base else "?"
+    return f"{base}{separator}{urlencode(params)}"
