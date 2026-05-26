@@ -50,6 +50,8 @@ export default async function AdminPage() {
   const digestReport = digest.digest_agent_report || {};
   const digestHistory = digest.digest_agent_history || {};
   const latestDigestHistory = digestHistory.latest || {};
+  const digestOpsRetentionHistory = digest.mailer_ops_retention_history || {};
+  const latestDigestOpsRetentionHistory = digestOpsRetentionHistory.latest || {};
   const latestRealOpsAction = opsActions.latest_real || {};
   const opsRetentionAgent = opsActions.latest_retention_agent || {};
   const opsRetentionReport = opsActions.retention_agent_report || {};
@@ -278,11 +280,16 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">time</span><span>digest report last updated</span><span className="score">{digestReport.modified_at ? new Date(digestReport.modified_at).toLocaleString("en-GB") : "not yet"}</span></div>
             <div className="row"><span className="tag">history</span><span>digest report history rows</span><span className="score">{digestHistory.count ?? 0}</span></div>
             <div className="row"><span className="tag">latest</span><span>latest digest history no-send state</span><span className="score">{latestDigestHistory.email_sent ? "sent" : "no-send"}</span></div>
+            <div className="row"><span className="tag">ops</span><span>ops retention history rows</span><span className="score">{digestOpsRetentionHistory.count ?? 0}</span></div>
+            <div className="row"><span className="tag">latest</span><span>latest ops retention no-send state</span><span className="score">{latestDigestOpsRetentionHistory.send_mail ? "send" : "no-send"}</span></div>
+            <div className="row"><span className="tag">kept</span><span>latest ops retention retained real</span><span className="score">{latestDigestOpsRetentionHistory.retained_real_count ?? 0}</span></div>
             <div className="row"><span className="tag">send</span><span>daily digest email send state</span><span className="score">{digest.email_sent ? "sent" : "no-send"}</span></div>
             <div className="row"><span className="tag">agent send</span><span>digest agent transport state</span><span className="score">{digestReport.email_sent ? "sent" : "no-send"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in digest summary</span><span className="score">{digest.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in digest report metadata</span><span className="score">{digestReport.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in digest history</span><span className="score">{digestHistory.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in ops retention history</span><span className="score">{digestOpsRetentionHistory.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">secret</span><span>secrets in ops retention history</span><span className="score">{digestOpsRetentionHistory.secrets_included ? "blocked" : "omitted"}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>
