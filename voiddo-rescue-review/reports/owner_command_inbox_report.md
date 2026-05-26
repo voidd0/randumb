@@ -1,6 +1,6 @@
 # Owner Command Inbox Report
 
-Updated: 2026-05-26 13:00 IDT
+Updated: 2026-05-26 13:33 IDT
 
 ## Implemented
 
@@ -37,5 +37,6 @@ Arbitrary shell execution is not supported. Shell-like command text is classifie
 - `PAUSE ALL` writes runtime controls and test cleanup prevents hidden pause state from leaking into the working DB.
 - `RUN DELIVERABILITY TEST` runs mail QA/deliverability preflight.
 - `START WARMUP DAY=1` has a real send executor, but real runtime is blocked because approved pools are missing.
+- Runtime P4 inbox poll completed after send gates; `0` new messages and `0` bounces were seen.
 - Test coverage verifies day-1 warmup sends max five messages only when all gates are mocked PASS.
 - `RUN SHELL` remains review-required.

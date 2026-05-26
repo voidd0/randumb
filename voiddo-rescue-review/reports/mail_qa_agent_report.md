@@ -1,6 +1,6 @@
 # Mail QA Agent Report
 
-Updated: 2026-05-26 13:00 IDT
+Updated: 2026-05-26 13:33 IDT
 
 ## Host Decision
 
@@ -37,6 +37,8 @@ Latest real mail QA run:
 - Issues: `approved_test_inbox_pool_missing`
 - Approved test inboxes: `0`
 - Deliverability diagnostic sends: `0`
+- Inbox poll after runtime gate: PASS, `0` messages seen
+- Bounce count after poll: `0`
 
 ## Safety State
 
@@ -48,4 +50,4 @@ Latest real mail QA run:
 
 `FAIL_BLOCK_LAUNCH`
 
-Exact blocker: owner-approved deliverability test inbox pool is missing.
+Exact blocker: owner-approved deliverability test inbox pool has no actual runtime/DB addresses.

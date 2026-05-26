@@ -1,10 +1,10 @@
 # Deliverability Test Pool Report
 
-Updated: 2026-05-26 13:00 IDT
+Updated: 2026-05-26 13:33 IDT
 
 ## Status
 
-No owner-approved deliverability test inbox pool is configured.
+No owner-approved deliverability test inbox pool is configured in runtime config or DB.
 
 ## Implemented
 
@@ -19,11 +19,14 @@ No owner-approved deliverability test inbox pool is configured.
 ## Current Preflight
 
 - Approved test inboxes: `0`
+- Runtime import accepted: `0`
+- Runtime import rejected: `0`
 - SMTP strict TLS: `PASS`
 - IMAP strict TLS: `PASS`
 - SPF/DKIM/DMARC: `PASS`
 - Deliverability diagnostic sends: `0`
 - Cold outreach sends: `0`
+- Bounce count after inbox poll: `0`
 
 ## Decision
 
@@ -33,4 +36,4 @@ Blocking reason:
 
 - `approved_test_inbox_pool_missing`
 
-No diagnostic email was sent in P4 because the approved test inbox pool is absent.
+No diagnostic email was sent in P4 because the approved test inbox pool has no actual addresses.

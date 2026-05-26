@@ -748,6 +748,7 @@ def run_deliverability_diagnostics(settings: Settings, recipients: list[str], sm
     sent = 0
     skipped = 0
     errors: list[str] = []
+    results: list[dict[str, Any]] = []
     with connect_dict() as conn:
         with conn.cursor() as cur:
             pending: list[str] = []
@@ -774,26 +775,38 @@ def run_deliverability_diagnostics(settings: Settings, recipients: list[str], sm
                         smtp.ehlo()
                         smtp.login(settings.smtp_username, settings.smtp_password)
                         for email in pending:
+                            message_id = make_msgid(domain="voiddorescue.com")
                             msg = EmailMessage()
                             msg["Subject"] = "Vøiddo Rescue mail diagnostic"
                             msg["From"] = settings.smtp_from_default
                             msg["To"] = email
-                            msg["Message-ID"] = make_msgid(domain="voiddorescue.com")
+                            msg["Message-ID"] = message_id
                             msg.set_content("This is a requested mail delivery diagnostic for Vøiddo Rescue. No action is required.")
-                            smtp.send_message(msg)
+                            smtp_result = smtp.send_message(msg) or {}
                             sent += 1
+                            result_json = {
+                                "status": "sent",
+                                "message": "neutral_diagnostic",
+                                "message_id": message_id,
+                                "smtp_result": "accepted" if not smtp_result else "partial_or_rejected",
+                                "smtp_refused": smtp_result,
+                                "bounce_result": "pending_inbox_poll",
+                            }
+                            results.append({"recipient": email, **result_json})
                             cur.execute(
                                 """
                                 UPDATE test_inboxes
                                 SET last_test_at = now(), result_json = %s
                                 WHERE lower(email) = lower(%s)
                                 """,
-                                (Jsonb({"status": "sent", "message": "neutral_diagnostic"}), email),
+                                (Jsonb(result_json), email),
                             )
                 except Exception as exc:
                     errors.append(type(exc).__name__)
             conn.commit()
     result: dict[str, Any] = {"sent": sent, "skipped_previously_tested": skipped, "policy": "neutral_diagnostic_max_one_per_mailbox"}
+    if results:
+        result["results"] = results
     if errors:
         result["errors"] = errors
     return result
@@ -885,6 +898,8 @@ def run_warmup_day(day_number: int = 1, warmup_run_id: str | None = None) -> dic
                                 "daily_cap": cap,
                                 "warmup_run_id": str(warmup_run_id or ""),
                                 "policy": "neutral_owner_approved_warmup_no_sales_no_tracking",
+                                "smtp_result": "accepted",
+                                "bounce_result": "pending_inbox_poll",
                             }
                         ),
                         settings.smtp_from_default,

@@ -1,6 +1,6 @@
 # Warmup Readiness Report
 
-Updated: 2026-05-26 13:00 IDT
+Updated: 2026-05-26 13:33 IDT
 
 ## Status
 
@@ -8,8 +8,8 @@ Warmup is implemented but blocked. It has not started.
 
 Current blockers:
 
-- Owner-approved warmup recipient pool is missing.
-- Owner-approved deliverability test inbox pool is missing.
+- Owner-approved warmup recipient pool has no actual runtime/DB addresses.
+- Owner-approved deliverability test inbox pool has no actual runtime/DB addresses.
 - Latest mail QA decision is `FAIL_BLOCK_LAUNCH` because the test inbox pool is missing.
 
 ## Implemented
@@ -42,8 +42,11 @@ Required before any warmup send:
 Current result:
 
 - Warmup recipient pool count: `0`
+- Runtime warmup import accepted: `0`
+- Runtime warmup import rejected: `0`
 - Warmup day 1 sent: `0`
 - Warmup status: `blocked_no_recipient_pool`
+- Bounce count after inbox poll: `0`
 
 ## Stop Conditions
 

@@ -1,12 +1,12 @@
 # P4 Deliverability Diagnostics + Warmup Day 1 Report
 
-Updated: 2026-05-26 13:00 IDT
+Updated: 2026-05-26 13:33 IDT
 
 ## Decision
 
 `CHECKOUT_READY_NOT_WARMED`
 
-P4 code gates are implemented, but P4 cannot move to `WARMUP_ACTIVE_NO_OUTREACH` because both owner-approved pools are missing.
+P4 runtime import and send gates were executed. The system cannot move to `WARMUP_ACTIVE_NO_OUTREACH` because no actual owner-approved pool addresses are present in runtime config or DB.
 
 ## Implemented
 
@@ -31,6 +31,8 @@ P4 code gates are implemented, but P4 cannot move to `WARMUP_ACTIVE_NO_OUTREACH`
 - Mail QA issue: `approved_test_inbox_pool_missing`
 - Deliverability diagnostics: skipped, `no_approved_test_inboxes`
 - Warmup day 1 gate: blocked
+- Inbox poll: completed
+- New inbox messages seen during poll: `0`
 
 ## Sends
 
@@ -39,6 +41,15 @@ P4 code gates are implemented, but P4 cannot move to `WARMUP_ACTIVE_NO_OUTREACH`
 - Live outreach sent count: `0`
 - Bounce count: `0`
 - Spam signal count: `0` observed; placement cannot be measured without test inboxes.
+
+## Runtime Import
+
+- `TEST_INBOX_POOL` import accepted: `0`
+- `TEST_INBOX_POOL` import rejected: `0`
+- `WARMUP_RECIPIENT_POOL` import accepted: `0`
+- `WARMUP_RECIPIENT_POOL` import rejected: `0`
+
+The runtime values currently contain no parseable approved email addresses.
 
 ## Verification
 
@@ -52,7 +63,7 @@ P4 code gates are implemented, but P4 cannot move to `WARMUP_ACTIVE_NO_OUTREACH`
 
 ## Blockers
 
-- Owner-approved `TEST_INBOX_POOL` missing.
-- Owner-approved `WARMUP_RECIPIENT_POOL` missing.
+- Owner-approved `TEST_INBOX_POOL` addresses missing from runtime config/DB.
+- Owner-approved `WARMUP_RECIPIENT_POOL` addresses missing from runtime config/DB.
 
 No cold outreach was sent. No warmup was sent. No sales copy was sent.

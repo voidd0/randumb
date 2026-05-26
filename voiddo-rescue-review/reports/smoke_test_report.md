@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Updated: 2026-05-26 13:00 IDT
+Updated: 2026-05-26 13:33 IDT
 
 ## Commands
 
@@ -25,6 +25,7 @@ Updated: 2026-05-26 13:00 IDT
 - Deliverability diagnostic sends max one neutral message per approved test inbox in tests.
 - Warmup refuses empty approved warmup pool.
 - Warmup day-1 executor sends max five neutral messages in tests when all gates are mocked PASS.
+- Deliverability diagnostic result records Message-ID, SMTP result, and pending bounce state in tests.
 - Owner command `START WARMUP DAY=1` remains blocked in real runtime because pools are missing.
 - `SEND OUTREACH` remains high risk and blocked.
 - Mail QA strict SMTP/IMAP remains PASS, but final decision is blocked by missing approved test inbox pool.

@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Updated: 2026-05-26 13:00 IDT
+Updated: 2026-05-26 13:33 IDT
 
 ## Decision
 
@@ -31,8 +31,8 @@ This is not live outreach ready.
 
 ## Blocking Gates
 
-- `TEST_INBOX_POOL` / approved deliverability test inboxes missing.
-- `WARMUP_RECIPIENT_POOL` / approved warmup recipients missing.
+- `TEST_INBOX_POOL` / approved deliverability test inbox addresses missing from runtime config/DB.
+- `WARMUP_RECIPIENT_POOL` / approved warmup recipient addresses missing from runtime config/DB.
 
 ## Safety Flags
 
@@ -49,5 +49,6 @@ This is not live outreach ready.
 - Live outreach sends: `0`
 - Bounce count: `0`
 - Spam signal count: `0` observed; inbox placement cannot be measured without approved test inboxes.
+- Inbox poll: completed, `0` messages seen.
 
 Launch remains blocked until approved test and warmup pools exist and warmup day 1 is explicitly approved through the gated owner command.

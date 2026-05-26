@@ -1,15 +1,15 @@
-# Vøiddo Rescue P4 Review Notes
+# Vøiddo Rescue P4 Runtime Pool Review Notes
 
-Updated: 2026-05-26 13:00 IDT
+Updated: 2026-05-26 13:33 IDT
 
 ## Scope
 
-This branch folder contains the Vøiddo Rescue MVP source tree after the P4 deliverability diagnostics and warmup day-1 gate pass.
+This branch folder contains the Vøiddo Rescue source tree after the P4 runtime pool import attempt, deliverability diagnostics gate, inbox poll, and warmup day-1 gate.
 
 ## Original Runtime Path
 
 - Project root: `/opt/voiddo-rescue`
-- P4 export path: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p4-deliverability-warmup-day1-2026-05-26.zip`
+- Runtime export path: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p4-runtime-pools-2026-05-26.zip`
 
 ## Excluded
 
@@ -29,14 +29,16 @@ This branch folder contains the Vøiddo Rescue MVP source tree after the P4 deli
 
 No raw secrets are intentionally included. Public review files contain placeholders and redacted reports only.
 
-## P4 Status
+## Runtime Result
 
-- Strict SMTP TLS: PASS
-- Strict IMAP TLS: PASS
-- Paddle checkout: READY through Paddle.js
-- Deliverability diagnostics: BLOCKED, approved test inbox pool missing
-- Warmup day 1: BLOCKED, approved warmup recipient pool missing
-- Live outreach sent: 0
-- Warmup sent: 0
+- Approved test inbox count: 0
+- Approved warmup recipient count: 0
+- Deliverability diagnostic sent count: 0
+- Warmup sent count: 0
+- Bounce count: 0
+- Live outreach sent count: 0
+- Launch readiness: `CHECKOUT_READY_NOT_WARMED`
+
+The runtime pool variables currently contain no parseable approved email addresses, so no diagnostic or warmup messages were sent.
 
 The exact pushed commit SHA is returned in the operator final report because self-referencing a commit SHA inside the same commit would invalidate that SHA.

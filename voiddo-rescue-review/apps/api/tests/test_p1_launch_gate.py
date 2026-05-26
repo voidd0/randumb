@@ -231,6 +231,9 @@ def test_deliverability_diagnostic_sends_max_one(monkeypatch):
         first = p0.run_deliverability_diagnostics(settings, [email], smtp_ready=True)
         second = p0.run_deliverability_diagnostics(settings, [email], smtp_ready=True)
         assert first["sent"] == 1
+        assert first["results"][0]["message_id"].endswith("@voiddorescue.com>")
+        assert first["results"][0]["smtp_result"] == "accepted"
+        assert first["results"][0]["bounce_result"] == "pending_inbox_poll"
         assert second["sent"] == 0
         assert sent.count(email) == 1
     finally:

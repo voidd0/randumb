@@ -1,7 +1,6 @@
 voiddo-rescue-review/.env.example
 voiddo-rescue-review/.gitignore
 voiddo-rescue-review/README.md
-voiddo-rescue-review/REVIEW_NOTES.md
 voiddo-rescue-review/apps/api/Dockerfile
 voiddo-rescue-review/apps/api/app/__init__.py
 voiddo-rescue-review/apps/api/app/auth.py
