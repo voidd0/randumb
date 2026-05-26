@@ -1,5 +1,6 @@
 .env.example
 .gitignore
+ARCHIVE_FILELIST.txt
 MIGRATIONS.md
 README.md
 REVIEW_NOTES.md
@@ -248,7 +249,9 @@ reports/p36_mailer_digest_scheduler_agent_report.md
 reports/p36_next_self_written_tz.md
 reports/p37_digest_agent_runtime_report_file.md
 reports/p37_next_self_written_tz.md
+reports/p38_mailer_digest_admin_report_link.md
 reports/p38_next_self_written_tz.md
+reports/p39_next_self_written_tz.md
 reports/p3_checkout_deliverability_warmup_report.md
 reports/p4_deliverability_warmup_day1_report.md
 reports/p5_review_package_hygiene_report.md

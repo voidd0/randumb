@@ -101,3 +101,23 @@ The authenticated admin panel now includes Daily Digest Evidence with owner-repo
 - daily digest panel visible: `true`
 - no-send status visible: `true`
 - blocking visual issues: `0`
+
+## P38 Notes
+
+The authenticated admin panel now includes sanitized digest-agent runtime report metadata in Daily Digest Evidence.
+
+- Huanshu local adapter: PASS
+- Playwright screenshots: 2, both nonblank
+- `axe-core-playwright`: PASS, 0 violations
+- `pa11y`: PASS, 0 issues
+- horizontal overflow: `false`
+- broken images: `0`
+- console errors: `0`
+- page errors: `0`
+- unresolved template variables: `false`
+- raw JSON visible: `false`
+- raw owner email visible: `false`
+- digest report metadata visible: `true`
+- no-send status visible: `true`
+- screenshots: `reports/visual_qa_p38/admin-desktop.png`, `reports/visual_qa_p38/admin-mobile.png`
+- blocking visual issues: `0`

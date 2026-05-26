@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 23:49 IDT
+Generated: 2026-05-26 23:58 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `247 passed`
+- API tests: `251 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -98,6 +98,10 @@ PASS
 - mailer digest agent runtime report omits raw recipients: PASS
 - mailer digest agent runtime report confirms no-send counts: PASS
 - daily loop exposes digest runtime report path: PASS
+- digest summary includes runtime report metadata: PASS
+- digest report metadata omits raw recipients and secrets: PASS
+- digest summary endpoint returns report metadata behind auth: PASS
+- digest summary send flags remain false with runtime report: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

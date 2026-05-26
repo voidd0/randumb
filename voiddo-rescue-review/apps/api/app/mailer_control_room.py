@@ -133,6 +133,14 @@ def monitoring_control_room_summary() -> dict[str, Any]:
 
 def mailer_digest_summary() -> dict[str, Any]:
     ops = mailer_ops_action_summary()
+    settings = get_settings()
+    digest_report_path = Path(settings.storage_root) / "reports" / "mailer_digest_agent_report.md"
+    digest_report_exists = digest_report_path.exists()
+    digest_report_modified_at = (
+        datetime.fromtimestamp(digest_report_path.stat().st_mtime, timezone.utc).isoformat()
+        if digest_report_exists
+        else None
+    )
     latest_report = fetch_one(
         """
         SELECT id, severity, message, payload_json, created_at
@@ -160,6 +168,14 @@ def mailer_digest_summary() -> dict[str, Any]:
             "latest_owner_report": dict(latest_report) if latest_report else None,
             "latest_owner_report_action": dict(latest_action) if latest_action else None,
             "owner_report_action_status": latest_action["status"] if latest_action else "none",
+            "digest_agent_report": {
+                "path": str(digest_report_path),
+                "exists": digest_report_exists,
+                "modified_at": digest_report_modified_at,
+                "email_sent": False,
+                "raw_recipient_addresses_included": False,
+                "secrets_included": False,
+            },
             "email_sent": bool((latest_report or {}).get("payload_json", {}).get("email_sent", False)) if latest_report else False,
             "send_mail": False,
             "live_outreach_allowed": False,

@@ -1,17 +1,21 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 23:50 IDT
+Generated: 2026-05-26 23:59 IDT
 
 ## Scope
 
 This review tree contains the Vøiddo Rescue MVP source tree and redacted reports for branch `voiddo-rescue-mvp-review-20260526-files`.
 
-## P37 Update
+## P37/P38 Update
 
 - Added dedicated `mailer_digest_agent_report.md` runtime evidence for the autonomous mailer digest agent.
+- Added protected admin digest summary metadata for that runtime report.
+- Admin Daily Digest Evidence now shows only sanitized metadata: existence, stored path state, updated time, no-send state, and privacy state.
 - `mailer_digest_agent` still sends no email and only queues no-send owner-report evidence during tests.
 - Focused digest-agent tests: `9 passed`.
-- Full smoke/API suite: `247 passed`.
+- Focused P38 digest/admin tests: `17 passed`.
+- Full smoke/API suite: `251 passed`.
+- Huanshu/Playwright/axe/pa11y authenticated admin visual QA: PASS.
 - Live outreach sent: `0`.
 - Warmup sent: `0`.
 
