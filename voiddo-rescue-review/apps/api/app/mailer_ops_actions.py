@@ -264,6 +264,38 @@ def mailer_ops_retention_report_metadata() -> dict[str, Any]:
     )
 
 
+def mailer_ops_retention_report_history(limit: int = 8) -> dict[str, Any]:
+    capped = max(1, min(int(limit or 8), 25))
+    rows = [
+        dict(row)
+        for row in fetch_all(
+            """
+            SELECT id, agent_run_id, report_path, deleted_synthetic_count, retained_real_count,
+                   retained_synthetic_count, send_mail, smtp_called, live_outreach_allowed,
+                   raw_recipient_addresses_included, secrets_included, created_at
+            FROM mailer_ops_retention_reports
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (capped,),
+        )
+    ]
+    total_row = fetch_one("SELECT count(*) AS count FROM mailer_ops_retention_reports")
+    latest = rows[0] if rows else None
+    return json_safe(
+        {
+            "count": int(total_row["count"]) if total_row else 0,
+            "latest": latest,
+            "rows": rows,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": any(bool(row.get("raw_recipient_addresses_included")) for row in rows),
+            "secrets_included": any(bool(row.get("secrets_included")) for row in rows),
+        }
+    )
+
+
 def cleanup_synthetic_mailer_ops_runs() -> dict[str, Any]:
     return cleanup_mailer_ops_synthetic_history()
 

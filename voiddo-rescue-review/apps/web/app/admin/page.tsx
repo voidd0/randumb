@@ -31,6 +31,7 @@ export default async function AdminPage() {
   const closedLoopData = await fetchJson("/admin/mailer/closed-loop", authorization ? { Authorization: authorization } : {});
   const simulationData = await postJson("/admin/mailer/customer-simulation", { write_report: false }, authorization ? { Authorization: authorization } : {});
   const opsActionData = await fetchJson("/admin/mailer/ops-actions", authorization ? { Authorization: authorization } : {});
+  const opsRetentionHistoryData = await fetchJson("/admin/mailer/ops-retention-history", authorization ? { Authorization: authorization } : {});
   const digestData = await fetchJson("/admin/mailer/digest-summary", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
@@ -42,6 +43,8 @@ export default async function AdminPage() {
   const closedLoop = closedLoopData?.closed_loop || {};
   const simulation = simulationData?.simulation || {};
   const opsActions = opsActionData?.ops_actions || {};
+  const opsRetentionHistory = opsRetentionHistoryData?.history || {};
+  const latestOpsRetentionHistory = opsRetentionHistory.latest || {};
   const digest = digestData?.digest || {};
   const digestOps = digest.mailer_ops || {};
   const digestReport = digest.digest_agent_report || {};
@@ -247,6 +250,9 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">report</span><span>ops retention runtime report</span><span className="score">{opsRetentionReport.exists ? "written" : "missing"}</span></div>
             <div className="row"><span className="tag">path</span><span>ops retention report location</span><span className="score">{opsRetentionReport.path_stored ? "stored" : "none"}</span></div>
             <div className="row"><span className="tag">time</span><span>ops retention report last updated</span><span className="score">{opsRetentionReport.modified_at ? new Date(opsRetentionReport.modified_at).toLocaleString("en-GB") : "not yet"}</span></div>
+            <div className="row"><span className="tag">history</span><span>ops retention history rows</span><span className="score">{opsRetentionHistory.count ?? 0}</span></div>
+            <div className="row"><span className="tag">latest</span><span>latest retention history no-send state</span><span className="score">{latestOpsRetentionHistory.send_mail ? "send" : "no-send"}</span></div>
+            <div className="row"><span className="tag">kept</span><span>latest history retained real count</span><span className="score">{latestOpsRetentionHistory.retained_real_count ?? 0}</span></div>
             <div className="row"><span className="tag">blocked</span><span>unsafe ops actions blocked</span><span className="score">{opsActions.blocked_unsafe_count ?? 0}</span></div>
             <div className="row"><span className="tag">send</span><span>ops action SMTP capability</span><span className="score">{opsActions.send_mail ? "armed" : "no-send"}</span></div>
             <div className="row"><span className="tag">agent send</span><span>retention agent SMTP capability</span><span className="score">{opsRetentionAgent.send_mail ? "armed" : "no-send"}</span></div>
@@ -254,6 +260,8 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">privacy</span><span>raw recipients in ops action summaries</span><span className="score">{opsActions.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in retention agent summary</span><span className="score">{opsRetentionAgent.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in retention report metadata</span><span className="score">{opsRetentionReport.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in retention history</span><span className="score">{opsRetentionHistory.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">secret</span><span>secrets in retention history</span><span className="score">{opsRetentionHistory.secrets_included ? "blocked" : "omitted"}</span></div>
             {Array.isArray(opsActions.latest) && opsActions.latest.length ? opsActions.latest.slice(0, 3).map((item: any) => (
               <div className="row" key={item.id}><span className="tag">{item.is_synthetic ? "test" : item.status}</span><span>{String(item.action).replaceAll("_", " ")}</span><span className="score">{item.send_mail ? "send" : "no-send"}</span></div>
             )) : <div className="row"><span className="tag">idle</span><span>no ops actions recorded yet</span><span className="score">0</span></div>}

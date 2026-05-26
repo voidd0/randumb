@@ -1,10 +1,12 @@
 # Smoke Test Report
 
-Generated: 2026-05-27 01:47 IDT
+Generated: 2026-05-27 02:04 IDT
 
-- docker compose API tests: `278 passed`
+- docker compose API tests: `280 passed`
 - smoke command: `bash scripts/run_smoke_tests.sh`
-- smoke result: `PASS (278 passed, ok)`
+- smoke result: `280 passed, ok`
+- targeted P50 tests: `18 passed`
+- Next production build: `PASS`
 - services healthy: `api`, `web`, `worker`, `postgres`, `redis`
 - warmup sent count: `0`
 - live outreach sent count: `0`

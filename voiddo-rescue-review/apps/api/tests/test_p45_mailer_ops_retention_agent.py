@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 
+from fastapi.testclient import TestClient
+
+from app.main import app
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
-from app.mailer_ops_actions import cleanup_mailer_ops_synthetic_history, mailer_ops_action_summary, run_mailer_ops_action
+from app.mailer_ops_actions import cleanup_mailer_ops_synthetic_history, mailer_ops_action_summary, mailer_ops_retention_report_history, run_mailer_ops_action
+
+
+client = TestClient(app)
+
+
+def admin_headers() -> dict[str, str]:
+    return {"X-Admin-Token": os.environ["ADMIN_AUTH_TOKEN"]}
 
 
 def _delete_run(run_id: str) -> None:
@@ -183,5 +194,40 @@ def test_mailer_ops_retention_history_flags_remain_no_send():
     assert row["send_mail"] is False
     assert row["smtp_called"] is False
     assert row["live_outreach_allowed"] is False
+    _delete_retention_history(report["history_id"])
+    _delete_run(real["run"]["id"])
+
+
+def test_mailer_ops_retention_history_summary_is_redacted_no_send():
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    run = run_agent("mailer_ops_retention_agent")
+    report = run["result_json"]["ops_retention_agent_report"]
+    summary = mailer_ops_retention_report_history(5)
+    assert summary["count"] >= 1
+    assert summary["latest"]["id"] == report["history_id"]
+    assert summary["latest"]["send_mail"] is False
+    assert summary["latest"]["smtp_called"] is False
+    assert summary["latest"]["live_outreach_allowed"] is False
+    assert summary["raw_recipient_addresses_included"] is False
+    assert summary["secrets_included"] is False
+    assert "owner-private@" not in str(summary)
+    assert "SMTP_PASSWORD" not in str(summary)
+    _delete_retention_history(report["history_id"])
+    _delete_run(real["run"]["id"])
+
+
+def test_mailer_ops_retention_history_endpoint_requires_auth_and_is_no_send():
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    run = run_agent("mailer_ops_retention_agent")
+    report = run["result_json"]["ops_retention_agent_report"]
+    assert client.get("/admin/mailer/ops-retention-history").status_code == 401
+    response = client.get("/admin/mailer/ops-retention-history", headers=admin_headers())
+    assert response.status_code == 200
+    history = response.json()["history"]
+    assert history["count"] >= 1
+    assert history["latest"]["send_mail"] is False
+    assert history["latest"]["live_outreach_allowed"] is False
+    assert history["raw_recipient_addresses_included"] is False
+    assert history["secrets_included"] is False
     _delete_retention_history(report["history_id"])
     _delete_run(real["run"]["id"])

@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 01:47 IDT
+Generated: 2026-05-27 02:04 IDT
 
 ## Decision
 
@@ -17,17 +17,15 @@ Generated: 2026-05-27 01:47 IDT
 - SMTP strict TLS: `PASS`
 - IMAP strict TLS: `PASS`
 - SPF/DKIM/DMARC: `PASS`
-- Huanshu/visual QA from previous visual pass: `PASS`
-- mailer retention history: `PASS`
-- tests: `278 passed`
-- smoke: `PASS (278 passed, ok)`
+- Huanshu/visual QA: `PASS`
+- mailer retention history endpoint/admin surface: `PASS`
+- tests: `280 passed`
+- smoke: `280 passed, ok`
 
 ## Current Runtime Counts
 
 - warmup sent count: `0`
 - live outreach sent count: `0`
-- bounce/DSN count, last 24h: `0`
-- SMTP rate-limit count, last 24h: `0`
 - mailer queue rows: `0`
 - mailer retention history rows: `1`
 
