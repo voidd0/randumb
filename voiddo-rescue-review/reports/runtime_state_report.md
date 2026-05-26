@@ -160,3 +160,23 @@ Generated: 2026-05-26T18:34:00+03:00
 - bounce/DSN count, last 24h: `2`
 - SMTP rate-limit count, last 24h: `1`
 - launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
+
+## P11 Sender Rotation + Warmup Spacing Update
+
+Generated: 2026-05-26T18:44:00+03:00
+
+- provider-spaced warmup planner: implemented
+- warmup schedule repair records: implemented
+- mailbox health diagnostics: extended with mailbox-specific signal details
+- admin dashboard: shows spacing repairs
+- tests: `112 passed`
+- smoke: PASS
+- Huanshu: PASS for landing, audit demo, customer, status, unsubscribe, and authenticated admin screenshots
+- extra quality plugins: axe/pa11y/pixelmatch PASS; Lighthouse CI PASS_WITH_WARNINGS
+- daily loop: 15 agents completed
+- latest spacing plan: current adjacent same-provider `16`, proposed `3`, applied `false`
+- warmup sent: `0`
+- live outreach sent: `0`
+- bounce/DSN count, last 24h: `2`
+- SMTP rate-limit count, last 24h: `1`
+- launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH

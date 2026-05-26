@@ -202,6 +202,33 @@ Updated: 2026-05-26 18:34 IDT
 - warmup sent: `0`
 - live outreach sent: `0`
 
+## P11 Sender Rotation + Warmup Spacing Smoke
+
+Updated: 2026-05-26 18:44 IDT
+
+- `docker compose exec -T api python -m app.db`: PASS
+- `docker compose exec -T api python -m pytest -q`: PASS, `112 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS, `112 passed`, `ok`
+- provider-spacing planner tests: PASS
+- spacing apply/record tests: PASS
+- protected admin endpoint tests: PASS
+- no raw recipient in spacing plan test: PASS
+- daily loop: PASS, 15 agents completed
+- Huanshu:
+  - landing: PASS
+  - audit demo: PASS
+  - customer: PASS
+  - status: PASS
+  - unsubscribe: PASS
+  - authenticated admin screenshots: PASS
+- extra quality plugins:
+  - axe-core/playwright: PASS
+  - pa11y: PASS
+  - pixelmatch: PASS
+  - Lighthouse CI: PASS_WITH_WARNINGS
+- warmup sent: `0`
+- live outreach sent: `0`
+
 ## P5 Cleanup Smoke
 
 Updated: 2026-05-26 14:52 IDT

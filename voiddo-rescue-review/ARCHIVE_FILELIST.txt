@@ -43,6 +43,7 @@ apps/api/app/security.py
 apps/api/app/self_operating.py
 apps/api/app/source_adapters.py
 apps/api/app/visual_quality.py
+apps/api/app/warmup_planner.py
 apps/api/migrations/001_init.sql
 apps/api/migrations/002_p0_integration.sql
 apps/api/migrations/003_p1_launch_gate.sql
@@ -57,10 +58,12 @@ apps/api/migrations/011_revenue_simulation_mail_recovery.sql
 apps/api/migrations/012_scout_quality_language_gate.sql
 apps/api/migrations/013_campaign_mailer_control.sql
 apps/api/migrations/014_mail_clean_window_readiness.sql
+apps/api/migrations/015_warmup_spacing_planner.sql
 apps/api/requirements.txt
 apps/api/tests/test_core.py
 apps/api/tests/test_p0_integration.py
 apps/api/tests/test_p10_mailer_readiness.py
+apps/api/tests/test_p11_warmup_spacing.py
 apps/api/tests/test_p1_launch_gate.py
 apps/api/tests/test_p5_warmup_safety.py
 apps/api/tests/test_p6_self_operating.py
@@ -139,6 +142,8 @@ reports/p0_module_split_plan.md
 reports/p10_mail_clean_window_readiness_report.md
 reports/p10_next_self_written_tz.md
 reports/p11_next_self_written_tz.md
+reports/p11_warmup_spacing_report.md
+reports/p12_next_self_written_tz.md
 reports/p1_launch_gate_fix_report.md
 reports/p2_mail_checkout_warmup_report.md
 reports/p3_checkout_deliverability_warmup_report.md

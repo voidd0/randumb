@@ -44,6 +44,7 @@ export default async function AdminPage() {
     ["clean transitions", metrics.mail_clean_window_transitions ?? 0],
     ["mailbox health", metrics.mailbox_health_scores ?? 0],
     ["sender rotation", metrics.sender_rotation_readiness ?? 0],
+    ["spacing repairs", metrics.warmup_schedule_repairs ?? 0],
     ["scout checks", metrics.scout_self_checks ?? 0],
     ["scout provenance", metrics.scout_provenance_scores ?? 0],
     ["audit strength", metrics.audit_strength_scores ?? 0],

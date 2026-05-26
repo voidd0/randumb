@@ -340,6 +340,7 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "mail_clean_window_transitions": scalar("SELECT count(*) FROM mail_clean_window_transitions"),
         "mailbox_health_scores": scalar("SELECT count(*) FROM mailbox_health_scores"),
         "sender_rotation_readiness": scalar("SELECT count(*) FROM sender_rotation_readiness"),
+        "warmup_schedule_repairs": scalar("SELECT count(*) FROM warmup_schedule_repairs"),
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,

@@ -1,9 +1,9 @@
-# Vøiddo Rescue P10 Review Notes
+# Vøiddo Rescue P11 Review Notes
 
-Generated: 2026-05-26 18:34 IDT
+Generated: 2026-05-26 18:44 IDT
 
 Runtime tree: `/opt/voiddo-rescue`
-Export target: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p10-mail-clean-window-readiness-2026-05-26.zip`
+Export target: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p11-warmup-spacing-2026-05-26.zip`
 Review branch: `voiddo-rescue-mvp-review-20260526-files`
 Review folder: `voiddo-rescue-review/`
 
@@ -12,7 +12,7 @@ Review folder: `voiddo-rescue-review/`
 - Docker Compose and `.env.example`
 - API, worker, web, WP plugin, packages, scripts, migrations
 - Redacted reports
-- P10 clean-window transition, mailbox health, sender rotation readiness code
+- P11 provider-spacing warmup planner and tests
 - Test suite and smoke scripts
 
 ## Excluded
@@ -26,12 +26,12 @@ Review folder: `voiddo-rescue-review/`
 
 ## Verification
 
-- Full pytest: `107 passed`
-- Smoke: `107 passed`, `ok`
+- Full pytest: `112 passed`
+- Smoke: `112 passed`, `ok`
 - Huanshu: PASS for landing, audit demo, customer, status, unsubscribe, authenticated admin screenshots
 - Extra visual/design plugins: axe PASS, pa11y PASS, pixelmatch PASS, Lighthouse CI PASS_WITH_WARNINGS
-- Daily loop: 14 agents, no sends
-- Clean-window transition: blocked by recent signals, sends_started=false
+- Daily loop: 15 agents, no sends
+- Provider spacing plan: current adjacent same-provider `16`, proposed `3`, applied=false
 - Secret/artifact scan: no raw secrets, no private keys, no `.env`, no runtime visual artifacts detected in review tree
 - Live outreach sent: `0`
 - Warmup sent: `0`

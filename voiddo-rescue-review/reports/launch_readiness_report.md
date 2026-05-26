@@ -179,6 +179,32 @@ Still blocking:
 
 No cold outreach was sent. No manual warmup send was forced. The transition agent started `0` sends.
 
+## P11 Sender Rotation + Warmup Spacing Update
+
+Updated: 2026-05-26 18:44 IDT
+
+Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
+
+New passes:
+
+- Provider-spaced warmup planner exists.
+- Planner records repair proposals with recipient hashes only.
+- Planner can reduce real current adjacent same-provider slots from `16` to `3`.
+- Planner default/agent mode is no-apply and no-send.
+- Admin dashboard exposes spacing repair count.
+- Daily loop completed 15 agents with no sends.
+- Tests: `112 passed`.
+- Smoke: PASS.
+- Huanshu and extra quality plugin gates pass.
+
+Still blocking:
+
+- bounce/DSN count, last 24h: `2`
+- SMTP rate-limit count, last 24h: `1`
+- spacing plan was not applied because mail safety is still blocked
+
+No cold outreach was sent. No manual warmup send was forced.
+
 ## P7 Revenue Simulation Update
 
 Updated: 2026-05-26 17:56 IDT

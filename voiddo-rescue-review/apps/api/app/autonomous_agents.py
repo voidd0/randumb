@@ -27,6 +27,7 @@ from .revenue_simulation import run_synthetic_lead_simulation
 from .language_gate import check_no_ai_public_language
 from .scouts import process_scout_run
 from .self_operating import run_self_audit, self_operating_summary
+from .warmup_planner import plan_provider_spaced_warmup
 
 
 def _record_agent(agent: str, func: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -88,6 +89,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "mail_clean_window_agent": lambda: check_mail_clean_window(24),
         "mail_clean_window_transition_agent": lambda: run_clean_window_transition(24),
         "sender_rotation_readiness_agent": lambda: sender_rotation_ready(),
+        "warmup_spacing_planner_agent": lambda: plan_provider_spaced_warmup(50, False),
         "public_language_gate_agent": lambda: check_no_ai_public_language(),
     }
     if agent not in agents:
@@ -110,6 +112,7 @@ def run_daily_loop() -> dict[str, Any]:
         "reply_action_agent",
         "mail_clean_window_transition_agent",
         "sender_rotation_readiness_agent",
+        "warmup_spacing_planner_agent",
         "self_audit_agent",
     ]
     runs = [run_agent(agent) for agent in selected]

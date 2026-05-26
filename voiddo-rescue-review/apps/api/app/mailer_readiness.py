@@ -25,6 +25,17 @@ def mailbox_health_score(mailbox: str) -> dict[str, Any]:
     username, password, from_addr = smtp_credentials_for_sender(settings, mailbox)
     mail_qa = latest_mail_qa_decision()
     recent_signals = recent_mail_signal_count(["bounce", "dsn", "smtp_rate_limit", "spam_signal"], 24)
+    mailbox_signals = fetch_all(
+        """
+        SELECT signal_type, count(*) AS count
+        FROM mail_signals
+        WHERE mailbox = %s
+          AND signal_type = ANY(%s)
+          AND created_at >= now() - interval '24 hours'
+        GROUP BY signal_type
+        """,
+        (from_addr, ["bounce", "dsn", "smtp_rate_limit", "spam_signal"]),
+    )
     throttle = throttle_decision("mailbox", from_addr, 1800)
     credentials = bool(username and password)
     score = 100
@@ -38,7 +49,13 @@ def mailbox_health_score(mailbox: str) -> dict[str, Any]:
         score -= 15
     score = max(0, score)
     status = "ready" if score >= 80 and credentials and mail_qa == "PASS" and recent_signals == 0 and throttle["allowed"] else "blocked"
-    checks = {"from_addr": from_addr, "throttle": throttle}
+    checks = {
+        "from_addr": from_addr,
+        "throttle": throttle,
+        "global_recent_signals": recent_signals,
+        "mailbox_signals": [dict(row) for row in mailbox_signals],
+        "credential_source": "sender_specific_or_default",
+    }
     row = execute(
         """
         INSERT INTO mailbox_health_scores(
