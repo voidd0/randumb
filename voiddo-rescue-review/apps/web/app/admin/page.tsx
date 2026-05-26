@@ -17,9 +17,11 @@ export default async function AdminPage() {
   const authorization = requestHeaders.get("authorization") || "";
   const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
   const mailerData = await fetchJson("/admin/mailer/control-room", authorization ? { Authorization: authorization } : {});
+  const recheckData = await fetchJson("/admin/mailer/clean-window-recheck", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
+  const recheck = recheckData?.summary || {};
   const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
@@ -60,6 +62,7 @@ export default async function AdminPage() {
     ["mailer snapshots", metrics.mailer_status_snapshots ?? 0],
     ["mail lessons", metrics.mail_signal_lessons ?? 0],
     ["clean recoveries", metrics.clean_window_recovery_runs ?? 0],
+    ["clean rechecks", metrics.clean_window_recheck_runs ?? 0],
     ["customer journeys", metrics.customer_journey_snapshots ?? 0],
     ["customer tokens", metrics.customer_access_tokens ?? 0],
     ["monitoring runs", metrics.monitoring_runs ?? 0],
@@ -124,6 +127,13 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">next</span><span>autonomous next action</span><span className="score">{mailer.next_allowed_action ?? "wait"}</span></div>
             <div className="row"><span className="tag">warmup</span><span>warmup gate</span><span className="score">{mailer.warmup_allowed ? "armed" : "blocked"}</span></div>
             <div className="row"><span className="tag">clean</span><span>latest clean-window recovery</span><span className="score">{cleanRecovery.status ?? "not run"}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Clean Window Recheck</h2>
+            <div className="row"><span className="tag">{recheck.signal_window_clear ? "clear" : "blocked"}</span><span>mail signal window</span><span className="score">{recheck.signal_window_clear ? "ready" : "waiting"}</span></div>
+            <div className="row"><span className="tag">safe at</span><span>next possible recheck time</span><span className="score">{recheck.next_safe_at ? new Date(recheck.next_safe_at).toLocaleString("en-GB") : "now"}</span></div>
+            <div className="row"><span className="tag">qa</span><span>mail QA before resume</span><span className="score">{recheck.mail_qa_decision ?? "unknown"}</span></div>
+            <div className="row"><span className="tag">send</span><span>live outreach gate</span><span className="score">blocked</span></div>
           </div>
           <div className="panel">
             <h2>Mail Signal Lessons</h2>

@@ -43,6 +43,7 @@ from .audit_strength import score_audit_strength
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
 from .campaign_control import campaign_readiness_snapshot
+from .clean_window_recheck import clean_window_recheck, clean_window_recheck_summary
 from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
 from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
@@ -515,6 +516,23 @@ def mailer_status_run():
 async def mailer_clean_window_recovery_run(request: Request):
     payload = await request.json()
     return {"ok": True, "recovery": run_clean_window_recovery(int(payload.get("window_hours", 24)))}
+
+
+@app.get("/admin/mailer/clean-window-recheck", dependencies=[Depends(require_admin)])
+def mailer_clean_window_recheck_get():
+    return {"ok": True, "summary": clean_window_recheck_summary()}
+
+
+@app.post("/admin/mailer/clean-window-recheck", dependencies=[Depends(require_admin)])
+async def mailer_clean_window_recheck_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "recheck": clean_window_recheck(
+            int(payload.get("window_hours", 24)),
+            bool(payload.get("run_recovery_if_clear", True)),
+        ),
+    }
 
 
 @app.post("/admin/mailer/learn-signals", dependencies=[Depends(require_admin)])

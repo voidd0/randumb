@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 20:09 IDT
+Generated: 2026-05-26 20:21 IDT
 
 ## Result
 
@@ -8,18 +8,19 @@ PASS
 
 ## Test Results
 
-- API tests: `150 passed`
+- API tests: `156 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
 - Docker services: healthy
 
-## P17 Coverage
+## P18 Coverage
 
-- mailer control-room auth and blocker tests: PASS
-- monitoring summary auth/no-send tests: PASS
-- owner status report no-send test: PASS
-- clean-window recovery no-send test: PASS
+- clean-window recheck blocks while recent signals exist: PASS
+- clean-window recheck ready state under mocked clean window: PASS
+- clean-window recheck endpoints require auth: PASS
+- clean-window recheck records no-send result: PASS
+- live outreach remains blocked: PASS
 
 ## Safety Counters
 

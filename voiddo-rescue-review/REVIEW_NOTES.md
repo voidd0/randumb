@@ -1,10 +1,10 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 20:09 IDT
+Generated: 2026-05-26 20:21 IDT
 
 ## Scope
 
-This review tree contains the Vøiddo Rescue source tree after P17 mailer autonomy control-room and monitoring evidence work.
+This review tree contains the Vøiddo Rescue source tree after P18 clean-window recheck automation and safe resume timestamp work.
 
 ## Included
 
@@ -24,24 +24,24 @@ This review tree contains the Vøiddo Rescue source tree after P17 mailer autono
 
 ## Verification
 
-- API tests: `150 passed`
+- API tests: `156 passed`
 - smoke: PASS
-- Huanshu: PASS, including updated authenticated admin control room
+- Huanshu: PASS, including updated authenticated admin clean-window panel
 - extra design/QA plugins: PASS or non-blocking warning; blockers `0`
-- owner status report email_sent: `false`
+- clean-window recheck status: `blocked_recent_signals`
 - live outreach sent: `0`
 - warmup sent: `0`
 
 ## Launch State
 
-`WARMUP_SCHEDULED_NO_OUTREACH`. Recent bounce/DSN and SMTP rate-limit signals still block sending.
+`WARMUP_SCHEDULED_NO_OUTREACH`. Recent bounce/DSN and SMTP rate-limit signals still block sending; next safe recheck timestamp is recorded in reports.
 
 ## Secrets
 
 No raw secrets are intentionally included. `.env.example` is included as a template only.
 
-## P17 Export
+## P18 Export
 
-- zip path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p17-mailer-control-room-2026-05-26.zip
-- initial zip SHA256 before metadata refresh: 50d3a55e05d11c4ef855f283895bda567a5d98408b875f4114a40e78f1908dd2
-- branch before commit: 26bb7d31e30e2cbd61f0106fbca165696a0b93d2
+- zip path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p18-clean-window-recheck-2026-05-26.zip
+- initial zip SHA256 before metadata refresh: abb6795a76d44e0c6a4b71b6b9be25e87e727ea3c6cf28e63f56af6bff184730
+- branch before commit: 73232586bdd03feaf2a81e57c0e210b7f09e2cdb

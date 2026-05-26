@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 20:09 IDT
+Generated: 2026-05-26 20:21 IDT
 
 ## Canonical Latest State
 
@@ -18,18 +18,17 @@ Generated: 2026-05-26 20:09 IDT
 - SMTP rate-limit signal count, last 24h: `1`
 - launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-## Customer, Monitoring, And Mailer Autonomy
+## Clean-Window Recheck
 
-- customer token dashboard web route: implemented and sanitized
-- monitoring due scheduler: implemented and kill-switch/scanner-pause gated
-- monitoring summary endpoint: implemented
-- mailer control-room endpoint: implemented
-- owner status report endpoint: implemented, file-only under current mail blockers
-- admin dashboard: shows mailer signals, lessons, clean-window recovery, monitoring evidence, and warmup calendar evidence
+- latest recheck status: `blocked_recent_signals`
+- signal window clear: `false`
+- next safe timestamp: `2026-05-27T11:19:56.313413+00:00`
+- recheck sends started: `false`
+- live outreach allowed: `false`
 
 ## Verification
 
-- API tests: `150 passed`
+- API tests: `156 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including admin control room
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
@@ -37,4 +36,4 @@ Generated: 2026-05-26 20:09 IDT
 
 ## Next Allowed Action
 
-Wait until the recent bounce/DSN and SMTP rate-limit window clears, then rerun clean-window recovery and mail QA before any warmup send.
+At or after `2026-05-27T11:19:56.313413+00:00`, rerun clean-window recheck and no-send mail QA. Do not enable live outreach.
