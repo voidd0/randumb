@@ -1,6 +1,5 @@
 .env.example
 .gitignore
-ARCHIVE_FILELIST.txt
 MIGRATIONS.md
 README.md
 REVIEW_NOTES.md
@@ -259,7 +258,9 @@ reports/p40_digest_history_admin_counter.md
 reports/p40_next_self_written_tz.md
 reports/p41_digest_history_retention_guard.md
 reports/p41_next_self_written_tz.md
+reports/p42_digest_retention_agent.md
 reports/p42_next_self_written_tz.md
+reports/p43_next_self_written_tz.md
 reports/p4_deliverability_warmup_day1_report.md
 reports/p5_review_package_hygiene_report.md
 reports/p5_warmup_safety_report.md

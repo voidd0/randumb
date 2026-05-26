@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-27 00:27 IDT
+Generated: 2026-05-27 00:38 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `258 passed`
+- API tests: `262 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -110,6 +110,10 @@ PASS
 - digest history cleanup preserves action queue and send ledger: PASS
 - digest history retention summary omits raw recipients and secrets: PASS
 - digest history cleanup endpoint requires auth and remains no-send: PASS
+- mailer digest retention agent exists: PASS
+- mailer digest retention agent deletes old digest rows: PASS
+- daily loop includes mailer digest retention agent: PASS
+- mailer digest retention agent leaves send flags false: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

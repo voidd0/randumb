@@ -1,18 +1,18 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 00:28 IDT
+Generated: 2026-05-27 00:39 IDT
 
 ## Scope
 
 This review tree contains the Vøiddo Rescue MVP source tree and redacted reports for branch `voiddo-rescue-mvp-review-20260526-files`.
 
-## P41 Update
+## P42 Update
 
-- Added sanitized digest history retention summary and cleanup guard.
-- Added protected no-send endpoint `POST /admin/mailer/digest-history/cleanup`.
-- Cleanup keeps the newest 90 digest rows and does not touch action queue, send ledger, recipient resolver audit, warmup, outreach, or SMTP.
-- Focused digest/retention tests: `24 passed`.
-- Full smoke/API suite: `258 passed`.
+- Added `mailer_digest_retention_agent`.
+- Added the agent to the autonomous daily loop.
+- Agent runs digest history cleanup with no-send flags and before/after retention summaries.
+- Focused digest/agent tests: `28 passed`.
+- Full smoke/API suite: `262 passed`.
 - Live outreach sent: `0`.
 - Warmup sent: `0`.
 

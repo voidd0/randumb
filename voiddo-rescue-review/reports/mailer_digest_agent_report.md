@@ -1,9 +1,9 @@
 # Vøiddo Rescue Mailer Digest Agent Report
 
-- generated_at: 2026-05-26T21:21:32.946305+00:00
-- agent_run_id: `cdabf5a4-5413-443b-a52a-8cd095d934f0`
+- generated_at: 2026-05-26T21:28:53.340172+00:00
+- agent_run_id: `e141cc74-b012-4808-bdad-c0a98bd18c6f`
 - owner_report_path: `/app/storage/reports/autonomous_owner_status_report.md`
-- owner_report_action_id: `cc0efd93-e0aa-401f-8af2-aa60ecf05f3c`
+- owner_report_action_id: `7ff280fc-68a1-47a7-b761-9d6ab1ad7261`
 - email_sent: `false`
 - warmup_sent_count: `0`
 - live_outreach_sent_count: `0`

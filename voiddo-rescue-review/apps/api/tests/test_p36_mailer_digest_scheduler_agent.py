@@ -119,3 +119,64 @@ def test_mailer_digest_history_omits_raw_recipients_and_secrets():
     assert "SMTP_PASSWORD" not in str(row)
     assert "voiddorescue.com" not in str(row)
     _cleanup(run["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_digest_retention_agent_exists_and_is_no_send():
+    run = run_agent("mailer_digest_retention_agent")
+    result = run["result_json"]
+    assert run["status"] == "completed"
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+    assert result["raw_recipient_addresses_included"] is False
+
+
+def test_mailer_digest_retention_agent_deletes_old_history_rows():
+    execute("DELETE FROM mailer_digest_reports WHERE report_path LIKE %s", ("%p42-retention-%",))
+    execute(
+        """
+        INSERT INTO mailer_digest_reports(report_path, email_sent, blockers_json, created_at)
+        SELECT '/app/storage/reports/p42-retention-' || gs::text || '.md',
+               false, '[]'::jsonb, now() - (gs || ' minutes')::interval
+        FROM generate_series(1, 95) AS gs
+        """
+    )
+    run = run_agent("mailer_digest_retention_agent")
+    result = run["result_json"]
+    rows = fetch_one("SELECT count(*) AS count FROM mailer_digest_reports WHERE report_path LIKE %s", ("%p42-retention-%",))
+    assert result["deleted_count"] >= 5
+    assert rows["count"] <= 90
+    execute("DELETE FROM mailer_digest_reports WHERE report_path LIKE %s", ("%p42-retention-%",))
+
+
+def test_daily_loop_includes_mailer_digest_retention_agent():
+    result = run_daily_loop()
+    agents = [item["agent"] for item in result["runs"]]
+    assert "mailer_digest_retention_agent" in agents
+    retention_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_retention_agent"]
+    assert retention_runs[0]["result_json"]["send_mail"] is False
+    assert result["live_outreach"] is False
+    digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
+    if digest_runs:
+        _cleanup(digest_runs[0]["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_digest_retention_agent_does_not_touch_action_queue_or_send_ledger():
+    action = execute(
+        """
+        INSERT INTO mailer_action_queue(action_type, risk_level, status, payload_json)
+        VALUES ('owner_report', 'SAFE_AUTO', 'queued', '{"source":"p42-retention-test"}'::jsonb)
+        RETURNING id
+        """
+    )
+    execute(
+        """
+        INSERT INTO mailer_send_ledger(action_id, action_type, mailbox, status)
+        VALUES (%s, 'owner_report', 'support@voiddorescue.com', 'transport_blocked')
+        """,
+        (action["id"],),
+    )
+    run = run_agent("mailer_digest_retention_agent")
+    assert run["result_json"]["send_mail"] is False
+    assert fetch_one("SELECT count(*) AS count FROM mailer_action_queue WHERE id = %s", (action["id"],))["count"] == 1
+    assert fetch_one("SELECT count(*) AS count FROM mailer_send_ledger WHERE action_id = %s", (action["id"],))["count"] == 1
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (action["id"],))
