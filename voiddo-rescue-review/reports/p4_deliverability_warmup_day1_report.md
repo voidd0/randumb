@@ -1,12 +1,16 @@
 # P4 Deliverability Diagnostics + Warmup Day 1 Report
 
-Updated: 2026-05-26 13:55 IDT
+Updated: 2026-05-26 14:02 IDT
 
 ## Decision
 
 `CHECKOUT_READY_NOT_WARMED`
 
 P4 runtime import and send gates were executed with owner-approved internal/external control inboxes. The system remains below `WARMUP_ACTIVE_NO_OUTREACH` because the diagnostic pass hit Mailcow/Rspamd rate limiting and inbox polling observed bounce/DSN messages.
+
+Owner corrected one external address typo after the first diagnostic pass. The typo address was disabled and suppressed; the corrected Gmail address was imported and received one neutral diagnostic with no immediate SMTP error and no immediate bounce on the follow-up inbox poll.
+
+After owner clarified the system must operate autonomously, regular delivery observations are handled as autonomous mail signals, not human blockers. A low-volume warmup calendar was configured instead of waiting for manual start.
 
 ## Implemented
 
@@ -32,13 +36,16 @@ P4 runtime import and send gates were executed with owner-approved internal/exte
 - Mail QA decision: `FAIL_BLOCK_LAUNCH`
 - Mail QA issues: `deliverability_diagnostic_failed`, `bounce_detected_or_dsn_seen`
 - Deliverability diagnostics: partial send, then Mailcow/Rspamd rate limit `5 / 1m`
+- Corrected-address diagnostic: sent `1`, SMTP errors `0`, immediate bounce `0`
 - Warmup day 1 gate: blocked
+- Warmup calendar: `28` scheduled messages, `2/day`, starts after cooldown
 - Inbox poll: completed
 - New inbox messages seen during poll: `3`
 
 ## Sends
 
-- Deliverability diagnostic sent count: `7`
+- Deliverability diagnostic sent count on currently approved pool: `7`
+- Total diagnostic rows including disabled typo address: `8`
 - Warmup sent count: `0`
 - Live outreach sent count: `0`
 - Bounce count: `2`
@@ -54,8 +61,8 @@ P4 runtime import and send gates were executed with owner-approved internal/exte
 Provider-level pool:
 
 - internal control: `4`
-- Gmail: `1`
-- custom `gamil.com` domain: `1`
+- Gmail: `2`
+- typo custom domain: disabled and suppressed
 - Clalit corporate: `1`
 
 Raw recipient addresses are intentionally not repeated in this report.
@@ -74,6 +81,6 @@ Raw recipient addresses are intentionally not repeated in this report.
 
 - Mailcow/Rspamd rate limit was hit during diagnostics.
 - Inbox poll observed bounce/DSN messages after the diagnostic attempt.
-- Warmup day 1 must not start until the bounce/rate-limit state is clean.
+- Warmup is throttled to `2/day` through the autonomous calendar to avoid repeat rate-limit bursts.
 
 No cold outreach was sent. No warmup was sent. No sales copy was sent.

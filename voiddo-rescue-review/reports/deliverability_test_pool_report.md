@@ -1,6 +1,6 @@
 # Deliverability Test Pool Report
 
-Updated: 2026-05-26 13:55 IDT
+Updated: 2026-05-26 13:52 IDT
 
 ## Status
 
@@ -24,16 +24,24 @@ Owner-approved deliverability test inbox pool is configured in DB. It contains i
 - SMTP strict TLS: `PASS`
 - IMAP strict TLS: `PASS`
 - SPF/DKIM/DMARC: `PASS`
-- Deliverability diagnostic sends: `7`
+- Deliverability diagnostic sends on currently approved pool: `7`
+- Total diagnostic rows including disabled typo address: `8`
 - Cold outreach sends: `0`
 - Bounce count after inbox poll: `2`
 
 Provider-level status:
 
 - internal control: `4` approved, local delivery accepted/saved
-- Gmail: `1` approved, remote SMTP accepted by Gmail
-- custom `gamil.com` domain: `1` approved, DSN/bounce observed
+- Gmail: `2` approved, remote SMTP accepted by Gmail for the correction diagnostic
+- typo custom domain: disabled and suppressed after owner correction
 - Clalit corporate: `1` approved, accepted/pending observation
+
+Correction note:
+
+- One owner-provided address had a domain typo. It was disabled from test and warmup pools, suppressed, and replaced with the corrected Gmail address.
+- Corrected Gmail diagnostic sent: `1`
+- Corrected Gmail immediate SMTP errors: `0`
+- Corrected Gmail immediate bounce poll: `0`
 
 ## Decision
 

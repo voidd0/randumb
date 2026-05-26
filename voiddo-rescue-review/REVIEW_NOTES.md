@@ -1,26 +1,25 @@
-# Vøiddo Rescue P4 Runtime Diagnostics Review Notes
+# Vøiddo Rescue Warmup Calendar Review Notes
 
-Updated: 2026-05-26 13:55 IDT
+Updated: 2026-05-26 14:02 IDT
 
 ## Scope
 
-This branch folder contains the Vøiddo Rescue source tree after the P4 runtime diagnostic send with owner-approved internal/external control inboxes.
+This branch folder contains the Vøiddo Rescue source tree after autonomous warmup calendar setup.
 
 ## Runtime Result
 
-- Approved test inbox count: 7
-- Approved warmup recipient count: 7
-- Diagnostic sent count: 7
-- Warmup sent count: 0
-- Bounce/DSN count after inbox poll: 2
-- Live outreach sent count: 0
-- Launch readiness: `CHECKOUT_READY_NOT_WARMED`
-
-Warmup did not start because the diagnostic pass hit Mailcow/Rspamd rate limiting and bounce/DSN messages were observed.
+- Warmup schedule created: 28 messages
+- Daily cap: 2 messages/day
+- Schedule length: 14 days
+- Sender rotation: audit/support/fix Rescue aliases
+- First scheduled slots: 10:15 and 16:15 Asia/Jerusalem starting 2026-05-27
+- Warmup sent so far: 0
+- Live outreach sent: 0
+- Human-review blocker count for delivery observations: 0
 
 ## Export
 
-- Runtime export path: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p4-runtime-diagnostics-2026-05-26.zip`
+- Runtime export path: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-warmup-calendar-2026-05-26.zip`
 
 ## Excluded
 

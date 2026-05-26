@@ -12,12 +12,13 @@ import imaplib
 import subprocess
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import make_msgid, parseaddr
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import psycopg
 import dns.resolver
@@ -40,6 +41,11 @@ RUNTIME_PAUSE_KEYS = {
     "auto_replies": "pause_auto_replies",
     "workers": "pause_workers",
 }
+WARMUP_SENDER_ROTATION = [
+    "audit@voiddorescue.com",
+    "support@voiddorescue.com",
+    "fix@voiddorescue.com",
+]
 
 
 def _split_config_emails(raw: str) -> list[str]:
@@ -74,6 +80,11 @@ def set_runtime_control(key: str, value: bool, source: str, reason: str = "") ->
         (key, value, source, reason),
     )
     return dict(row)
+
+
+def warmup_daily_cap() -> int:
+    row = fetch_one("SELECT value FROM runtime_controls WHERE key = 'warmup_daily_cap_2'")
+    return 2 if not row or row["value"] else 2
 
 
 def effective_pause_state(area: str, configured: bool = False) -> bool:
@@ -417,6 +428,11 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
                     "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, 'critical', %s, %s)",
                     (f"inbox.{classification}", "Unsafe reply requires human review", Jsonb({"sender": sender, "subject": subject})),
                 )
+            if any(marker in body.lower() for marker in ["found it in spam", "in spam", "spam folder"]):
+                cur.execute(
+                    "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
+                    ("deliverability.spam_observed", "warning", "Test inbox spam placement signal observed", Jsonb({"sender": sender, "subject": subject})),
+                )
         conn.commit()
     return {"stored": True, "duplicate": False, "classification": classification, "human_review_required": human}
 
@@ -604,6 +620,146 @@ def start_warmup_gate(day_number: int = 1) -> dict[str, Any]:
         "warmup": warmup,
         "send_result": send_result,
     }
+
+
+def smtp_credentials_for_sender(settings: Settings, sender_mailbox: str) -> tuple[str, str, str]:
+    sender = sender_mailbox.lower()
+    if sender.startswith("support@") and settings.imap_username_support and settings.imap_password_support:
+        return settings.imap_username_support, settings.imap_password_support, sender_mailbox
+    if sender.startswith("fix@") and settings.imap_username_fix and settings.imap_password_fix:
+        return settings.imap_username_fix, settings.imap_password_fix, sender_mailbox
+    return settings.smtp_username, settings.smtp_password, settings.smtp_from_default
+
+
+def warmup_recipient_order() -> list[str]:
+    settings = get_settings()
+    owner = (settings.owner_command_email or "").lower()
+    rows = fetch_all(
+        """
+        SELECT email
+        FROM warmup_recipients
+        WHERE status = 'approved_test_pool' AND approved
+          AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(s.email) = lower(warmup_recipients.email))
+        """
+    )
+    emails = sorted({str(row["email"]).lower() for row in rows})
+    def key(email: str) -> tuple[int, str]:
+        domain = email.rsplit("@", 1)[-1]
+        if owner and email == owner:
+            return (0, email)
+        if domain == "gmail.com":
+            return (1, email)
+        if domain not in {"voiddo.com", "voiddorescue.com"}:
+            return (2, email)
+        return (3, email)
+    return sorted(emails, key=key)
+
+
+def build_warmup_calendar(days: int = 14, per_day: int = 2, start_tomorrow: bool = True) -> dict[str, Any]:
+    recipients = warmup_recipient_order()
+    if not recipients:
+        return {"created": 0, "status": "blocked_no_recipients"}
+    tz = ZoneInfo("Asia/Jerusalem")
+    now_local = datetime.now(tz)
+    first_day = (now_local + timedelta(days=1)).date() if start_tomorrow else now_local.date()
+    send_times = [time(10, 15), time(16, 15)]
+    created = 0
+    existing = fetch_one("SELECT count(*) AS count FROM warmup_schedule WHERE status = 'scheduled'")
+    if existing and int(existing["count"]) > 0:
+        return {"created": 0, "status": "already_scheduled", "scheduled": int(existing["count"])}
+    for day_index in range(days):
+        for slot in range(per_day):
+            recipient = recipients[(day_index * per_day + slot) % len(recipients)]
+            sender = WARMUP_SENDER_ROTATION[(day_index * per_day + slot) % len(WARMUP_SENDER_ROTATION)]
+            local_dt = datetime.combine(first_day + timedelta(days=day_index), send_times[slot % len(send_times)], tzinfo=tz)
+            execute(
+                """
+                INSERT INTO warmup_schedule(recipient_email, sender_mailbox, day_number, scheduled_for, status, result_json)
+                VALUES (%s, %s, %s, %s, 'scheduled', %s)
+                """,
+                (
+                    recipient,
+                    sender,
+                    day_index + 1,
+                    local_dt.astimezone(timezone.utc),
+                    Jsonb({"daily_cap": per_day, "content_policy": "neutral_no_sales_no_tracking", "owner_preferred": recipient == (get_settings().owner_command_email or "").lower()}),
+                ),
+            )
+            created += 1
+    execute(
+        "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
+        ("warmup.calendar_created", "info", "Autonomous warmup calendar created", Jsonb({"days": days, "per_day": per_day, "created": created})),
+    )
+    return {"created": created, "status": "scheduled", "days": days, "per_day": per_day}
+
+
+def run_warmup_calendar_due(limit: int = 2) -> dict[str, Any]:
+    settings = get_settings()
+    today_sent = fetch_one(
+        """
+        SELECT count(*) AS count
+        FROM email_events
+        WHERE event_type = 'warmup_sent'
+          AND created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+        """
+    )
+    remaining = max(0, warmup_daily_cap() - int(today_sent["count"]))
+    if remaining <= 0:
+        return {"sent": 0, "status": "daily_cap_reached"}
+    rows = fetch_all(
+        """
+        SELECT id, recipient_email, sender_mailbox, day_number, scheduled_for
+        FROM warmup_schedule
+        WHERE status = 'scheduled' AND scheduled_for <= now()
+        ORDER BY scheduled_for
+        LIMIT %s
+        """,
+        (min(limit, remaining),),
+    )
+    sent = 0
+    errors: list[str] = []
+    for row in rows:
+        username, password, from_addr = smtp_credentials_for_sender(settings, row["sender_mailbox"])
+        message_id = make_msgid(domain="voiddorescue.com")
+        msg = EmailMessage()
+        msg["Subject"] = "Vøiddo Rescue warmup check"
+        msg["From"] = from_addr
+        msg["To"] = row["recipient_email"]
+        msg["Message-ID"] = message_id
+        msg.set_content(warmup_message_for(sent))
+        try:
+            ctx = ssl.create_default_context()
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+                smtp.ehlo()
+                smtp.starttls(context=ctx)
+                smtp.ehlo()
+                smtp.login(username, password)
+                smtp.send_message(msg)
+        except Exception as exc:
+            label = smtp_error_label(exc)
+            errors.append(label)
+            execute(
+                "UPDATE warmup_schedule SET status = 'failed', result_json = %s, updated_at = now() WHERE id = %s",
+                (Jsonb({"error": label, "message_id": message_id}), row["id"]),
+            )
+            break
+        execute(
+            """
+            INSERT INTO email_events(event_type, payload_json, mailbox, message_id)
+            VALUES ('warmup_sent', %s, %s, %s)
+            """,
+            (
+                Jsonb({"recipient": row["recipient_email"], "sender": from_addr, "schedule_id": str(row["id"]), "day_number": row["day_number"], "policy": "neutral_calendar_warmup_no_sales_no_tracking"}),
+                from_addr,
+                message_id,
+            ),
+        )
+        execute(
+            "UPDATE warmup_schedule SET status = 'sent', sent_at = now(), result_json = %s, updated_at = now() WHERE id = %s",
+            (Jsonb({"message_id": message_id, "smtp_result": "accepted"}), row["id"]),
+        )
+        sent += 1
+    return {"sent": sent, "errors": errors, "status": "ok" if not errors else "stopped_on_error"}
 
 
 def write_owner_daily_report() -> dict[str, Any]:

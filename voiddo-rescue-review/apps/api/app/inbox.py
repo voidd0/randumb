@@ -15,6 +15,8 @@ def classify_reply(subject: str, body: str) -> dict[str, object]:
     text = f"{subject}\n{body}".lower()
     if any(word in text for word in ["unsubscribe", "remove me", "stop emailing"]):
         label = "unsubscribe"
+    elif any(word in text for word in ["found it in spam", "in spam", "spam folder", "starred and answered", "starred and sent", "all fine"]):
+        label = "auto_reply"
     elif any(word in text for word in ["delivery status notification", "undelivered", "mail delivery failed"]):
         label = "bounce"
     elif any(word in text for word in ["lawyer", "legal", "sue", "gdpr complaint"]):

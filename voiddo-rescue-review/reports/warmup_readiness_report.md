@@ -1,16 +1,18 @@
 # Warmup Readiness Report
 
-Updated: 2026-05-26 13:55 IDT
+Updated: 2026-05-26 14:02 IDT
 
 ## Status
 
-Warmup is implemented but blocked. It has not started.
+Warmup is implemented as an autonomous low-volume calendar. It is scheduled but has not sent yet.
 
 Current blockers:
 
 - Owner-approved warmup recipient pool exists.
 - Owner-approved deliverability test inbox pool exists.
-- Latest mail QA decision is `FAIL_BLOCK_LAUNCH` because deliverability diagnostics hit rate-limit and bounce/DSN was observed.
+- Warmup calendar exists with daily cap `2`.
+- Systemd timer `voiddo-rescue-warmup-calendar.timer` is active and checks due sends every 15 minutes.
+- Latest diagnostic history includes rate-limit/bounce signal, so the calendar starts after cooldown instead of sending immediately.
 
 ## Implemented
 
@@ -21,13 +23,18 @@ Current blockers:
 - Dry-run warmup schedule preview.
 - Owner command `PREPARE WARMUP` uses the real approved env+DB pool count.
 - Owner command `START WARMUP DAY=1` now has a real send executor, but only after all gates pass.
+- Autonomous calendar table: `warmup_schedule`.
+- Autonomous runner: `/opt/voiddo-rescue/scripts/run_warmup_calendar.sh`.
+- Host timer: `voiddo-rescue-warmup-calendar.timer`.
+- Sender rotation: `audit@`, `support@`, `fix@` on `voiddorescue.com`.
 
 ## Day Caps
 
-- Day 1: `5`
-- Day 2: `10`
-- Day 3: `15`
-- Day 4-7: `25`
+- Calendar mode: `2/day`.
+- Slot 1: `10:15 Asia/Jerusalem`.
+- Slot 2: `16:15 Asia/Jerusalem`.
+- Current plan length: `14 days`, `28 scheduled messages`.
+- Recipient ordering prefers owner/Gmail controls first, then external controls, then internal controls.
 
 ## Day 1 Send Gate
 
@@ -45,9 +52,11 @@ Current result:
 - Warmup recipient pool count after import: `7`
 - Runtime warmup import accepted: `7`
 - Runtime warmup import rejected: `0`
+- Warmup scheduled messages: `28`
 - Warmup day 1 sent: `0`
-- Warmup status: `warmup_day_1_blocked`
+- Warmup status: `scheduled_autonomous_calendar`
 - Bounce count after inbox poll: `2`
+- Typo address disabled and corrected Gmail imported into warmup pool.
 
 ## Stop Conditions
 
@@ -60,4 +69,4 @@ Current result:
 
 ## Decision
 
-`BLOCKED_DELIVERABILITY_FAILURE`
+`WARMUP_SCHEDULED_NO_OUTREACH`

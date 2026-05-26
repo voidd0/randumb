@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Updated: 2026-05-26 13:55 IDT
+Updated: 2026-05-26 14:02 IDT
 
 ## Decision
 
@@ -34,6 +34,8 @@ This is not live outreach ready.
 - Deliverability diagnostics hit Mailcow/Rspamd rate limit.
 - Bounce/DSN messages were observed after diagnostics.
 - Warmup day 1 sent `0` and remains blocked.
+- One typo address was corrected; the corrected Gmail diagnostic was sent and awaits owner inbox/spam observation.
+- Autonomous warmup calendar is configured at `2/day`, with no cold outreach and no sales copy.
 
 ## Safety Flags
 
@@ -52,4 +54,4 @@ This is not live outreach ready.
 - Spam signal count: `0` observed; inbox placement cannot be measured without approved test inboxes.
 - Inbox poll: completed, `3` messages seen.
 
-Launch remains blocked until approved test and warmup pools exist and warmup day 1 is explicitly approved through the gated owner command.
+Live outreach remains blocked. Warmup is scheduled as an autonomous low-volume internal/test-recipient calendar.

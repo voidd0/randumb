@@ -24,6 +24,7 @@ voiddo-rescue-review/apps/api/migrations/002_p0_integration.sql
 voiddo-rescue-review/apps/api/migrations/003_p1_launch_gate.sql
 voiddo-rescue-review/apps/api/migrations/004_p2_mail_checkout_warmup.sql
 voiddo-rescue-review/apps/api/migrations/006_p4_deliverability_warmup.sql
+voiddo-rescue-review/apps/api/migrations/007_warmup_calendar.sql
 voiddo-rescue-review/apps/api/requirements.txt
 voiddo-rescue-review/apps/api/tests/test_core.py
 voiddo-rescue-review/apps/api/tests/test_p0_integration.py
@@ -102,5 +103,6 @@ voiddo-rescue-review/reports/vps_inventory.md
 voiddo-rescue-review/reports/warmup_readiness_report.md
 voiddo-rescue-review/scripts/mailcow_rescue_setup.py
 voiddo-rescue-review/scripts/run_smoke_tests.sh
+voiddo-rescue-review/scripts/run_warmup_calendar.sh
 voiddo-rescue-review/scripts/setup_paddle_products.py
 voiddo-rescue-review/scripts/sync_runtime_env.py

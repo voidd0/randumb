@@ -49,6 +49,15 @@ def test_inbox_classifier_marks_unsafe_security_accusation():
     assert result["auto_reply_allowed"] is False
 
 
+def test_inbox_classifier_treats_delivery_observation_as_autonomous_signal():
+    result = classify_reply("Re: diagnostic", "All fine, found it in spam, starred and answered")
+    assert result["classification"] == "auto_reply"
+    assert result["human_review_required"] is False
+    assert result["auto_reply_allowed"] is False
+
+
+
+
 def test_paddle_signature_mock():
     secret = "test_secret"
     body = b'{"event_type":"transaction.paid"}'

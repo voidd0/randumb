@@ -52,5 +52,10 @@ def persist_message(item: Any) -> bool:
                     "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, 'critical', %s, %s)",
                     (f"inbox.{item.classification}", "Unsafe reply requires human review", Jsonb({"sender": sender, "subject": item.subject})),
                 )
+            if any(marker in item.body.lower() for marker in ["found it in spam", "in spam", "spam folder"]):
+                cur.execute(
+                    "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
+                    ("deliverability.spam_observed", "warning", "Test inbox spam placement signal observed", Jsonb({"sender": sender, "subject": item.subject})),
+                )
         conn.commit()
     return True
