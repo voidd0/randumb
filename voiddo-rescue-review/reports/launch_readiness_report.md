@@ -1,76 +1,48 @@
-# Vøiddo Rescue Launch Readiness Report
+# Launch Readiness Report
 
-Generated: 2026-05-26
+Updated: 2026-05-26 IDT
 
-## Current Status
+## Decision
 
-MVP runtime is built and running in an isolated Docker Compose project, but it is not ready for live outreach.
+`NOT LAUNCH READY`
 
 ## Passed
 
-- Existing project inventory completed.
-- Existing projects were not intentionally modified.
-- Rescue project is isolated under `/opt/voiddo-rescue`.
-- Docker services are running and healthy.
-- Database migrations created the MVP schema.
-- API health checks pass.
-- Web build and health checks pass.
-- Worker health checks pass.
-- Safe scanner produced a real audit and screenshots.
-- Audit page route exists.
-- Admin dashboard route exists.
-- Customer dashboard route exists.
-- Outreach dry-run preview works.
-- Email QA gate works.
-- Suppression endpoint works.
-- Unsubscribe endpoint works.
-- Rate-limit/safety gate blocks live sending while paused.
-- Inbox classifier works.
-- Paddle products/prices are configured.
-- Paddle webhook signature verification works.
-- WordPress plugin skeleton syntax check passes.
-- Huashu/design-review pre-publish visual gate passes locally.
-- Rollback plan exists.
+- Existing non-Rescue projects not modified.
+- Rescue Docker services healthy.
+- DB migrations applied.
+- Real scanner job writes audits/issues/screenshots.
+- Dynamic audit page reads API audit data.
+- Dynamic admin dashboard reads DB metrics.
+- Paddle webhook provisioning writes records.
+- Inbox persistence and idempotency implemented.
+- Owner command parser and risk gates implemented.
+- Mail DNS auth records are present, including DKIM.
+- DMARC typo `TTL: Automatic` is not present.
+- Warmup planner exists and is dry-run only.
+- Lead batch importer exists and is dry-run only.
+- Tests pass: `17 passed`.
 
-## Blocked Before Live Launch
+## Blocking P0 Gates
 
-- DKIM TXT for `voiddorescue.com` is not published.
-- DMARC TXT has an invalid trailing `TTL: Automatic` string.
-- Strict TLS SMTP/IMAP fails because current Mailcow mail certificate is not valid for `mail.voiddorescue.com`.
-- Public reverse proxy routes have not been wired for:
-  - `rescue.voiddo.com`
-  - `app.rescue.voiddo.com`
-  - `api.rescue.voiddo.com`
-  - `audit.rescue.voiddo.com`
-  - `go.rescue.voiddo.com`
-  - `status.rescue.voiddo.com`
-- Public-domain screenshot QA has not run yet.
-- First 100-150 lead batch has not been generated/scanned.
-- First 20 live-send preview has not been approved by launch flag.
+- Strict SMTP TLS login fails with certificate verification error.
+- Strict IMAP TLS login fails with certificate verification error.
+- Huanshu adapter is `BLOCKED_HUANSHU_NOT_AVAILABLE`.
+- Deliverability test inbox pool is missing.
+- Warmup recipient pool is missing.
 
-## Launch Flags
+## Safety Flags
 
 - `OUTREACH_DRY_RUN=true`
 - `OUTREACH_PAUSED=true`
 - `AUTO_REPLIES_PAUSED=true`
 - `FIRST_LIVE_SEND_FLAG=false`
-- `INBOX_WORKER_ENABLED=false`
 - `PADDLE_PROVISIONING_PAUSED=true`
 
-These flags must remain conservative until all blockers are cleared.
+## Live Activity
 
-## Required Owner/DNS Actions
+- Live outreach sent: `0`
+- Warmup sent: `0`
+- Customer-facing auto-replies: paused
 
-1. Add DKIM TXT:
-   - Host: `dkim._domainkey`
-   - Value: see `/opt/voiddo-rescue/reports/mailcow_setup_report.md`
-2. Fix DMARC TXT:
-   - Remove literal ` TTL: Automatic` from the TXT value.
-3. Decide whether to add `mail.voiddorescue.com` to the Mailcow certificate/SAN set or use a trusted existing mail hostname for SMTP/IMAP.
-
-## Ready For Next Autonomous Pass
-
-- Reverse proxy route planning without touching existing routes.
-- Public-domain dry-run once DNS/TLS blockers are resolved.
-- Lead source importer and first batch generation.
-- Admin preview queue for the first 20 dry-run emails.
+Launch must remain blocked until the TLS, Huanshu, deliverability, and warmup-pool gates are resolved.

@@ -59,7 +59,19 @@ def test_paddle_signature_mock():
 
 
 def test_billing_config_reports_missing_prices():
-    status = checkout_config_status(Settings(_env_file=None, paddle_api_key="", paddle_webhook_secret=""))
+    status = checkout_config_status(
+        Settings(
+            _env_file=None,
+            paddle_api_key="",
+            paddle_webhook_secret="",
+            paddle_price_monitor_monthly="",
+            paddle_price_fix_lite_monthly="",
+            paddle_price_rescue_pro_monthly="",
+            paddle_price_audit_onetime="",
+            paddle_price_contact_form_repair="",
+            paddle_price_emergency_fix="",
+        )
+    )
     assert status["ready"] is False
     assert "monitor_monthly" in status["missing_price_keys"]
 

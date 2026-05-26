@@ -1,15 +1,24 @@
-const metrics = [
-  ["0", "leads total"],
-  ["0", "qualified"],
-  ["0", "audit pages"],
-  ["0", "payments"],
-  ["0", "emails queued"],
-  ["0", "emails sent"],
-  ["0", "human review"],
-  ["5", "kill switches"],
-];
+import { fetchJson } from "../lib/api";
 
-export default function AdminPage() {
+const labels: Record<string, string> = {
+  leads_total: "leads total",
+  qualified_leads: "qualified",
+  audit_pages_generated: "audit pages",
+  payments: "payments",
+  subscriptions: "subscriptions",
+  customers: "customers",
+  fix_requests: "fix requests",
+  human_review_required: "human review",
+};
+
+export default async function AdminPage() {
+  const data = await fetchJson("/admin/metrics");
+  const metrics = data || {};
+  const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
+  const scans = metrics.scans || {};
+  const emails = metrics.emails || {};
+  const switches = metrics.kill_switches || {};
+
   return (
     <div className="shell">
       <header className="nav"><div className="brand"><span className="mark">vø</span> Rescue Admin</div><nav className="navlinks"><a href="/">Product</a><a href="/status">Status</a></nav></header>
@@ -17,21 +26,35 @@ export default function AdminPage() {
         <aside className="sidebar">
           <div className="eyebrow">Control room</div>
           <h1 style={{fontSize: 34, lineHeight: 1.05}}>Pipeline is gated</h1>
-          <p className="lede" style={{fontSize: 15}}>Live sends, auto-replies, and Paddle provisioning stay paused until launch gates pass.</p>
+          <p className="lede" style={{fontSize: 15}}>Live sends, warmup, auto-replies, and Paddle customer-facing provisioning stay paused until P0 gates pass.</p>
         </aside>
         <section className="content">
           <div className="metric-grid">
-            {metrics.map(([value, label]) => <div className="metric" key={label}><strong>{value}</strong><span>{label}</span></div>)}
+            {cards.map(([value, label]) => <div className="metric" key={label}><strong>{value}</strong><span>{label}</span></div>)}
           </div>
           <div className="panel">
-            <h2>Kill Switches</h2>
-            {["pause scanning", "pause outreach", "pause auto-replies", "pause Paddle provisioning", "pause all workers"].map((item) => (
-              <div className="row" key={item}><span className="tag">on</span><span>{item}</span><span className="score">safe</span></div>
+            <h2>Scanner Jobs</h2>
+            {["queued", "running", "completed", "failed"].map((item) => (
+              <div className="row" key={item}><span className="tag">{item}</span><span>scan jobs</span><span className="score">{scans[item] ?? 0}</span></div>
             ))}
           </div>
           <div className="panel">
-            <h2>First Live Batch</h2>
-            <p className="lede" style={{fontSize: 16}}>No live batch has been approved. First day cap is 20 emails total and 5 emails/hour/domain after DNS, mail auth, suppression, unsubscribe, audit page, and Paddle tests pass.</p>
+            <h2>Outreach Queue</h2>
+            {["queued", "sent", "bounced", "replied"].map((item) => (
+              <div className="row" key={item}><span className="tag">{item}</span><span>messages</span><span className="score">{emails[item] ?? 0}</span></div>
+            ))}
+          </div>
+          <div className="panel">
+            <h2>Kill Switches</h2>
+            {Object.entries(switches).map(([key, value]) => (
+              <div className="row" key={key}><span className="tag">{value ? "on" : "off"}</span><span>{key.replaceAll("_", " ")}</span><span className="score">{value ? "blocked" : "armed"}</span></div>
+            ))}
+          </div>
+          <div className="panel">
+            <h2>Owner Commands</h2>
+            <div className="row"><span className="tag">stored</span><span>gated inbox commands</span><span className="score">{metrics.owner_commands ?? 0}</span></div>
+            <div className="row"><span className="tag">visual</span><span>QA runs</span><span className="score">{metrics.visual_qa_runs ?? 0}</span></div>
+            <div className="row"><span className="tag">mail</span><span>QA runs</span><span className="score">{metrics.mail_qa_runs ?? 0}</span></div>
           </div>
         </section>
       </main>

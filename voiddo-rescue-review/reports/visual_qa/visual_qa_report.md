@@ -7,8 +7,8 @@ Scope:
 - Routes checked: `/`, `/admin`, `/customer`, `/status`, `/r/sample-audit`.
 - Viewports checked: desktop `1440x1000`, mobile `390x844`.
 
-Huashu/design-review gate:
-- Huashu mandate recorded for all money-facing/public/customer pages.
+Huanshu/design-review gate:
+- Huanshu mandate recorded for all money-facing/public/customer pages.
 - Desktop screenshots captured.
 - Mobile screenshots captured.
 - No overlap detected by automated bounding/overflow pass.

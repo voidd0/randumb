@@ -3,12 +3,40 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import psycopg
+from psycopg.rows import dict_row
 
 from .config import get_settings
 
 
 def connect():
     return psycopg.connect(get_settings().database_url)
+
+
+def connect_dict():
+    return psycopg.connect(get_settings().database_url, row_factory=dict_row)
+
+
+def fetch_one(query: str, params: tuple = ()):
+    with connect_dict() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchone()
+
+
+def fetch_all(query: str, params: tuple = ()):
+    with connect_dict() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+
+
+def execute(query: str, params: tuple = ()):
+    with connect_dict() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            row = cur.fetchone() if cur.description else None
+        conn.commit()
+        return row
 
 
 def migrate() -> None:

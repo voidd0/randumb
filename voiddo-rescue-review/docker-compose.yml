@@ -114,6 +114,7 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:-https://api.rescue.voiddo.com}
       NEXT_PUBLIC_AUDIT_BASE_URL: ${AUDIT_BASE_URL:-https://audit.rescue.voiddo.com}
       NEXT_PUBLIC_GO_BASE_URL: ${GO_BASE_URL:-https://go.rescue.voiddo.com}
+      API_INTERNAL_BASE_URL: http://api:8080
     depends_on:
       api:
         condition: service_healthy

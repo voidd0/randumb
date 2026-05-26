@@ -39,7 +39,7 @@ Current MVP has deterministic checks in `apps/api/app/email_quality.py`. Later A
 
 Before any Rescue page is published:
 
-- huashu-design protocol is mandatory.
+- huanshu-design protocol is mandatory.
 - frontend-design/review skills are mandatory.
 - desktop screenshot required.
 - mobile screenshot required.

@@ -24,12 +24,12 @@ class Settings(BaseSettings):
     paddle_provisioning_paused: bool = True
     first_live_send_flag: bool = False
 
-    smtp_host: str = "mail.voiddorescue.com"
+    smtp_host: str = "mail.voiddo.com"
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_from_default: str = "audit@voiddorescue.com"
-    imap_host: str = "mail.voiddorescue.com"
+    imap_host: str = "mail.voiddo.com"
     imap_port: int = 993
     imap_username_audit: str = ""
     imap_password_audit: str = ""
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     imap_password_fix: str = ""
     imap_username_support: str = ""
     imap_password_support: str = ""
-    mail_tls_verify: bool = False
+    mail_tls_verify: bool = True
 
     paddle_api_key: str = ""
     paddle_environment: str = "sandbox"

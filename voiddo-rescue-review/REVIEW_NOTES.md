@@ -1,53 +1,54 @@
-# Vøiddo Rescue MVP Review Notes
+# Vøiddo Rescue MVP P0 Review Notes
 
-Original ZIP path on VPS:
-- `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-code-2026-05-26.zip`
+Updated: 2026-05-26 IDT
 
-Expected SHA256:
-- `76fe46d16c5070df639016905bddd9bf9642b7086dd2ade0a2e6722228049f3b`
+## Source Archive
 
-Target GitHub branch:
-- `voiddo-rescue-mvp-review-20260526-files`
+- Original fixed ZIP path on VPS: /opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p0-fixed-2026-05-26.zip
+- SHA256: 0cf70fc0215559b12dd4f3722455897a933649307a79d60e266d714d4b5e3e46
+- Source tree staged from: /opt/voiddo-rescue
+- Target folder in branch: voiddo-rescue-review/
 
-Target folder:
-- `voiddo-rescue-review/`
+## Exclusions
 
-Excluded from review tree:
-- `.env`
-- mailbox passwords and private runtime secrets
-- `.venv/`
-- `node_modules/`
-- `.next/`
-- `__pycache__/`
-- `*.pyc`
-- runtime storage contents
-- logs/backups
+The review tree excludes runtime and secret-bearing artifacts:
+
+- .env
+- .env.* except .env.example
+- mailbox passwords
+- venv/.venv
+- node_modules
+- .next
+- __pycache__ and *.pyc
+- runtime storage/audits, storage/screenshots, storage/exports contents
+- runtime logs and backups
 - PNG screenshots
 
-Included intentionally:
-- `.env.example`
-- `docker-compose.yml`
-- database migrations
-- API/web/worker source
-- WordPress plugin skeleton
-- setup/sync scripts
+## Included
+
+- .env.example
+- docker-compose.yml
+- API, worker, web, shared package files
+- migrations, including 002_p0_integration.sql
+- scripts
+- WP plugin
 - redacted reports
-- file list and SHA report
+- P0 integration, visual QA, mail QA, owner command, warmup, smoke, and launch readiness reports
 
-Secret scan result:
-- `SECRET_SCAN_PASS`
-- Token/private-key patterns checked: GitHub PAT, GitHub short tokens, NPM tokens, OpenAI-style keys, private key blocks, npm registry auth tokens.
-- Env-like sensitive assignments checked for non-redacted values.
-- Forbidden path scan checked for `.env`, `node_modules`, `.next`, `.venv`, `__pycache__`, `*.pyc`, and PNG files.
+## Secret Scan
 
-Confirmation:
-- No raw secrets are intentionally included.
-- No mailbox passwords are intentionally included.
-- No runtime `.env` is included.
-- GitHub `main`/`master` is not modified; this review content lives on the dedicated branch only.
+Result: PASS
 
-Commit SHA:
-- Artifact import commit: `590b1519a8e05e9de92351f61710bfb3532f3c8c`
+No raw secrets, mailbox passwords, private keys, .env file, Paddle API key, GitHub token, NPM token, or OpenAI token were included.
 
-Note:
-- The final branch HEAD commit SHA is returned in the operator response. A commit cannot contain its own final SHA without changing that SHA.
+## Runtime Safety
+
+- Live outreach sent: 0
+- Warmup started: no
+- Existing non-Rescue projects touched: no
+- Launch readiness: NOT READY
+- Current blockers: strict SMTP/IMAP TLS certificate verification, Huanshu adapter unavailable, approved deliverability/warmup recipient pool missing
+
+## Commit Notes
+
+This file is committed before the final Git commit SHA exists. Use the branch HEAD returned by the operator as the exact final commit SHA for this export.

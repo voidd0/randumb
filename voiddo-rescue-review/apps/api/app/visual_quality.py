@@ -28,7 +28,7 @@ def check_visual_publish_gate(artifact_dir: str) -> VisualQualityResult:
     report = path / "visual_qa_report.md"
     if report.exists():
         text = report.read_text(encoding="utf-8", errors="replace").lower()
-        for required in ["huashu", "desktop", "mobile", "no overlap", "no horizontal overflow"]:
+        for required in ["huanshu", "desktop", "mobile", "no overlap", "no horizontal overflow"]:
             if required not in text:
                 issues.append(f"report_missing:{required}")
     return VisualQualityResult(passed=not issues, issues=issues)

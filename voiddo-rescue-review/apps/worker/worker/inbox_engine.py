@@ -9,6 +9,8 @@ import os
 import smtplib
 import ssl
 
+from .inbox_store import persist_message
+
 
 SAFE_AUTO_REPLY = {"ask_price", "ask_details", "wrong_person", "out_of_office", "unsubscribe"}
 UNSAFE = {"angry", "legal_threat", "security_accusation", "custom_technical_request", "paid", "wants_call"}
@@ -142,6 +144,7 @@ def poll_all() -> list[InboxMessage]:
             continue
         all_messages.extend(read_unseen(mailbox, username, password))
     for item in all_messages:
+        persist_message(item)
         if item.auto_reply_allowed and not item.human_review_required:
             send_auto_reply(item.sender, item.classification)
         # Unsafe/human-review messages are intentionally not auto-replied.
