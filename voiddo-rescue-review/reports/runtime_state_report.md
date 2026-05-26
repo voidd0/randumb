@@ -61,3 +61,21 @@ Generated: 2026-05-26T15:18:39+03:00
 - launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
 
 Canonical decision: not production/live-outreach-ready. The codebase now has scout, scoring, agent, template, checkout, onboarding, and throttle foundations, but warmup remains blocked by recent mail signals and production lead sourcing is import-based.
+
+## P6 Self-Operating Update
+
+Generated: 2026-05-26T17:43:04+03:00
+
+- economics engine: PASS
+- self-audit engine: running, latest status `needs_fix`
+- self-fix/self-learning/self-building tables: active
+- autonomous mailer: active, sent `0`, outbound blocked by policy
+- quality plugin gate: Huanshu PASS plus axe/pa11y/pixelmatch PASS and Lighthouse CI PASS_WITH_WARNINGS
+- tests: `71 passed`
+- smoke: PASS
+- safe daily loop: 10 agents completed
+- warmup sent: `0`
+- live outreach sent: `0`
+- launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
+
+Current self-audit blockers remain recent mail signals, not code failures.

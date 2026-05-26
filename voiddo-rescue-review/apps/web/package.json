@@ -17,9 +17,15 @@
     "postcss": "8.5.15"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
+    "@lhci/cli": "^0.15.1",
     "@types/node": "22.10.2",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
+    "pa11y": "^9.1.1",
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.60.0",
+    "pngjs": "^7.0.0",
     "typescript": "5.7.2"
   }
 }

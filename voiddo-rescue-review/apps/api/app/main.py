@@ -40,7 +40,17 @@ from .autonomous_agents import run_agent, run_daily_loop
 from .email_templates import render_email_template, qa_email_template, render_all_samples
 from .lead_scoring import score_lead
 from .mailer_throttle import throttle_decision
+from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
+from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
+from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, process_scout_run
+from .self_operating import (
+    create_self_fix_task,
+    queue_self_build,
+    record_learning,
+    run_self_audit,
+    self_operating_summary,
+)
 
 app = FastAPI(title="Vøiddo Rescue API", version="0.1.0")
 settings = get_settings()
@@ -374,6 +384,107 @@ async def agent_run(agent: str, request: Request):
 @app.post("/admin/daily-loop/run", dependencies=[Depends(require_admin)])
 def daily_loop_run():
     return {"ok": True, "loop": run_daily_loop()}
+
+
+@app.post("/admin/economics/audit", dependencies=[Depends(require_admin)])
+def economics_audit_run():
+    return {"ok": True, "economics": run_economics_audit()}
+
+
+@app.get("/admin/economics/summary", dependencies=[Depends(require_admin)])
+def economics_summary_get():
+    return {"ok": True, "summary": latest_economics_summary()}
+
+
+@app.get("/admin/economics/{product_key}", dependencies=[Depends(require_admin)])
+def economics_product_get(product_key: str):
+    return {"ok": True, "economics": calculate_unit_economics(product_key)}
+
+
+@app.post("/admin/self/audit", dependencies=[Depends(require_admin)])
+async def self_audit_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "self_audit": run_self_audit(payload.get("scope", "full"))}
+
+
+@app.get("/admin/self/summary", dependencies=[Depends(require_admin)])
+def self_summary_get():
+    return {"ok": True, "summary": self_operating_summary()}
+
+
+@app.post("/admin/self/fix-tasks", dependencies=[Depends(require_admin)])
+async def self_fix_task_create(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "task": create_self_fix_task(
+            payload.get("type", "manual_self_fix"),
+            payload.get("title", "Self-fix task"),
+            payload.get("priority", "P2"),
+            payload.get("evidence") or {},
+            payload.get("safety_level", "safe"),
+        ),
+    }
+
+
+@app.post("/admin/self/learning", dependencies=[Depends(require_admin)])
+async def self_learning_create(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "learning": record_learning(
+            payload.get("signal_type", "manual"),
+            payload.get("source", "admin"),
+            payload.get("lesson", "No lesson supplied."),
+            payload.get("prevention_rule", "Review before recurrence."),
+            payload.get("severity", "info"),
+            payload.get("payload") or {},
+        ),
+    }
+
+
+@app.post("/admin/self/build-queue", dependencies=[Depends(require_admin)])
+async def self_build_queue_create(request: Request):
+    payload = await request.json()
+    return {"ok": True, "item": queue_self_build(payload.get("module", "unknown"), payload.get("title", "Build item"), payload.get("priority", "P2"), payload.get("acceptance") or [])}
+
+
+@app.post("/admin/mailer/autonomous-cycle", dependencies=[Depends(require_admin)])
+def autonomous_mailer_cycle_run():
+    return {"ok": True, "mailer": run_autonomous_mailer_cycle()}
+
+
+@app.post("/admin/mailer/decide-outbound", dependencies=[Depends(require_admin)])
+async def autonomous_mailer_outbound(request: Request):
+    payload = await request.json()
+    return {"ok": True, "decision": decide_outbound_mail(payload)}
+
+
+@app.post("/admin/mailer/decide-inbound", dependencies=[Depends(require_admin)])
+async def autonomous_mailer_inbound(request: Request):
+    payload = await request.json()
+    return {"ok": True, "decision": decide_inbound_mail(payload.get("subject", ""), payload.get("body", ""), payload.get("mailbox", "support@voiddorescue.com"))}
+
+
+@app.get("/admin/quality/plugins", dependencies=[Depends(require_admin)])
+def quality_plugins_get():
+    return {"ok": True, "manifest": quality_plugin_manifest(), "summary": latest_quality_summary()}
+
+
+@app.post("/admin/quality/plugins/record", dependencies=[Depends(require_admin)])
+async def quality_plugin_record(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "run": record_quality_plugin_run(
+            payload.get("tool", "huanshu"),
+            payload.get("target", "/"),
+            payload.get("status", "PASS"),
+            int(payload.get("score", 100)),
+            payload.get("issues") or [],
+            payload.get("artifact_path", ""),
+        ),
+    }
 
 
 @app.post("/admin/mail/throttle-check", dependencies=[Depends(require_admin)])

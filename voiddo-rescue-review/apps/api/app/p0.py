@@ -319,6 +319,13 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "agent_runs": scalar("SELECT count(*) FROM agent_runs"),
         "onboarding_tasks": scalar("SELECT count(*) FROM onboarding_tasks"),
         "monitoring_targets": scalar("SELECT count(*) FROM monitoring_targets"),
+        "economics_snapshots": scalar("SELECT count(*) FROM economics_snapshots"),
+        "self_audit_runs": scalar("SELECT count(*) FROM self_audit_runs"),
+        "self_fix_tasks_open": scalar("SELECT count(*) FROM self_fix_tasks WHERE status = 'open'"),
+        "self_learning_events": scalar("SELECT count(*) FROM self_learning_events"),
+        "self_build_queue_open": scalar("SELECT count(*) FROM self_build_queue WHERE status = 'queued'"),
+        "autonomous_mailer_decisions": scalar("SELECT count(*) FROM autonomous_mailer_decisions"),
+        "quality_plugin_runs": scalar("SELECT count(*) FROM quality_plugin_runs"),
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,

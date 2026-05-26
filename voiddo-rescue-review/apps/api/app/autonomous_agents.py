@@ -7,6 +7,8 @@ from psycopg.types.json import Jsonb
 
 from .db import execute, fetch_one
 from .email_templates import render_all_samples
+from .economics import run_economics_audit
+from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_throttle import throttle_decision
 from .p0 import (
     build_warmup_calendar,
@@ -16,7 +18,9 @@ from .p0 import (
     run_warmup_calendar_due,
     runtime_state_snapshot,
 )
+from .quality_plugins import latest_quality_summary
 from .scouts import process_scout_run
+from .self_operating import run_self_audit, self_operating_summary
 
 
 def _record_agent(agent: str, func: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -65,6 +69,13 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "mail_throttle_agent": lambda: throttle_decision("global", "diagnostic", 600),
         "email_template_agent": lambda: {"rendered": len(render_all_samples()), "all_pass": all(item["qa"]["passed"] for item in render_all_samples())},
         "warmup_calendar_agent": lambda: build_warmup_calendar(),
+        "economics_agent": lambda: run_economics_audit(),
+        "self_audit_agent": lambda: run_self_audit("agent_cycle"),
+        "self_fix_agent": lambda: self_operating_summary(),
+        "self_learning_agent": lambda: self_operating_summary(),
+        "self_building_agent": lambda: self_operating_summary(),
+        "autonomous_mailer_agent": lambda: run_autonomous_mailer_cycle(),
+        "quality_plugin_agent": lambda: latest_quality_summary(),
     }
     if agent not in agents:
         raise ValueError("unknown_agent")
@@ -80,6 +91,9 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_agent",
         "reporting_agent",
         "fix_task_agent",
+        "economics_agent",
+        "autonomous_mailer_agent",
+        "self_audit_agent",
     ]
     runs = [run_agent(agent) for agent in selected]
     return {"agents": len(runs), "runs": runs, "live_outreach": False}

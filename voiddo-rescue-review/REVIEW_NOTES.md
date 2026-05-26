@@ -2,7 +2,16 @@
 
 Original source path: `/opt/voiddo-rescue`
 
-Export package is generated from this folder after artifact cleanup.
+## P6 Status
+
+- Self-operating foundation added: economics, self-audit, self-fix, self-learning, self-building, autonomous mailer, and quality plugin gates.
+- Tests: 71 passed
+- Smoke: PASS
+- Huanshu: PASS
+- Additional quality plugins: axe-core/playwright PASS, pa11y PASS, pixelmatch PASS, Lighthouse CI PASS_WITH_WARNINGS
+- Live outreach sent: 0
+- Warmup sent: 0
+- Launch readiness: WARMUP_SCHEDULED_NO_OUTREACH
 
 ## Excluded
 
@@ -16,15 +25,6 @@ Export package is generated from this folder after artifact cleanup.
 ## Secret Scan
 
 Result: no raw secrets intentionally included. Reports are redacted. Runtime addresses and private mailbox credentials are excluded.
-
-## Functional Status
-
-- Tests: 61 passed
-- Smoke: PASS
-- Huanshu visual checks: PASS for landing, audit demo, customer, status, unsubscribe, authenticated admin
-- Live outreach sent: 0
-- Warmup sent: 0
-- Launch readiness: WARMUP_SCHEDULED_NO_OUTREACH
 
 ## Commit SHA
 

@@ -77,6 +77,29 @@ Updated: 2026-05-26 15:18 IDT
 - recent bounce/DSN still blocks warmup: `2`
 - recent rate-limit still blocks warmup: `1`
 
+## P6 Self-Operating Smoke
+
+Updated: 2026-05-26 17:43 IDT
+
+- `docker compose exec -T api python -m pytest -q`: PASS, `71 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS, `71 passed`
+- Huanshu:
+  - landing: PASS
+  - audit demo: PASS
+  - customer: PASS
+  - status: PASS
+  - unsubscribe: PASS
+  - authenticated admin: PASS
+- extra quality plugins:
+  - axe-core/playwright: PASS
+  - pa11y: PASS
+  - pixelmatch: PASS
+  - Lighthouse CI: PASS_WITH_WARNINGS
+- autonomous mailer cycle: PASS, sent `0`
+- daily loop: PASS, 10 agents completed
+- warmup sent: `0`
+- live outreach sent: `0`
+
 ## P5 Cleanup Smoke
 
 Updated: 2026-05-26 14:52 IDT

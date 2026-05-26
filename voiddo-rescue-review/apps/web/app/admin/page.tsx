@@ -27,6 +27,15 @@ export default async function AdminPage() {
     ["agents", metrics.agent_runs ?? 0],
     ["onboarding", metrics.onboarding_tasks ?? 0],
   ];
+  const selfOps = [
+    ["economics", metrics.economics_snapshots ?? 0],
+    ["self audits", metrics.self_audit_runs ?? 0],
+    ["fix queue", metrics.self_fix_tasks_open ?? 0],
+    ["learning", metrics.self_learning_events ?? 0],
+    ["build queue", metrics.self_build_queue_open ?? 0],
+    ["mailer decisions", metrics.autonomous_mailer_decisions ?? 0],
+    ["plugin gates", metrics.quality_plugin_runs ?? 0],
+  ];
 
   return (
     <div className="shell">
@@ -73,6 +82,12 @@ export default async function AdminPage() {
             <h2>Autonomous Agents</h2>
             {ops.map(([label, value]) => (
               <div className="row" key={String(label)}><span className="tag">agent</span><span>{String(label)}</span><span className="score">{String(value)}</span></div>
+            ))}
+          </div>
+          <div className="panel">
+            <h2>Self-Operating Engine</h2>
+            {selfOps.map(([label, value]) => (
+              <div className="row" key={String(label)}><span className="tag">self</span><span>{String(label)}</span><span className="score">{String(value)}</span></div>
             ))}
           </div>
           <div className="panel">
