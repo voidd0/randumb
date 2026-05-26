@@ -1,32 +1,41 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 21:46 IDT
+Generated: 2026-05-26 21:50 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - target folder: `voiddo-rescue-review/`
-- file count: `250`
+- file count after manifest regeneration: `254`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## P25 Summary
+## P26 Summary
 
-- Added protected customer mail transport dry-run endpoint.
-- Dry-run converts send-ready actions to sanitized transport evidence.
-- Dry-run never calls SMTP and keeps send_mail=false.
-- Live outreach sent: `0`.
-- Warmup sent: `0`.
+- Added `CUSTOMER_MAIL_REAL_SEND_ENABLED=false`.
+- Added protected customer mail real-send endpoint:
+  - `POST /admin/mailer/action-queue/send-customer-mail`
+- Real transport now requires customer send flags, mail QA PASS, clean recent mail signals, throttle pass, and template QA pass.
+- Mocked SMTP success records `sent`; SMTP exceptions record `failed`; missing flags or missing recipient resolver record `transport_blocked`.
+- Raw customer email remains excluded from queue summaries/results.
+
+## Verification
+
+- focused P24-P26 tests: `15 passed`
+- full API tests: `196 passed`
+- smoke script: PASS
+- Docker services: API/web/worker/postgres/redis healthy
+- live outreach sent: `0`
+- warmup sent: `0`
+- customer real-send default: blocked
 
 ## Exclusions
 
 Excluded from review/export: `.env`, `*.env`, mailbox passwords, private keys, `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`, `node_modules`, `.next`, runtime storage, screenshots, exports, backups, logs.
 
-## Verification
+## Secret And Artifact Scan
 
-- API tests: `190 passed`.
-- Smoke script: PASS.
-- Secret/artifact scan: run before push/export; no committed runtime artifacts intended.
+Secret/artifact scan is run before push/export. No secrets, private keys, raw mailbox passwords, virtualenv, cache directories, runtime storage, screenshots, or export artifacts are intended for the review tree.
 
 ## Notes
 
-Raw recipient addresses and secrets are intentionally omitted. Commit SHA is reported in the final operator output after push.
+This package is still not launch-ready. Real customer mail, warmup, auto-replies, and cold outreach remain blocked by default until the relevant flags and runtime gates are clean.

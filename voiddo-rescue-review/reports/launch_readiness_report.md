@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-26 21:45 IDT
+Generated: 2026-05-26 21:50 IDT
 
 ## Decision
 
@@ -12,6 +12,7 @@ P22 added a protected action queue/router so safe mail actions can be prepared o
 P23 connected Paddle provisioning to customer mail actions for onboarding, fix-request confirmation, and monitoring setup reminders. Customer mail sending remains disabled until gates permit it.
 P24 added customer-mail send-ready evidence under clean mocked gates while keeping real transport disabled.
 P25 added customer-mail transport dry-run records. The endpoint is protected and does not call SMTP.
+P26 added the protected customer-mail real-send gate. Real SMTP transport remains blocked by default and requires explicit flags plus clean mail QA/signals/throttle/template QA.
 
 ## Passed Gates
 
@@ -26,11 +27,12 @@ P25 added customer-mail transport dry-run records. The endpoint is protected and
 - customer mail action enqueueing from Paddle: implemented
 - customer mail send-ready gate: implemented
 - customer mail transport dry-run: implemented
+- customer mail real-send gate: implemented and disabled by default
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: PASS or non-blocking warning
-- API tests: `190 passed`
+- API tests: `196 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -44,6 +46,7 @@ P25 added customer-mail transport dry-run records. The endpoint is protected and
 - post-window recheck state: `not_due`
 - mailer ledger blockers: `outreach_paused_env`, `first_live_send_flag_false`, `auto_replies_paused_env`, `recent_bounce_or_dsn`, `recent_rate_limit`
 - customer mail sending flag: `false`
+- customer mail real-send flag: `false`
 
 ## Next Exact Action
 

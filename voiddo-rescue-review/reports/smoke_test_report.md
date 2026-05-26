@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 21:45 IDT
+Generated: 2026-05-26 21:50 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `190 passed`
+- API tests: `196 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -42,6 +42,12 @@ PASS
 - customer mail transport dry-run does not call SMTP: PASS
 - customer mail transport dry-run records sanitized result: PASS
 - customer mail transport endpoint requires auth: PASS
+- customer mail real-send endpoint requires auth: PASS
+- customer mail real-send default gate blocks: PASS
+- customer mail real-send missing flag blocks: PASS
+- mocked customer SMTP send records sent: PASS
+- customer SMTP failure records failed: PASS
+- customer mail real-send summaries omit raw email: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

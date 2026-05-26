@@ -1,8 +1,10 @@
 .env.example
 .gitignore
 ARCHIVE_FILELIST.txt
+ARCHIVE_SHA256.txt
 MIGRATIONS.md
 README.md
+REVIEW_NOTES.md
 apps/api/Dockerfile
 apps/api/app/__init__.py
 apps/api/app/audit_strength.py
@@ -93,6 +95,7 @@ apps/api/tests/test_p22_mailer_action_queue.py
 apps/api/tests/test_p23_customer_mail_tasks.py
 apps/api/tests/test_p24_customer_mail_gate.py
 apps/api/tests/test_p25_customer_mail_transport_dry_run.py
+apps/api/tests/test_p26_customer_mail_real_send_gate.py
 apps/api/tests/test_p5_warmup_safety.py
 apps/api/tests/test_p6_self_operating.py
 apps/api/tests/test_p7_revenue_simulation.py
@@ -204,7 +207,9 @@ reports/p24_customer_mail_gate_report.md
 reports/p24_next_self_written_tz.md
 reports/p25_customer_mail_transport_dry_run_report.md
 reports/p25_next_self_written_tz.md
+reports/p26_customer_mail_real_send_gate_report.md
 reports/p26_next_self_written_tz.md
+reports/p27_next_self_written_tz.md
 reports/p2_mail_checkout_warmup_report.md
 reports/p3_checkout_deliverability_warmup_report.md
 reports/p4_deliverability_warmup_day1_report.md

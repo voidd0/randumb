@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 21:45 IDT
+Generated: 2026-05-26 21:50 IDT
 
 ## Canonical Latest State
 
@@ -46,6 +46,7 @@ Generated: 2026-05-26 21:45 IDT
 - prepared: `0`
 - blocked: `0`
 - send_ready: `0`
+- transport_blocked: `0`
 - dry_run_recorded: `0`
 - sent: `0`
 - raw recipient addresses included: `false`
@@ -53,10 +54,12 @@ Generated: 2026-05-26 21:45 IDT
 - live_outreach_allowed: `false`
 - customer mail actions: onboarding, fix request, monitoring report
 - customer mail sending flag: `false`
+- customer mail real-send flag: `false`
+- P26 real transport endpoint: implemented and protected
 
 ## Verification
 
-- API tests: `190 passed`
+- API tests: `196 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including admin transition panel
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers

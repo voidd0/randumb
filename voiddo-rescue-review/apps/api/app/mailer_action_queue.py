@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import ssl
+import smtplib
+from email.message import EmailMessage
 from email.utils import make_msgid
 from typing import Any
 
@@ -10,8 +13,8 @@ from .config import get_settings
 from .db import execute, fetch_all, fetch_one
 from .email_templates import qa_email_template, render_email_template
 from .mailer_autonomy_ledger import mailer_autonomy_ledger
-from .mailer_throttle import throttle_decision
-from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary
+from .mailer_throttle import record_throttle_send, throttle_decision
+from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary, smtp_credentials_for_sender, smtp_error_label
 
 
 HIGH_RISK_ACTIONS = {"cold_outreach", "send_outreach", "start_warmup", "unpause_outreach", "execute_shell"}
@@ -204,6 +207,187 @@ def transport_dry_run(limit: int = 10) -> dict[str, Any]:
     return json_safe({"processed": len(recorded), "actions": recorded, "send_mail": False, "smtp_called": False, "live_outreach_allowed": False})
 
 
+def _real_send_gate(action: dict[str, Any], preview: dict[str, Any] | None = None) -> dict[str, Any]:
+    settings = get_settings()
+    signals = mail_signal_summary(24)
+    preview = preview or render_customer_mail_preview(action)
+    throttle = throttle_decision("customer_mail", action.get("mailbox", "support@voiddorescue.com"), 600)
+    blockers: list[str] = []
+    if action.get("status") != "send_ready":
+        blockers.append("action_not_send_ready")
+    if action.get("action_type") not in CUSTOMER_MAIL_ACTIONS:
+        blockers.append("not_customer_mail_action")
+    if not settings.customer_mail_sending_enabled:
+        blockers.append("customer_mail_sending_flag_false")
+    if not settings.customer_mail_real_send_enabled:
+        blockers.append("customer_mail_real_send_flag_false")
+    if latest_mail_qa_decision() != "PASS":
+        blockers.append("mail_qa_not_pass")
+    if signals["bounce_or_dsn_count"] > 0:
+        blockers.append("recent_bounce_or_dsn")
+    if signals["rate_limit_count"] > 0:
+        blockers.append("recent_rate_limit")
+    if not preview["qa"]["passed"]:
+        blockers.append("customer_template_qa_failed")
+    if not throttle["allowed"]:
+        blockers.append(f"throttle:{throttle['reason']}")
+    return {
+        "allowed": not blockers,
+        "blockers": blockers,
+        "send_mail": not blockers,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "signals": signals,
+        "throttle": throttle,
+        "template_qa": preview["qa"],
+    }
+
+
+def send_customer_mail_via_smtp(action: dict[str, Any], preview: dict[str, Any]) -> dict[str, Any]:
+    settings = get_settings()
+    recipient = str((action.get("payload_json") or {}).get("recipient_email", "")).strip()
+    if not recipient:
+        return {"sent": False, "smtp_called": False, "blocker": "recipient_resolver_missing"}
+    username, password, from_addr = smtp_credentials_for_sender(settings, str(action.get("mailbox") or settings.smtp_from_default))
+    if not username or not password:
+        return {"sent": False, "smtp_called": False, "blocker": "smtp_credentials_missing"}
+    message_id = make_msgid(domain="voiddorescue.com")
+    msg = EmailMessage()
+    msg["Subject"] = preview["rendered"]["subject"]
+    msg["From"] = from_addr
+    msg["To"] = recipient
+    msg["Message-ID"] = message_id
+    msg.set_content(preview["rendered"]["text"])
+    ctx = ssl.create_default_context()
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+        smtp.ehlo()
+        smtp.starttls(context=ctx)
+        smtp.ehlo()
+        smtp.login(username, password)
+        smtp.send_message(msg)
+    return {"sent": True, "smtp_called": True, "provider_message_id": message_id}
+
+
+def send_customer_mail(limit: int = 10) -> dict[str, Any]:
+    rows = [
+        dict(row)
+        for row in fetch_all(
+            """
+            SELECT *
+            FROM mailer_action_queue
+            WHERE status = 'send_ready'
+            ORDER BY updated_at, created_at
+            LIMIT %s
+            """,
+            (limit,),
+        )
+    ]
+    actions = []
+    for row in rows:
+        preview = render_customer_mail_preview(row)
+        gate = _real_send_gate(row, preview)
+        if not gate["allowed"]:
+            result = {
+                "status": "transport_blocked",
+                "blockers": gate["blockers"],
+                "send_mail": False,
+                "smtp_called": False,
+                "raw_recipient_included": False,
+            }
+            updated = execute(
+                """
+                UPDATE mailer_action_queue
+                SET status = 'transport_blocked',
+                    gate_result_json = %s,
+                    result_json = %s,
+                    attempt_count = attempt_count + 1,
+                    updated_at = now()
+                WHERE id = %s
+                RETURNING id, action_type, risk_level, status, mailbox, recipient_hash, template_key, gate_result_json, result_json, attempt_count, updated_at
+                """,
+                (Jsonb(json_safe(gate)), Jsonb(json_safe(result)), row["id"]),
+            )
+            actions.append(dict(updated))
+            continue
+        try:
+            smtp_result = send_customer_mail_via_smtp(row, preview)
+            if not smtp_result.get("sent"):
+                result = {
+                    "status": "transport_blocked",
+                    "blockers": [smtp_result.get("blocker", "smtp_transport_not_ready")],
+                    "send_mail": False,
+                    "smtp_called": bool(smtp_result.get("smtp_called")),
+                    "raw_recipient_included": False,
+                }
+                updated = execute(
+                    """
+                    UPDATE mailer_action_queue
+                    SET status = 'transport_blocked',
+                        gate_result_json = %s,
+                        result_json = %s,
+                        attempt_count = attempt_count + 1,
+                        updated_at = now()
+                    WHERE id = %s
+                    RETURNING id, action_type, risk_level, status, mailbox, recipient_hash, template_key, gate_result_json, result_json, attempt_count, updated_at
+                    """,
+                    (Jsonb(json_safe({**gate, "transport_blocker": result["blockers"][0]})), Jsonb(json_safe(result)), row["id"]),
+                )
+                actions.append(dict(updated))
+                continue
+            result = {
+                "status": "sent",
+                "provider_message_id": smtp_result.get("provider_message_id", ""),
+                "send_mail": True,
+                "smtp_called": True,
+                "raw_recipient_included": False,
+            }
+            updated = execute(
+                """
+                UPDATE mailer_action_queue
+                SET status = 'sent',
+                    result_json = %s,
+                    attempt_count = attempt_count + 1,
+                    updated_at = now()
+                WHERE id = %s
+                RETURNING id, action_type, risk_level, status, mailbox, recipient_hash, template_key, result_json, attempt_count, updated_at
+                """,
+                (Jsonb(json_safe(result)), row["id"]),
+            )
+            record_throttle_send("customer_mail", row.get("mailbox", "support@voiddorescue.com"), "customer_mail_sent")
+            actions.append(dict(updated))
+        except Exception as exc:
+            result = {
+                "status": "failed",
+                "error": smtp_error_label(exc),
+                "error_type": type(exc).__name__,
+                "send_mail": False,
+                "smtp_called": True,
+                "raw_recipient_included": False,
+            }
+            updated = execute(
+                """
+                UPDATE mailer_action_queue
+                SET status = 'failed',
+                    result_json = %s,
+                    attempt_count = attempt_count + 1,
+                    updated_at = now()
+                WHERE id = %s
+                RETURNING id, action_type, risk_level, status, mailbox, recipient_hash, template_key, result_json, attempt_count, updated_at
+                """,
+                (Jsonb(json_safe(result)), row["id"]),
+            )
+            actions.append(dict(updated))
+    return json_safe(
+        {
+            "processed": len(actions),
+            "actions": actions,
+            "send_mail": any((item.get("result_json") or {}).get("send_mail") for item in actions),
+            "smtp_called": any((item.get("result_json") or {}).get("smtp_called") for item in actions),
+            "live_outreach_allowed": False,
+        }
+    )
+
+
 def mailer_action_queue_summary() -> dict[str, Any]:
     rows = [
         dict(row)
@@ -238,6 +422,8 @@ def mailer_action_queue_summary() -> dict[str, Any]:
             "blocked": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'blocked'"),
             "send_ready": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'send_ready'"),
             "sent": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'sent'"),
+            "transport_blocked": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'transport_blocked'"),
+            "failed": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'failed'"),
             "dry_run_recorded": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'dry_run_recorded'"),
             "ledger_blockers": ledger["gates"]["blockers"],
             "raw_recipient_addresses_included": False,

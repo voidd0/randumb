@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     outreach_paused: bool = True
     auto_replies_paused: bool = True
     customer_mail_sending_enabled: bool = False
+    customer_mail_real_send_enabled: bool = False
     paddle_provisioning_paused: bool = True
     first_live_send_flag: bool = False
 
