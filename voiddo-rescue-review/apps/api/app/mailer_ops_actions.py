@@ -5,7 +5,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .customer_mail_simulation import run_customer_mail_simulation
-from .db import execute, fetch_all
+from .db import execute, fetch_all, fetch_one
 from .mailer_action_queue import enqueue_mailer_action, process_mailer_action_queue, transport_dry_run
 from .p0 import json_safe
 
@@ -90,7 +90,23 @@ def run_mailer_ops_action(action: str, limit: int = 10) -> dict[str, Any]:
             "raw_recipient_addresses_included": False,
         }
     result = _sanitize_result(result)
-    row = execute(
+    run = execute(
+        """
+        INSERT INTO mailer_ops_runs(action, status, result_json, raw_recipient_addresses_included, send_mail, smtp_called, live_outreach_allowed)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING id, action, status, raw_recipient_addresses_included, send_mail, smtp_called, live_outreach_allowed, created_at
+        """,
+        (
+            action,
+            result["status"],
+            Jsonb(json_safe(result)),
+            bool(result.get("raw_recipient_addresses_included")),
+            bool(result.get("send_mail")),
+            bool(result.get("smtp_called")),
+            bool(result.get("live_outreach_allowed")),
+        ),
+    )
+    event = execute(
         """
         INSERT INTO system_events(type, severity, message, payload_json)
         VALUES ('mailer.ops_action', %s, %s, %s)
@@ -102,30 +118,42 @@ def run_mailer_ops_action(action: str, limit: int = 10) -> dict[str, Any]:
             Jsonb(json_safe({"action": action, "result": result})),
         ),
     )
-    return json_safe({"action": action, "result": result, "event": dict(row), "send_mail": False, "live_outreach_allowed": False})
+    return json_safe({"action": action, "result": result, "run": dict(run), "event": dict(event), "send_mail": False, "live_outreach_allowed": False})
 
 
 def mailer_ops_action_summary(limit: int = 8) -> dict[str, Any]:
-    rows = [
+    latest = [
         dict(row)
         for row in fetch_all(
             """
-            SELECT id, severity, message, payload_json, created_at
-            FROM system_events
-            WHERE type = 'mailer.ops_action'
+            SELECT id, action, status, raw_recipient_addresses_included, send_mail, smtp_called, live_outreach_allowed, created_at
+            FROM mailer_ops_runs
             ORDER BY created_at DESC
             LIMIT %s
             """,
             (max(1, min(int(limit or 8), 25)),),
         )
     ]
+    by_action = [
+        dict(row)
+        for row in fetch_all(
+            """
+            SELECT action, status, count(*) AS count
+            FROM mailer_ops_runs
+            GROUP BY action, status
+            ORDER BY action, status
+            """
+        )
+    ]
+    total_row = fetch_one("SELECT count(*) AS count FROM mailer_ops_runs")
+    total = int(total_row["count"]) if total_row else 0
     return json_safe(
         {
-            "latest": rows,
-            "count": len(rows),
+            "latest": latest,
+            "by_action": by_action,
+            "count": total,
             "send_mail": False,
             "live_outreach_allowed": False,
             "raw_recipient_addresses_included": False,
         }
     )
-

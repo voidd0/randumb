@@ -225,7 +225,7 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">send</span><span>ops action SMTP capability</span><span className="score">{opsActions.send_mail ? "armed" : "no-send"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in ops action summaries</span><span className="score">{opsActions.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             {Array.isArray(opsActions.latest) && opsActions.latest.length ? opsActions.latest.slice(0, 3).map((item: any) => (
-              <div className="row" key={item.id}><span className="tag">{item.severity}</span><span>{item.message}</span><span className="score">stored</span></div>
+              <div className="row" key={item.id}><span className="tag">{item.status}</span><span>{String(item.action).replaceAll("_", " ")}</span><span className="score">{item.send_mail ? "send" : "no-send"}</span></div>
             )) : <div className="row"><span className="tag">idle</span><span>no ops actions recorded yet</span><span className="score">0</span></div>}
           </div>
           <div className="panel">

@@ -1,19 +1,19 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 22:50 IDT
+Generated: 2026-05-26 22:59 IDT
 
 ## Branch
 
 - repository: `voidd0/randumb`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
 - review folder: `voiddo-rescue-review/`
-- current pass: `P31 Mailer Ops Action Controls`
+- current pass: `P32 Mailer Ops Result Persistence`
 
 ## Package State
 
 - source path: `/opt/voiddo-rescue`
 - clean review path: `/tmp/randumb-rescue-review/voiddo-rescue-review`
-- tree file count: `274`
+- tree file count: `278`
 - tree manifest hash: see `ARCHIVE_SHA256.txt`
 - final commit SHA: see branch HEAD returned in the operator final output. The exact final SHA cannot be embedded into the same commit before Git computes that commit hash.
 
@@ -32,25 +32,27 @@ The review tree excludes:
 - runtime `storage/`
 - runtime `logs/`
 - `backups/`
-- screenshot artifacts, including P30/P31 visual QA PNGs
+- screenshot artifacts, including P30/P31/P32 visual QA PNGs
 - export archives
 
-## P31 Summary
+## P32 Summary
 
-P31 added protected admin action controls for safe no-send mailer operations:
+P32 added dedicated persistence for no-send mailer ops results:
 
-- customer mail simulation
-- closed-loop dry run
-- customer transport dry run
-- owner report action preparation
+- migration `025_mailer_ops_runs.sql`
+- `mailer_ops_runs` table
+- persisted action/status/result flags
+- sanitized summary endpoint
+- admin history display from persisted runs
 
-Each action remains admin-only, writes sanitized state, blocks unknown/unsafe commands, and keeps real SMTP, warmup, auto-replies, and live outreach disabled by default.
+Real SMTP, warmup, auto-replies, and live outreach remain disabled by default.
 
 ## Verification
 
-- focused P30/P31 tests: `8 passed`
-- full API suite: `222 passed`
+- focused P31/P32 tests: `8 passed`
+- full API suite: `226 passed`
 - smoke script: PASS, output `ok`
+- migration applied: PASS
 - Next production build: PASS
 - Huanshu local adapter: PASS
 - Playwright desktop/mobile admin screenshots: nonblank

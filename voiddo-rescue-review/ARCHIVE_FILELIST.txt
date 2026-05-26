@@ -80,6 +80,7 @@ apps/api/migrations/021_post_window_recheck.sql
 apps/api/migrations/022_mailer_action_queue.sql
 apps/api/migrations/023_mailer_closed_loop.sql
 apps/api/migrations/024_recipient_resolver_audit.sql
+apps/api/migrations/025_mailer_ops_runs.sql
 apps/api/requirements.txt
 apps/api/tests/test_core.py
 apps/api/tests/test_p0_integration.py
@@ -106,6 +107,7 @@ apps/api/tests/test_p28_recipient_resolver_boundary.py
 apps/api/tests/test_p29_customer_mail_simulation.py
 apps/api/tests/test_p30_mailer_admin_visibility.py
 apps/api/tests/test_p31_mailer_ops_action_controls.py
+apps/api/tests/test_p32_mailer_ops_result_persistence.py
 apps/api/tests/test_p5_warmup_safety.py
 apps/api/tests/test_p6_self_operating.py
 apps/api/tests/test_p7_revenue_simulation.py
@@ -230,7 +232,9 @@ reports/p30_mailer_admin_visibility_report.md
 reports/p30_next_self_written_tz.md
 reports/p31_mailer_ops_action_controls_report.md
 reports/p31_next_self_written_tz.md
+reports/p32_mailer_ops_result_persistence_report.md
 reports/p32_next_self_written_tz.md
+reports/p33_next_self_written_tz.md
 reports/p3_checkout_deliverability_warmup_report.md
 reports/p4_deliverability_warmup_day1_report.md
 reports/p5_review_package_hygiene_report.md

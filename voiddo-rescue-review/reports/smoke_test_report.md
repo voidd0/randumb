@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 22:50 IDT
+Generated: 2026-05-26 22:59 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `222 passed`
+- API tests: `226 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -74,6 +74,10 @@ PASS
 - customer simulation ops action is no-send: PASS
 - closed-loop ops action uses dry-run transport only: PASS
 - unknown ops action blocks without shell or send: PASS
+- ops run row is written without send: PASS
+- ops summary omits raw recipients: PASS
+- unknown ops action persists as blocked: PASS
+- ops summary endpoint returns persisted runs: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 
@@ -89,3 +93,4 @@ PASS
 - mailer send ledger after cleanup: `0`
 - recipient resolver audit after cleanup: `0`
 - ops action events after cleanup: `0`
+- mailer ops run rows after cleanup: `0`
