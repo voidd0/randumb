@@ -1,48 +1,35 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 20:34 IDT
+Generated: 2026-05-26 20:49 IDT
 
-## Scope
+## Package
 
-This review tree contains the Vøiddo Rescue source tree after P19 post-window no-send recheck scheduler and warmup-ready transition evidence work.
+- source path: `/opt/voiddo-rescue`
+- target folder: `voiddo-rescue-review/`
+- file count: `232`
+- branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## Included
+## P20 Summary
 
-- `docker-compose.yml`
-- `.env.example`
-- API, worker, web, shared package, scripts, migrations, WP plugin source
-- redacted reports
-- test suite
+- Added post-window no-send runner.
+- Added Rescue-only systemd timer and service definitions.
+- Runtime timer installed as `voiddo-rescue-post-window-recheck.timer` and active waiting.
+- Latest transition: `WAIT_UNTIL_NEXT_SAFE_AT`.
+- Live outreach sent: `0`.
+- Warmup sent: `0`.
 
-## Excluded
+## Exclusions
 
-- `.env` and `*.env`
-- mailbox passwords, API keys, private keys
-- `storage/`, runtime screenshots, exports, logs
-- `.venv`, `.pytest_cache`, `__pycache__`, `*.pyc`
-- `node_modules`, `.next`
+Excluded from review/export: `.env`, `*.env`, mailbox passwords, private keys, `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`, `node_modules`, `.next`, runtime storage, screenshots, exports, backups, logs.
 
 ## Verification
 
-- API tests: `162 passed`
-- smoke: PASS
-- Huanshu: PASS, including updated authenticated admin post-window panel
-- extra design/QA plugins: PASS or non-blocking warning; blockers `0`
-- post-window scheduler status: `not_due`
-- transition decision: `WAIT_UNTIL_NEXT_SAFE_AT`
-- live outreach sent: `0`
-- warmup sent: `0`
+- API tests: `167 passed`.
+- Smoke script: PASS.
+- Huanshu: PASS on money-facing/public/admin/customer routes.
+- Extra design/accessibility/regression plugins: PASS with `0` blockers.
+- Secret/artifact scan: run before push/export; no committed runtime artifacts intended.
 
-## Launch State
+## Notes
 
-`WARMUP_SCHEDULED_NO_OUTREACH`. Recent bounce/DSN and SMTP rate-limit signals still block sending; post-window no-send recheck is scheduled by evidence but not yet due.
-
-## Secrets
-
-No raw secrets are intentionally included. `.env.example` is included as a template only.
-
-## P19 Export
-
-- zip path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p19-post-window-recheck-2026-05-26.zip
-- initial zip SHA256 before metadata refresh: 46789ac74d7e33d352a5c4c67cb59847d264be369e22a4e8b1620579cdb614c3
-- branch before commit: cb0601a7dc8bf45318315262bef3b95b75915cfd
+Raw recipient addresses and secrets are intentionally omitted. Commit SHA is reported in the final operator output after push.

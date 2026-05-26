@@ -1,0 +1,10 @@
+[Unit]
+Description=Vøiddo Rescue post-window no-send readiness recheck
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/voiddo-rescue
+ExecStart=/opt/voiddo-rescue/scripts/run_post_window_recheck.sh
+Nice=5

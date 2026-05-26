@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 20:34 IDT
+Generated: 2026-05-26 20:47 IDT
 
 ## Canonical Latest State
 
@@ -26,10 +26,13 @@ Generated: 2026-05-26 20:34 IDT
 - next safe timestamp: `2026-05-27T11:19:56.313413+00:00`
 - sends started: `false`
 - live outreach allowed: `false`
+- systemd timer: `voiddo-rescue-post-window-recheck.timer`
+- timer state: `active (waiting)`
+- timer policy: no-send readiness evidence only
 
 ## Verification
 
-- API tests: `162 passed`
+- API tests: `167 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including admin transition panel
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
@@ -37,4 +40,4 @@ Generated: 2026-05-26 20:34 IDT
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`, then let the post-window recheck agent execute no-send checks and transition only to warmup-ready if all gates pass.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass.

@@ -1,12 +1,12 @@
 # Launch Readiness Report
 
-Generated: 2026-05-26 20:34 IDT
+Generated: 2026-05-26 20:47 IDT
 
 ## Decision
 
 Launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-Vøiddo Rescue is not approved for cold outreach. P19 added post-window no-send recheck scheduling and transition evidence, but the current scheduler state is not due yet.
+Vøiddo Rescue is not approved for cold outreach. P20 added a Rescue-only systemd timer for post-window no-send recovery checks. The current scheduler state is still not due yet.
 
 ## Passed Gates
 
@@ -15,11 +15,12 @@ Vøiddo Rescue is not approved for cold outreach. P19 added post-window no-send 
 - latest mail QA: PASS
 - clean-window recheck automation: implemented
 - post-window recheck scheduler: implemented
+- post-window no-send systemd timer: active
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: PASS or non-blocking warning
-- API tests: `162 passed`
+- API tests: `167 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -34,4 +35,4 @@ Vøiddo Rescue is not approved for cold outreach. P19 added post-window no-send 
 
 ## Next Exact Action
 
-Proceed with P20 after export: add post-window scheduling reports/timer integration so the no-send transition can run at the safe timestamp without manual intervention.
+Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.

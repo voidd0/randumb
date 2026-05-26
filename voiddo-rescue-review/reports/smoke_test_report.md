@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 20:34 IDT
+Generated: 2026-05-26 20:47 IDT
 
 ## Result
 
@@ -8,18 +8,22 @@ PASS
 
 ## Test Results
 
-- API tests: `162 passed`
+- API tests: `167 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
 - Docker services: healthy
 
-## P19 Coverage
+## P20 Coverage
 
 - post-window scheduler not-due before safe timestamp: PASS
 - post-window scheduler due after safe timestamp: PASS
 - warmup-ready transition under mocked clean window: PASS
 - post-window endpoints require auth: PASS
+- post-window runner writes no-send report: PASS
+- post-window runner honors recovery env: PASS
+- runner source has no outreach/warmup send path: PASS
+- systemd timer installed and active: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

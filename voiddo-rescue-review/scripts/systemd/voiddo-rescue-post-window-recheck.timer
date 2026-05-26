@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Vøiddo Rescue post-window no-send readiness recheck
+
+[Timer]
+OnBootSec=12min
+OnUnitActiveSec=15min
+AccuracySec=1min
+Persistent=true
+Unit=voiddo-rescue-post-window-recheck.service
+
+[Install]
+WantedBy=timers.target

@@ -1,6 +1,6 @@
 # Warmup Calendar Health Report
 
-Generated: 2026-05-26 18:58 IDT
+Generated: 2026-05-26 20:47 IDT
 
 ## State
 
@@ -21,7 +21,15 @@ Generated: 2026-05-26 18:58 IDT
 - schedule changed: `false`
 - sends started: `false`
 
+## P20 Post-Window Timer
+
+- timer: `voiddo-rescue-post-window-recheck.timer`
+- timer state: `active (waiting)`
+- latest post-window status: `not_due`
+- transition decision: `WAIT_UNTIL_NEXT_SAFE_AT`
+- next safe timestamp: `2026-05-27T11:19:56.313413+00:00`
+- sends started by post-window runner: `false`
+
 ## Next Allowed Action
 
-No warmup send should be attempted until the recent bounce/DSN and rate-limit window clears and mail QA is rechecked. The existing systemd warmup timer remains safe because every due send is pre-gated.
-
+No warmup send should be attempted until the recent bounce/DSN and rate-limit window clears and mail QA is rechecked. The existing systemd warmup timer remains safe because every due send is pre-gated; the P20 timer only updates no-send recovery evidence.
