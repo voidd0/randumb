@@ -159,6 +159,7 @@ export default async function AdminPage() {
             <h2>Mailer Action Queue</h2>
             <div className="row"><span className="tag">queued</span><span>prepared mail actions waiting for gates</span><span className="score">{actionQueue.queued ?? 0}</span></div>
             <div className="row"><span className="tag">prepared</span><span>safe actions prepared without sending</span><span className="score">{actionQueue.prepared ?? 0}</span></div>
+            <div className="row"><span className="tag">ready</span><span>customer mail send-ready evidence</span><span className="score">{actionQueue.send_ready ?? 0}</span></div>
             <div className="row"><span className="tag">blocked</span><span>actions blocked by safety gates</span><span className="score">{actionQueue.blocked ?? 0}</span></div>
             <div className="row"><span className="tag">sent</span><span>actions sent by this router</span><span className="score">{actionQueue.sent ?? 0}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw addresses in queue payload</span><span className="score">{actionQueue.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>

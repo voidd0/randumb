@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 21:23 IDT
+Generated: 2026-05-26 21:33 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `181 passed`
+- API tests: `186 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -36,6 +36,9 @@ PASS
 - one-time fix purchase enqueues fix-request mail action: PASS
 - customer mail action prepares without sending while gated: PASS
 - customer email omitted from action queue summary: PASS
+- customer mail becomes send-ready under mocked clean gates: PASS
+- customer mail throttle failure blocks send-ready: PASS
+- customer mail templates pass email QA: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

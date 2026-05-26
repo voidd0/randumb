@@ -7,7 +7,9 @@ from psycopg.types.json import Jsonb
 
 from .config import get_settings
 from .db import execute, fetch_all, fetch_one
+from .email_templates import qa_email_template, render_email_template
 from .mailer_autonomy_ledger import mailer_autonomy_ledger
+from .mailer_throttle import throttle_decision
 from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary
 
 
@@ -73,12 +75,23 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
             blockers.append("recent_rate_limit")
         if latest_mail_qa_decision() != "PASS":
             blockers.append("mail_qa_not_pass")
-    if action_type in CUSTOMER_MAIL_ACTIONS and not settings.customer_mail_sending_enabled:
-        blockers.append("customer_mail_sending_flag_false")
+    throttle = None
+    rendered = None
+    if action_type in CUSTOMER_MAIL_ACTIONS:
+        rendered = render_customer_mail_preview(action)
+        if not rendered["qa"]["passed"]:
+            blockers.append("customer_template_qa_failed")
+        throttle = throttle_decision("customer_mail", action.get("mailbox", "support@voiddorescue.com"), 600)
+        if not throttle["allowed"]:
+            blockers.append(f"throttle:{throttle['reason']}")
+        if not settings.customer_mail_sending_enabled:
+            blockers.append("customer_mail_sending_flag_false")
     if action_type == "warmup_slot":
         blockers.append("natural_warmup_timer_only")
 
-    if blockers:
+    if action_type in CUSTOMER_MAIL_ACTIONS and not blockers:
+        status = "send_ready"
+    elif blockers:
         status = "prepared" if action_type in {"owner_report", *CUSTOMER_MAIL_ACTIONS} and "high_risk_action_requires_review" not in blockers else "blocked"
     else:
         status = "prepared"
@@ -86,9 +99,30 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
         "status": status,
         "blockers": blockers,
         "send_mail": False,
+        "send_ready": status == "send_ready",
         "live_outreach_allowed": False,
+        "customer_mail": action_type in CUSTOMER_MAIL_ACTIONS,
+        "throttle": throttle,
+        "template_qa": rendered["qa"] if rendered else None,
         "reason": "prepared_no_send" if status == "prepared" else "blocked_by_gate",
     }
+
+
+def render_customer_mail_preview(action: dict[str, Any]) -> dict[str, Any]:
+    action_type = action["action_type"]
+    template_key = action.get("template_key") or {
+        "customer_onboarding": "payment_onboarding",
+        "fix_request_created": "fix_request_created",
+        "monitoring_report": "monitoring_setup_reminder",
+    }.get(action_type, "payment_onboarding")
+    payload = action.get("payload_json") or {}
+    data = {
+        "customer_url": "https://app.rescue.voiddo.com/customer",
+        "fix_request_title": payload.get("product_key", "Website fix request"),
+        "status": "prepared",
+    }
+    rendered = render_email_template(template_key, "en", data)
+    return {"rendered": rendered, "qa": qa_email_template(rendered)}
 
 
 def process_mailer_action_queue(limit: int = 10) -> dict[str, Any]:
@@ -158,6 +192,7 @@ def mailer_action_queue_summary() -> dict[str, Any]:
             "queued": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'queued'"),
             "prepared": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'prepared'"),
             "blocked": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'blocked'"),
+            "send_ready": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'send_ready'"),
             "sent": _count("SELECT count(*) FROM mailer_action_queue WHERE status = 'sent'"),
             "ledger_blockers": ledger["gates"]["blockers"],
             "raw_recipient_addresses_included": False,

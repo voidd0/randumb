@@ -35,6 +35,7 @@ TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
     "unsubscribe_confirmed": {"en": {"subject": "Unsubscribed", "body": "You have been unsubscribed from Vøiddo Rescue outreach. No action is required."}},
     "payment_onboarding": {"en": {"subject": "Vøiddo Rescue onboarding", "body": "Thanks for your purchase. Your dashboard is ready here:\n{{customer_url}}\n\nNext step: review the current audit and connect the read-only WordPress agent if needed.\n\nVøiddo Rescue"}},
     "fix_request_created": {"en": {"subject": "Fix request created", "body": "Your fix request has been created.\n\nRequest: {{fix_request_title}}\nStatus: {{status}}\n\nVøiddo Rescue"}},
+    "monitoring_setup_reminder": {"en": {"subject": "Vøiddo Rescue monitoring setup", "body": "Your Vøiddo Rescue monitoring workspace is ready.\n\nDashboard: {{customer_url}}\n\nCurrent status: {{status}}\n\nVøiddo Rescue"}},
     "warmup_neutral": {"en": {"subject": "Vøiddo Rescue warmup check", "body": "This is a requested Vøiddo Rescue mail warmup check. No action is required."}},
     "deliverability_diagnostic": {"en": {"subject": "Vøiddo Rescue mail diagnostic", "body": "This is a requested mail delivery diagnostic for Vøiddo Rescue. No action is required."}},
 }
