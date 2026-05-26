@@ -79,3 +79,20 @@ Generated: 2026-05-26T17:43:04+03:00
 - launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
 
 Current self-audit blockers remain recent mail signals, not code failures.
+
+## P7 Revenue Simulation Update
+
+Generated: 2026-05-26T17:56:29+03:00
+
+- revenue simulation: implemented
+- campaign economics gate: implemented
+- mail clean-window watcher: implemented
+- mailer draft persistence: implemented
+- tests: `81 passed`
+- smoke: PASS
+- Huanshu: PASS
+- extra quality plugins: PASS/PASS_WITH_WARNINGS, no blockers
+- clean window: blocked by recent mail signals
+- warmup sent: `0`
+- live outreach sent: `0`
+- launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH

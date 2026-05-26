@@ -151,3 +151,26 @@ Still blocking launch:
 - live outreach sent: `0`
 
 No cold outreach was sent. No manual warmup send was forced.
+
+## P7 Revenue Simulation Update
+
+Updated: 2026-05-26 17:56 IDT
+
+Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
+
+New passes:
+
+- Synthetic lead -> scanner job -> audit -> score -> campaign preview simulation.
+- Campaign economics gate with expected revenue/cost/margin/risk.
+- Mail clean-window watcher.
+- Safe mailer draft persistence with recipient hashing.
+- Tests: `81 passed`.
+- Smoke: PASS.
+- Huanshu and extra quality plugin gates pass.
+
+Still blocking:
+
+- bounce/DSN count, last 24h: `2`
+- SMTP rate-limit count, last 24h: `1`
+
+No live outreach was sent. Warmup was not manually forced.

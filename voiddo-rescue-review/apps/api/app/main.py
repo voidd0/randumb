@@ -40,9 +40,12 @@ from .autonomous_agents import run_agent, run_daily_loop
 from .email_templates import render_email_template, qa_email_template, render_all_samples
 from .lead_scoring import score_lead
 from .mailer_throttle import throttle_decision
+from .campaign_economics import run_campaign_economics_check
 from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
 from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
+from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
+from .revenue_simulation import run_synthetic_lead_simulation
 from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, process_scout_run
 from .self_operating import (
     create_self_fix_task,
@@ -483,6 +486,55 @@ async def quality_plugin_record(request: Request):
             int(payload.get("score", 100)),
             payload.get("issues") or [],
             payload.get("artifact_path", ""),
+        ),
+    }
+
+
+@app.post("/admin/revenue/simulate", dependencies=[Depends(require_admin)])
+async def revenue_simulate(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "simulation": run_synthetic_lead_simulation(
+            int(payload.get("count", 100)),
+            payload.get("country", "EE"),
+            payload.get("niche", "dentists"),
+            payload.get("product_key", "contact_form_repair"),
+        ),
+    }
+
+
+@app.post("/admin/campaigns/{campaign_id}/economics", dependencies=[Depends(require_admin)])
+async def campaign_economics_run(campaign_id: str, request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "economics": run_campaign_economics_check(
+            campaign_id,
+            payload.get("product_key", "contact_form_repair"),
+            float(payload.get("expected_conversion_rate", 0.02)),
+        ),
+    }
+
+
+@app.post("/admin/mail/clean-window", dependencies=[Depends(require_admin)])
+async def mail_clean_window_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "check": check_mail_clean_window(int(payload.get("window_hours", 24)))}
+
+
+@app.post("/admin/mailer/drafts", dependencies=[Depends(require_admin)])
+async def mailer_draft_create(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "draft": create_mailer_draft(
+            payload.get("template_key", "reply_ask_price"),
+            payload.get("category", "ask_price"),
+            payload.get("mailbox", "audit@voiddorescue.com"),
+            payload.get("recipient_email", ""),
+            payload.get("language", "en"),
+            payload.get("data") or {},
         ),
     }
 

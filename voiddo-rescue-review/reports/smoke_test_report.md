@@ -74,6 +74,24 @@ Updated: 2026-05-26 15:18 IDT
 - Manual safe daily loop: PASS, 7/7 agents completed
 - warmup sent: `0`
 - live outreach sent: `0`
+
+## P7 Revenue Simulation Smoke
+
+Updated: 2026-05-26 17:56 IDT
+
+- `docker compose exec -T api python -m pytest -q`: PASS, `81 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS, `81 passed`
+- Huanshu: PASS
+- axe-core/playwright: PASS
+- pa11y: PASS
+- pixelmatch: PASS
+- Lighthouse CI: PASS_WITH_WARNINGS
+- revenue simulation: PASS
+- campaign economics gate: PASS
+- mail clean-window watcher: PASS, blocked by current signals
+- mailer draft persistence: PASS
+- warmup sent: `0`
+- live outreach sent: `0`
 - recent bounce/DSN still blocks warmup: `2`
 - recent rate-limit still blocks warmup: `1`
 

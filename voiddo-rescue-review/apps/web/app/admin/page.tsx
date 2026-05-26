@@ -34,7 +34,10 @@ export default async function AdminPage() {
     ["learning", metrics.self_learning_events ?? 0],
     ["build queue", metrics.self_build_queue_open ?? 0],
     ["mailer decisions", metrics.autonomous_mailer_decisions ?? 0],
+    ["mailer drafts", metrics.mailer_drafts ?? 0],
     ["plugin gates", metrics.quality_plugin_runs ?? 0],
+    ["simulations", metrics.revenue_simulation_runs ?? 0],
+    ["clean windows", metrics.mail_clean_window_checks ?? 0],
   ];
 
   return (

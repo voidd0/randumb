@@ -97,11 +97,13 @@ def test_lead_scoring_explains_reasoning():
 def test_campaign_prepare_selects_top_scored_leads():
     token = uuid.uuid4().hex[:8]
     try:
-        business = execute("INSERT INTO businesses(name, domain, source, niche, country, status) VALUES (%s, %s, 'test_prod', 'dentists', 'EE', 'scouted') RETURNING id", (f"Campaign {token}", f"campaign-{token}.example.test"))
-        lead = execute("INSERT INTO leads(business_id, email, source, status, score, niche, country, language) VALUES (%s, %s, 'test_prod', 'scouted', 85, 'dentists', 'EE', 'en') RETURNING id", (business["id"], f"owner@campaign-{token}.example.test"))
+        niche = f"test_niche_{token}"
+        country = f"T{token[:2].upper()}"
+        business = execute("INSERT INTO businesses(name, domain, source, niche, country, status) VALUES (%s, %s, 'test_prod', %s, %s, 'scouted') RETURNING id", (f"Campaign {token}", f"campaign-{token}.example.test", niche, country))
+        lead = execute("INSERT INTO leads(business_id, email, source, status, score, niche, country, language) VALUES (%s, %s, 'test_prod', 'scouted', 85, %s, %s, 'en') RETURNING id", (business["id"], f"owner@campaign-{token}.example.test", niche, country))
         audit = execute("INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at) VALUES (%s, %s, %s, %s, 'completed', 70, 'Issue', %s, now()) RETURNING id", (business["id"], lead["id"], f"campaign-{token}.example.test", f"https://campaign-{token}.example.test", f"campaign-{token}"))
         execute("INSERT INTO lead_scores(lead_id, audit_id, final_score, technical_score, sales_score, urgency_score, value_score, deliverability_score) VALUES (%s, %s, 88, 90, 80, 90, 80, 80)", (lead["id"], audit["id"]))
-        campaign = create_campaign({"name": f"campaign-{token}", "country": "EE", "language": "en", "niche": "dentists"})
+        campaign = create_campaign({"name": f"campaign-{token}", "country": country, "language": "en", "niche": niche})
         result = prepare_campaign(str(campaign["id"]), threshold=70, limit=20)
         assert result["preview_count"] == 1
         assert get_campaign(str(campaign["id"]))["leads"][0]["score"] == 88

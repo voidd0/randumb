@@ -326,6 +326,10 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "self_build_queue_open": scalar("SELECT count(*) FROM self_build_queue WHERE status = 'queued'"),
         "autonomous_mailer_decisions": scalar("SELECT count(*) FROM autonomous_mailer_decisions"),
         "quality_plugin_runs": scalar("SELECT count(*) FROM quality_plugin_runs"),
+        "revenue_simulation_runs": scalar("SELECT count(*) FROM revenue_simulation_runs"),
+        "campaign_economics_checks": scalar("SELECT count(*) FROM campaign_economics_checks"),
+        "mail_clean_window_checks": scalar("SELECT count(*) FROM mail_clean_window_checks"),
+        "mailer_drafts": scalar("SELECT count(*) FROM mailer_drafts"),
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,

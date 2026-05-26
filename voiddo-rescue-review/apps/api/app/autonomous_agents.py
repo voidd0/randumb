@@ -9,6 +9,7 @@ from .db import execute, fetch_one
 from .email_templates import render_all_samples
 from .economics import run_economics_audit
 from .autonomous_mailer import run_autonomous_mailer_cycle
+from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
 from .p0 import (
     build_warmup_calendar,
@@ -19,6 +20,7 @@ from .p0 import (
     runtime_state_snapshot,
 )
 from .quality_plugins import latest_quality_summary
+from .revenue_simulation import run_synthetic_lead_simulation
 from .scouts import process_scout_run
 from .self_operating import run_self_audit, self_operating_summary
 
@@ -76,6 +78,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "self_building_agent": lambda: self_operating_summary(),
         "autonomous_mailer_agent": lambda: run_autonomous_mailer_cycle(),
         "quality_plugin_agent": lambda: latest_quality_summary(),
+        "revenue_simulation_agent": lambda: run_synthetic_lead_simulation(int(payload.get("count", 25))),
+        "mail_clean_window_agent": lambda: check_mail_clean_window(24),
     }
     if agent not in agents:
         raise ValueError("unknown_agent")
