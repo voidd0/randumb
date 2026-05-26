@@ -21,6 +21,7 @@ from .p0 import (
 )
 from .quality_plugins import latest_quality_summary
 from .revenue_simulation import run_synthetic_lead_simulation
+from .language_gate import check_no_ai_public_language
 from .scouts import process_scout_run
 from .self_operating import run_self_audit, self_operating_summary
 
@@ -80,6 +81,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "quality_plugin_agent": lambda: latest_quality_summary(),
         "revenue_simulation_agent": lambda: run_synthetic_lead_simulation(int(payload.get("count", 25))),
         "mail_clean_window_agent": lambda: check_mail_clean_window(24),
+        "public_language_gate_agent": lambda: check_no_ai_public_language(),
     }
     if agent not in agents:
         raise ValueError("unknown_agent")

@@ -1,3 +1,2 @@
-TREE_FILELIST_SHA256=eebd780912b0a1042e3c4c325507d4030368a5aa5bdc32f50a94537fcb2fc904
-ZIP_SHA256 is recorded in the adjacent .sha256 file after export.
-Generated: 2026-05-26T17:56:29+03:00
+Archive: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p8-real-source-quality-2026-05-26.zip
+SHA256: generated after clean export; see adjacent .sha256 file and final report.

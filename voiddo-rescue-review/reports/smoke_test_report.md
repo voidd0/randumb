@@ -118,6 +118,34 @@ Updated: 2026-05-26 17:43 IDT
 - warmup sent: `0`
 - live outreach sent: `0`
 
+## P8 Real Source + Quality Smoke
+
+Updated: 2026-05-26 18:12 IDT
+
+- `docker compose exec -T api python -m app.db`: PASS
+- `docker compose exec -T api python -m pytest -q`: PASS, `92 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS, `92 passed`, `ok`
+- P8 migrations applied: PASS
+- source adapter tests: PASS
+- scout self-check tests: PASS
+- audit strength tests: PASS
+- public-language gate tests: PASS
+- protected admin endpoint tests: PASS
+- Huanshu:
+  - landing: PASS
+  - audit demo: PASS
+  - customer: PASS
+  - status: PASS
+  - unsubscribe: PASS
+  - authenticated admin screenshots: PASS
+- extra quality plugins:
+  - axe-core/playwright: PASS
+  - pa11y: PASS
+  - pixelmatch: PASS
+  - Lighthouse CI: PASS_WITH_WARNINGS
+- warmup sent: `0`
+- live outreach sent: `0`
+
 ## P5 Cleanup Smoke
 
 Updated: 2026-05-26 14:52 IDT

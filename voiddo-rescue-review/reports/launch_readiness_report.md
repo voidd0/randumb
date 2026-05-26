@@ -174,3 +174,27 @@ Still blocking:
 - SMTP rate-limit count, last 24h: `1`
 
 No live outreach was sent. Warmup was not manually forced.
+
+## P8 Real Source + Quality Update
+
+Updated: 2026-05-26 18:12 IDT
+
+Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
+
+New passes:
+
+- Domain-list and directory-row source adapters.
+- Scout self-check persistence.
+- Audit strength scoring.
+- Public/customer language gate blocking AI/operator/build traces.
+- Admin metrics for the new P8 checks.
+- Tests: `92 passed`.
+- Smoke: PASS.
+- Huanshu and extra quality plugin gates pass.
+
+Still blocking:
+
+- bounce/DSN count, last 24h: `2`
+- SMTP rate-limit count, last 24h: `1`
+
+No cold outreach was sent. No manual warmup send was forced. Launch readiness is not overstated.

@@ -38,6 +38,9 @@ export default async function AdminPage() {
     ["plugin gates", metrics.quality_plugin_runs ?? 0],
     ["simulations", metrics.revenue_simulation_runs ?? 0],
     ["clean windows", metrics.mail_clean_window_checks ?? 0],
+    ["scout checks", metrics.scout_self_checks ?? 0],
+    ["audit strength", metrics.audit_strength_scores ?? 0],
+    ["language gates", metrics.public_language_gate_runs ?? 0],
   ];
 
   return (

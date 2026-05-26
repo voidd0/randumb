@@ -1,10 +1,13 @@
 .env.example
 .gitignore
 ARCHIVE_FILELIST.txt
+ARCHIVE_SHA256.txt
 MIGRATIONS.md
 README.md
+REVIEW_NOTES.md
 apps/api/Dockerfile
 apps/api/app/__init__.py
+apps/api/app/audit_strength.py
 apps/api/app/auth.py
 apps/api/app/autonomous_agents.py
 apps/api/app/autonomous_mailer.py
@@ -19,6 +22,7 @@ apps/api/app/email_templates.py
 apps/api/app/healthcheck.py
 apps/api/app/huanshu_cli.py
 apps/api/app/inbox.py
+apps/api/app/language_gate.py
 apps/api/app/lead_scoring.py
 apps/api/app/mail_recovery.py
 apps/api/app/mailer_throttle.py
@@ -29,9 +33,11 @@ apps/api/app/p0.py
 apps/api/app/quality_plugins.py
 apps/api/app/revenue_simulation.py
 apps/api/app/scanner.py
+apps/api/app/scout_quality.py
 apps/api/app/scouts.py
 apps/api/app/security.py
 apps/api/app/self_operating.py
+apps/api/app/source_adapters.py
 apps/api/app/visual_quality.py
 apps/api/migrations/001_init.sql
 apps/api/migrations/002_p0_integration.sql
@@ -44,6 +50,7 @@ apps/api/migrations/008_p5_mail_signals.sql
 apps/api/migrations/009_production_autonomy.sql
 apps/api/migrations/010_self_operating_system.sql
 apps/api/migrations/011_revenue_simulation_mail_recovery.sql
+apps/api/migrations/012_scout_quality_language_gate.sql
 apps/api/requirements.txt
 apps/api/tests/test_core.py
 apps/api/tests/test_p0_integration.py
@@ -51,6 +58,7 @@ apps/api/tests/test_p1_launch_gate.py
 apps/api/tests/test_p5_warmup_safety.py
 apps/api/tests/test_p6_self_operating.py
 apps/api/tests/test_p7_revenue_simulation.py
+apps/api/tests/test_p8_quality_language.py
 apps/api/tests/test_production_autonomy.py
 apps/web/Dockerfile
 apps/web/app/admin/page.tsx
@@ -135,6 +143,8 @@ reports/p6_self_operating_tz.md
 reports/p7_next_self_written_tz.md
 reports/p7_revenue_simulation_report.md
 reports/p8_next_self_written_tz.md
+reports/p8_real_source_quality_report.md
+reports/p9_next_self_written_tz.md
 reports/paddle_checkout_readiness_report.md
 reports/paddle_products_state.json
 reports/paddle_setup_report.md

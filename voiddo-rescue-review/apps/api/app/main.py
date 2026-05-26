@@ -39,13 +39,17 @@ from .visual_quality import check_visual_publish_gate
 from .autonomous_agents import run_agent, run_daily_loop
 from .email_templates import render_email_template, qa_email_template, render_all_samples
 from .lead_scoring import score_lead
+from .audit_strength import score_audit_strength
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
 from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
 from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
+from .language_gate import check_no_ai_public_language
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
+from .source_adapters import directory_rows_to_csv, domain_list_to_csv
+from .scout_quality import run_scout_self_check
 from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, process_scout_run
 from .self_operating import (
     create_self_fix_task,
@@ -537,6 +541,35 @@ async def mailer_draft_create(request: Request):
             payload.get("data") or {},
         ),
     }
+
+
+@app.post("/admin/source-adapters/domain-list", dependencies=[Depends(require_admin)])
+async def source_adapter_domain_list(request: Request):
+    payload = await request.json()
+    return {"ok": True, "csv": domain_list_to_csv(payload.get("text", ""), payload.get("country", ""), payload.get("niche", ""), payload.get("language", "en"))}
+
+
+@app.post("/admin/source-adapters/directory", dependencies=[Depends(require_admin)])
+async def source_adapter_directory(request: Request):
+    payload = await request.json()
+    return {"ok": True, "csv": directory_rows_to_csv(payload.get("csv", ""), payload.get("country", ""), payload.get("niche", ""), payload.get("language", "en"))}
+
+
+@app.post("/admin/scouts/runs/{run_id}/self-check", dependencies=[Depends(require_admin)])
+def scout_self_check(run_id: str):
+    return {"ok": True, "check": run_scout_self_check(run_id)}
+
+
+@app.post("/admin/audits/{audit_id}/strength", dependencies=[Depends(require_admin)])
+def audit_strength_run(audit_id: str):
+    return {"ok": True, "strength": score_audit_strength(audit_id)}
+
+
+@app.post("/admin/language/no-ai-gate", dependencies=[Depends(require_admin)])
+async def language_gate_run(request: Request):
+    payload = await request.json()
+    samples = payload.get("samples")
+    return {"ok": True, "gate": check_no_ai_public_language(samples, payload.get("scope", "manual"))}
 
 
 @app.post("/admin/mail/throttle-check", dependencies=[Depends(require_admin)])

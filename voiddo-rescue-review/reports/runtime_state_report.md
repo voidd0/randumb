@@ -96,3 +96,24 @@ Generated: 2026-05-26T17:56:29+03:00
 - warmup sent: `0`
 - live outreach sent: `0`
 - launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
+
+## P8 Real Source + Quality Update
+
+Generated: 2026-05-26T18:12:00+03:00
+
+- source adapters: implemented for domain lists and directory rows
+- scout self-checks: implemented and exposed through protected admin endpoint
+- audit strength scoring: implemented and stored in DB
+- no-AI/public-language gate: implemented and PASS
+- autonomous agent registry: includes public language gate agent
+- tests: `92 passed`
+- smoke: PASS
+- Huanshu: PASS for landing, audit demo, customer, status, unsubscribe, and authenticated admin screenshots
+- extra quality plugins: axe/pa11y/pixelmatch PASS; Lighthouse CI PASS_WITH_WARNINGS
+- latest self-audit: `needs_fix` because recent mail signals remain active
+- deliverability diagnostic sent count: `8`
+- warmup sent: `0`
+- live outreach sent: `0`
+- bounce/DSN count, last 24h: `2`
+- SMTP rate-limit count, last 24h: `1`
+- launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
