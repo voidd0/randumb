@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Vøiddo Rescue Outreach Template",
+  "type": "object",
+  "required": ["language", "subject", "body"],
+  "properties": {
+    "language": {"type": "string", "enum": ["en", "he", "et"]},
+    "subject": {"type": "string", "maxLength": 120},
+    "body": {"type": "string", "minLength": 80},
+    "required_tokens": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": ["audit_url", "unsubscribe_url"]
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "products": {
+    "audit_onetime": {
+      "amount_usd": 49.0,
+      "billing": "one_time",
+      "name": "V\u00f8iddo Rescue \u00b7 Website Rescue Audit",
+      "price_id": "pri_01ksh75way6frg7j7vev5c7jc3",
+      "price_status": "created",
+      "product_id": "pro_01ksh75w5v0ytm0zm0wxt48rgd",
+      "product_status": "created"
+    },
+    "contact_form_repair": {
+      "amount_usd": 99.0,
+      "billing": "one_time",
+      "name": "V\u00f8iddo Rescue \u00b7 Contact Form Repair",
+      "price_id": "pri_01ksh75ww32wx6kk9y444ddm5a",
+      "price_status": "created",
+      "product_id": "pro_01ksh75wj8fsanfc5p3npmja9q",
+      "product_status": "created"
+    },
+    "emergency_fix": {
+      "amount_usd": 149.0,
+      "billing": "one_time",
+      "name": "V\u00f8iddo Rescue \u00b7 Emergency Website Fix",
+      "price_id": "pri_01ksh75xe7w4adprsckgypjw97",
+      "price_status": "created",
+      "product_id": "pro_01ksh75x2m65q9mtn74wy27fe2",
+      "product_status": "created"
+    },
+    "fix_lite_monthly": {
+      "amount_usd": 49.0,
+      "billing": "monthly",
+      "name": "V\u00f8iddo Rescue \u00b7 Fix Lite Monthly",
+      "price_id": "pri_01ksh75vkh4qkn7pnxkt2630xe",
+      "price_status": "created",
+      "product_id": "pro_01ksh75vepsrgx5wmtgyd2qsmc",
+      "product_status": "created"
+    },
+    "monitor_monthly": {
+      "amount_usd": 19.0,
+      "billing": "monthly",
+      "name": "V\u00f8iddo Rescue \u00b7 Website Monitor Monthly",
+      "price_id": "pri_01ksh75v2r2pz3kyv7g5c1cmmy",
+      "price_status": "created",
+      "product_id": "pro_01ksh75ty1zaksyferb47n212h",
+      "product_status": "created"
+    },
+    "rescue_pro_monthly": {
+      "amount_usd": 99.0,
+      "billing": "monthly",
+      "name": "V\u00f8iddo Rescue \u00b7 Rescue Pro Monthly",
+      "price_id": "pri_01ksh75vz2a42s5x7br4500t38",
+      "price_status": "created",
+      "product_id": "pro_01ksh75vt6ze5x9chmwzgn1twq",
+      "product_status": "created"
+    }
+  },
+  "updated_at": "2026-05-26T04:02:39.025113+00:00"
+}

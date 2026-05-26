@@ -1,0 +1,149 @@
+name: voiddo_rescue
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: voiddo_rescue_postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-voiddo_rescue}
+      POSTGRES_USER: ${POSTGRES_USER:-voiddo_rescue}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - voiddo_rescue_postgres_data:/var/lib/postgresql/data
+      - ./apps/api/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - voiddo_rescue_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    container_name: voiddo_rescue_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - voiddo_rescue_redis_data:/data
+    networks:
+      - voiddo_rescue_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  api:
+    build:
+      context: ./apps/api
+    container_name: voiddo_rescue_api
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - voiddo_rescue_storage:/app/storage
+      - ./codex_tasks:/app/codex_tasks
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - voiddo_rescue_internal
+      - voiddo_rescue_proxy
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  worker:
+    build:
+      context: ./apps/worker
+    container_name: voiddo_rescue_worker
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - voiddo_rescue_storage:/app/storage
+      - ./codex_tasks:/app/codex_tasks
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - voiddo_rescue_internal
+      - voiddo_rescue_proxy
+    healthcheck:
+      test: ["CMD", "python", "-m", "worker.healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  web:
+    build:
+      context: ./apps/web
+    container_name: voiddo_rescue_web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${API_BASE_URL:-https://api.rescue.voiddo.com}
+      NEXT_PUBLIC_AUDIT_BASE_URL: ${AUDIT_BASE_URL:-https://audit.rescue.voiddo.com}
+      NEXT_PUBLIC_GO_BASE_URL: ${GO_BASE_URL:-https://go.rescue.voiddo.com}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - voiddo_rescue_internal
+      - voiddo_rescue_proxy
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  voiddo_rescue_postgres_data:
+    name: voiddo_rescue_postgres_data
+  voiddo_rescue_redis_data:
+    name: voiddo_rescue_redis_data
+  voiddo_rescue_storage:
+    name: voiddo_rescue_storage
+
+networks:
+  voiddo_rescue_internal:
+    name: voiddo_rescue_internal
+    internal: true
+  voiddo_rescue_proxy:
+    name: voiddo_rescue_proxy
