@@ -16,6 +16,7 @@ ALLOWED_OPS_ACTIONS = {
     "closed_loop_dry_run",
     "customer_transport_dry_run",
     "owner_report_action",
+    "digest_history_cleanup",
 }
 
 
@@ -75,6 +76,21 @@ def run_mailer_ops_action(action: str, limit: int = 10, source: str = "admin", i
         result = {
             "status": "completed",
             "transport": transport_dry_run(limit),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+        }
+    elif action == "digest_history_cleanup":
+        from .mailer_control_room import cleanup_mailer_digest_history
+
+        cleanup = cleanup_mailer_digest_history(90)
+        result = {
+            "status": "completed",
+            "cleanup": cleanup,
+            "deleted_count": cleanup["deleted_count"],
+            "before_total_rows": cleanup["before"]["total_rows"],
+            "after_total_rows": cleanup["after"]["total_rows"],
             "send_mail": False,
             "smtp_called": False,
             "live_outreach_allowed": False,

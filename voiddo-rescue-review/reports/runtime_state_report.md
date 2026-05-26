@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-27 00:38 IDT
+Generated: 2026-05-27 00:51 IDT
 
 ## Canonical Latest State
 
@@ -83,10 +83,11 @@ Generated: 2026-05-27 00:38 IDT
 - P40 digest history admin counter: implemented and protected
 - P41 digest history retention guard: implemented and protected
 - P42 digest retention autonomous agent: implemented
+- P43 digest retention ops evidence: implemented
 
 ## Verification
 
-- API tests: `262 passed`
+- API tests: `265 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including authenticated admin digest history counter
 - secondary QA plugins: Playwright/axe/pa11y PASS, 0 blockers
@@ -94,4 +95,4 @@ Generated: 2026-05-27 00:38 IDT
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P43 Mailer Digest Retention Ops Evidence`.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P44 Mailer Ops Digest Retention Admin Visibility`.

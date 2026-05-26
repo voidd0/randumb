@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-27 00:38 IDT
+Generated: 2026-05-27 00:51 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `262 passed`
+- API tests: `265 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -114,6 +114,9 @@ PASS
 - mailer digest retention agent deletes old digest rows: PASS
 - daily loop includes mailer digest retention agent: PASS
 - mailer digest retention agent leaves send flags false: PASS
+- digest history cleanup ops action runs and persists: PASS
+- digest history cleanup ops action is sanitized no-send: PASS
+- digest history cleanup ops action preserves action queue/send ledger: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

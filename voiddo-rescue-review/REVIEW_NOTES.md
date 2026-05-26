@@ -1,18 +1,18 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 00:39 IDT
+Generated: 2026-05-27 00:52 IDT
 
 ## Scope
 
 This review tree contains the Vøiddo Rescue MVP source tree and redacted reports for branch `voiddo-rescue-mvp-review-20260526-files`.
 
-## P42 Update
+## P43 Update
 
-- Added `mailer_digest_retention_agent`.
-- Added the agent to the autonomous daily loop.
-- Agent runs digest history cleanup with no-send flags and before/after retention summaries.
-- Focused digest/agent tests: `28 passed`.
-- Full smoke/API suite: `262 passed`.
+- Added `digest_history_cleanup` as a persisted no-send mailer ops action.
+- Ops evidence stores deleted count and before/after digest history totals.
+- The action does not touch mailer action queue, send ledger, recipient resolver audit, warmup, outreach, or SMTP.
+- Focused mailer ops tests: `15 passed`.
+- Full smoke/API suite: `265 passed`.
 - Live outreach sent: `0`.
 - Warmup sent: `0`.
 

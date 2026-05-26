@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 00:38 IDT
+Generated: 2026-05-27 00:51 IDT
 
 ## Decision
 
@@ -29,6 +29,7 @@ P39 added sanitized digest-agent report history persistence.
 P40 exposed sanitized digest history count and latest no-send state in the protected admin panel.
 P41 added sanitized digest history retention summary and cleanup guard.
 P42 wired digest history retention cleanup into the autonomous daily agent loop.
+P43 added digest history cleanup to persisted mailer ops evidence.
 
 ## Passed Gates
 
@@ -61,11 +62,12 @@ P42 wired digest history retention cleanup into the autonomous daily agent loop.
 - mailer digest history admin counter: implemented and protected
 - mailer digest history retention guard: implemented and protected
 - mailer digest retention autonomous agent: implemented
+- mailer digest retention ops evidence: implemented
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: Playwright/axe/pa11y PASS
-- API tests: `262 passed`
+- API tests: `265 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -90,4 +92,4 @@ P42 wired digest history retention cleanup into the autonomous daily agent loop.
 
 ## Next Exact Action
 
-Continue the self-written build cycle with `P43 Mailer Digest Retention Ops Evidence`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
+Continue the self-written build cycle with `P44 Mailer Ops Digest Retention Admin Visibility`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
