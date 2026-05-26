@@ -1,42 +1,43 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 23:34 IDT
+Generated: 2026-05-26 23:50 IDT
 
-## Branch
+## Scope
 
-- repository: `voidd0/randumb`
-- branch: `voiddo-rescue-mvp-review-20260526-files`
-- review folder: `voiddo-rescue-review/`
-- current pass: `P36 Mailer Digest Scheduler Agent`
+This review tree contains the Vøiddo Rescue MVP source tree and redacted reports for branch `voiddo-rescue-mvp-review-20260526-files`.
 
-## Package State
+## P37 Update
 
-- source path: `/opt/voiddo-rescue`
-- clean review path: `/tmp/randumb-rescue-review/voiddo-rescue-review`
-- tree file count: `291`
-- tree manifest hash: see `ARCHIVE_SHA256.txt`
-- final commit SHA: see branch HEAD returned in the operator final output.
+- Added dedicated `mailer_digest_agent_report.md` runtime evidence for the autonomous mailer digest agent.
+- `mailer_digest_agent` still sends no email and only queues no-send owner-report evidence during tests.
+- Focused digest-agent tests: `9 passed`.
+- Full smoke/API suite: `247 passed`.
+- Live outreach sent: `0`.
+- Warmup sent: `0`.
 
 ## Exclusions
 
-The review tree excludes `.env`, mailbox passwords, private keys, virtualenvs, caches, `node_modules`, `.next`, runtime storage/logs/backups, screenshots, export archives, and visual QA PNGs.
+The review package excludes:
 
-## P36 Summary
+- `.env` / `*.env`
+- mailbox passwords, API keys, private keys
+- `.venv/`, `venv/`
+- `.pytest_cache/`, `__pycache__/`, `*.pyc`
+- `node_modules/`, `.next/`
+- runtime `storage/`, `exports/`, screenshots, backups, logs
 
-P36 added `mailer_digest_agent` to the autonomous agent loop. The agent generates the owner status report and queues a no-send owner-report action while keeping email sends, warmup, and live outreach disabled.
+## Secret Scan
 
-## Verification
+No raw secrets, mailbox passwords, private keys, `.env` files, virtualenvs, node modules, Next build output, runtime storage, screenshots, or logs are intentionally included.
 
-- focused P36 tests: `5 passed`
-- full API suite: `243 passed`
-- smoke script: PASS, output `ok`
-- digest agent appears in `agent_runs`: PASS
-- daily loop includes digest agent: PASS
-- secret/artifact scan: PASS
-- live outreach sent: `0`
-- warmup sent: `0`
-- real customer SMTP sends: `0`
+## Safety State
 
-## Runtime Decision
+- `OUTREACH_PAUSED=true`
+- `FIRST_LIVE_SEND_FLAG=false`
+- `AUTO_REPLIES_PAUSED=true`
+- customer mail real send remains disabled by default
+- recent bounce/DSN and SMTP rate-limit signals still block sending
 
-Launch remains blocked for cold outreach. Warmup remains scheduled but not sending because recent bounce/DSN and SMTP rate-limit signals still exist inside the 24-hour safety window.
+## Commit
+
+Final commit SHA is reported in the operator final output after push.

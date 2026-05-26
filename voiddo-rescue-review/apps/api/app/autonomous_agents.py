@@ -11,7 +11,7 @@ from .email_templates import render_all_samples
 from .economics import run_economics_audit
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
-from .mailer_control_room import write_owner_status_report
+from .mailer_control_room import write_mailer_digest_agent_report, write_owner_status_report
 from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mailer_closed_loop import run_mailer_closed_loop
@@ -44,6 +44,9 @@ def _record_agent(agent: str, func: Callable[[], dict[str, Any]]) -> dict[str, A
     )
     try:
         result = json.loads(json.dumps(func(), default=str))
+        if agent == "mailer_digest_agent":
+            digest_report = write_mailer_digest_agent_report(str(row["id"]), result)
+            result["digest_agent_report"] = digest_report
         done = execute(
             "UPDATE agent_runs SET status = 'completed', completed_at = now(), result_json = %s WHERE id = %s RETURNING *",
             (Jsonb(result), row["id"]),

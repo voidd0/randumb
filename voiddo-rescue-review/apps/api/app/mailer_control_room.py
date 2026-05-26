@@ -243,3 +243,47 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         "mailer_ops": ops,
         "owner_report_action": draft,
     }
+
+
+def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, Any]) -> dict[str, Any]:
+    settings = get_settings()
+    state = owner_report.get("state") or runtime_state_snapshot()
+    mailer = owner_report.get("mailer") or mailer_control_room_summary(write_snapshot=False)
+    action = owner_report.get("owner_report_action") or {}
+    blockers = mailer.get("warmup_blocked_reason") or []
+    email_sent = bool(owner_report.get("email_sent", False))
+    path = Path(settings.storage_root) / "reports" / "mailer_digest_agent_report.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            [
+                "# Vøiddo Rescue Mailer Digest Agent Report",
+                "",
+                f"- generated_at: {datetime.now(timezone.utc).isoformat()}",
+                f"- agent_run_id: `{agent_run_id}`",
+                f"- owner_report_path: `{owner_report.get('path', '')}`",
+                f"- owner_report_action_id: `{action.get('id', '')}`",
+                f"- email_sent: `{str(email_sent).lower()}`",
+                f"- warmup_sent_count: `{state.get('warmup_sent_count', 0)}`",
+                f"- live_outreach_sent_count: `{state.get('live_outreach_sent_count', 0)}`",
+                f"- bounce_or_dsn_count_24h: `{state.get('bounce_count', 0)}`",
+                f"- rate_limit_signal_count_24h: `{state.get('rate_limit_signal_count', 0)}`",
+                f"- current_mail_blockers: `{', '.join(blockers) if blockers else 'none'}`",
+                f"- send_decision: `{owner_report.get('send_decision', '')}`",
+                "",
+                "Raw recipient addresses, message bodies, mailbox passwords, and secrets are intentionally omitted.",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return {
+        "path": str(path),
+        "agent_run_id": agent_run_id,
+        "owner_report_path": owner_report.get("path", ""),
+        "owner_report_action_id": action.get("id", ""),
+        "email_sent": email_sent,
+        "warmup_sent_count": int(state.get("warmup_sent_count", 0) or 0),
+        "live_outreach_sent_count": int(state.get("live_outreach_sent_count", 0) or 0),
+        "current_mail_blockers": blockers,
+    }

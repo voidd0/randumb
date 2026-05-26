@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 23:34 IDT
+Generated: 2026-05-26 23:49 IDT
 
 ## Canonical Latest State
 
@@ -74,10 +74,13 @@ Generated: 2026-05-26 23:34 IDT
 - P34 mailer ops daily digest hook: implemented
 - P35 mailer ops digest UI surface: implemented
 - P36 mailer digest scheduler agent: implemented
+- P37 digest agent runtime report file: implemented
+- latest digest agent report: `/opt/voiddo-rescue/reports/mailer_digest_agent_report.md`
+- digest agent email_sent: `false`
 
 ## Verification
 
-- API tests: `243 passed`
+- API tests: `247 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including authenticated admin mailer ops controls
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
@@ -85,4 +88,4 @@ Generated: 2026-05-26 23:34 IDT
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P37 Digest Agent Runtime Report File`.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P38 Mailer Digest Admin Report Link`.

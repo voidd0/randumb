@@ -57,3 +57,40 @@ def test_mailer_digest_agent_records_agent_run_evidence():
     assert row["agent"] == "mailer_digest_agent"
     assert row["status"] == "completed"
     _cleanup(run["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_digest_agent_writes_runtime_report_file():
+    run = run_agent("mailer_digest_agent")
+    report = run["result_json"]["digest_agent_report"]
+    assert report["agent_run_id"] == str(run["id"])
+    assert report["email_sent"] is False
+    assert Path(report["path"]).exists()
+    _cleanup(run["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_digest_agent_runtime_report_omits_raw_recipients():
+    run = run_agent("mailer_digest_agent")
+    text = Path(run["result_json"]["digest_agent_report"]["path"]).read_text(encoding="utf-8")
+    assert "Raw recipient addresses" in text
+    assert "gkorner@" not in text
+    assert "voiddorescue.com" not in text
+    assert "SMTP_PASSWORD" not in text
+    _cleanup(run["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_digest_agent_runtime_report_confirms_no_send_counts():
+    run = run_agent("mailer_digest_agent")
+    report = run["result_json"]["digest_agent_report"]
+    assert report["warmup_sent_count"] == 0
+    assert report["live_outreach_sent_count"] == 0
+    assert report["email_sent"] is False
+    _cleanup(run["result_json"]["owner_report_action"]["id"])
+
+
+def test_daily_loop_digest_agent_exposes_runtime_report_path():
+    result = run_daily_loop()
+    digest_run = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"][0]
+    report = digest_run["result_json"]["digest_agent_report"]
+    assert Path(report["path"]).exists()
+    assert report["email_sent"] is False
+    _cleanup(digest_run["result_json"]["owner_report_action"]["id"])
