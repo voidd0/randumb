@@ -264,6 +264,7 @@ def test_deliverability_diagnostic_sends_max_one(monkeypatch):
     email = f"deliverability-{uuid.uuid4().hex[:8]}@example.test"
     monkeypatch.setattr(p0.smtplib, "SMTP", FakeSMTP)
     try:
+        execute("DELETE FROM mail_signals WHERE source = 'deliverability_diagnostic_sent'")
         first = p0.run_deliverability_diagnostics(settings, [email], smtp_ready=True)
         second = p0.run_deliverability_diagnostics(settings, [email], smtp_ready=True)
         assert first["sent"] == 1
@@ -274,6 +275,7 @@ def test_deliverability_diagnostic_sends_max_one(monkeypatch):
         assert sent.count(email) == 1
     finally:
         execute("DELETE FROM test_inboxes WHERE lower(email) = lower(%s)", (email,))
+        execute("DELETE FROM mail_signals WHERE source = 'deliverability_diagnostic_sent'")
 
 
 def test_warmup_pool_missing_blocks(monkeypatch):
@@ -319,6 +321,7 @@ def test_owner_start_warmup_day1_sends_max_five_when_all_gates_pass(monkeypatch)
     recipients = [f"warmup-{uuid.uuid4().hex[:6]}-{index}@example.test" for index in range(7)]
     monkeypatch.setattr(p0, "approved_warmup_recipient_emails", lambda settings=None: recipients)
     monkeypatch.setattr(p0, "effective_pause_state", lambda area, configured=False: False)
+    monkeypatch.setattr(p0, "recent_mail_signal_count", lambda types, hours=24: 0)
     monkeypatch.setattr(p0.smtplib, "SMTP", FakeSMTP)
     monkeypatch.setattr(
         p0,

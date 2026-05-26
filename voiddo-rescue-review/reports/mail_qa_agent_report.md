@@ -56,3 +56,15 @@ The latest correction poll after sending the corrected Gmail diagnostic saw `0` 
 `FAIL_BLOCK_LAUNCH`
 
 Exact blocker: Mailcow/Rspamd rate limit and bounce/DSN observation after diagnostics.
+
+## P5 Mail Signal Hardening
+
+Updated: 2026-05-26 14:21 IDT
+
+Latest DNS/auth/TLS mail QA remains PASS, but warmup sending is safety-blocked by recent runtime mail signals:
+
+- bounce/DSN signals in last 24h: `2`
+- SMTP rate-limit signals in last 24h: `1`
+- spam signals in last 24h: `0`
+
+P5 stores these in `mail_signals` without raw recipient addresses in reports. The warmup pre-send gate refuses sends while those signals are inside the 24-hour window, even if SMTP/IMAP TLS and DNS auth are PASS.

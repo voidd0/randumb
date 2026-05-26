@@ -1,38 +1,34 @@
-# Vøiddo Rescue Warmup Calendar Review Notes
+# Vøiddo Rescue P5 Review Notes
 
-Updated: 2026-05-26 14:02 IDT
+Original ZIP path on VPS:
+`/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p5-warmup-safety-2026-05-26.zip`
 
-## Scope
+SHA256:
+`753fe3c65c8ad564bca1b1184827be1609e949f98bae5f89f153f00ea5ef8904`
 
-This branch folder contains the Vøiddo Rescue source tree after autonomous warmup calendar setup.
+Included under this branch folder:
+`voiddo-rescue-review/`
 
-## Runtime Result
+Excluded from review files:
 
-- Warmup schedule created: 28 messages
-- Daily cap: 2 messages/day
-- Schedule length: 14 days
-- Sender rotation: audit/support/fix Rescue aliases
-- First scheduled slots: 10:15 and 16:15 Asia/Jerusalem starting 2026-05-27
-- Warmup sent so far: 0
-- Live outreach sent: 0
-- Human-review blocker count for delivery observations: 0
+- `.env` and `*.env` except `.env.example`
+- mailbox passwords and runtime secrets
+- `storage/`
+- `logs/`
+- `backups/`
+- `node_modules/`
+- `.next/`
+- `__pycache__/` and `*.pyc`
+- PNG screenshots and runtime visual captures
 
-## Export
+Secret scan result:
+No raw secrets, mailbox passwords, `.env`, or personal owner/test addresses are included in the review folder. Findings are limited to environment variable names, `.env.example`, redacted reports, and provider-domain literals used for classification.
 
-- Runtime export path: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-warmup-calendar-2026-05-26.zip`
+P5 summary:
+Warmup pre-send safety gate, `mail_signals`, diagnostic send caps, owner warmup/signal commands, migration manifest, runtime state report, and 46 passing API tests.
 
-## Excluded
+Exact commit SHA:
+Pending until commit is created.
 
-- `.env`
-- mailbox passwords
-- private keys and certificate backups
-- `.venv`, `node_modules`, `.next`, pycache
-- runtime logs
-- runtime storage exports
-- runtime audit/screenshot storage
-- PNG screenshots
-- owner personal email addresses
-
-## Secret Scan
-
-No raw secrets or owner personal email addresses are intentionally included.
+Live activity confirmation:
+Cold outreach sent: 0. Warmup sent: 0. Non-Rescue projects untouched.

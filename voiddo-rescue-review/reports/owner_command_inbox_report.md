@@ -40,3 +40,18 @@ Arbitrary shell execution is not supported. Shell-like command text is classifie
 - Runtime P4 inbox poll completed after send gates; `0` new messages and `0` bounces were seen.
 - Test coverage verifies day-1 warmup sends max five messages only when all gates are mocked PASS.
 - `RUN SHELL` remains review-required.
+
+## P5 Commands
+
+Updated: 2026-05-26 14:21 IDT
+
+Added:
+
+- `SHOW WARMUP CALENDAR`
+- `SHOW MAIL SIGNALS`
+- `PAUSE WARMUP`
+- `RESUME WARMUP`
+
+`RESUME WARMUP` is `MEDIUM_RISK` and only clears the warmup pause when all checks pass: no bounce/DSN in last 24h, no SMTP rate-limit in last 24h, latest mail QA PASS, and approved warmup pool exists.
+
+`SEND OUTREACH` remains `HIGH_RISK` and blocked.

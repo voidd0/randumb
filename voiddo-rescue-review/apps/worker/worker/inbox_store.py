@@ -1,11 +1,33 @@
 from __future__ import annotations
 
+import hashlib
 from email.utils import parseaddr
 from typing import Any
 
 from psycopg.types.json import Jsonb
 
 from .db import connect
+
+
+def _recipient_hash(email: str) -> str:
+    return hashlib.sha256((email or "").strip().lower().encode("utf-8")).hexdigest()
+
+
+def _email_provider(email: str) -> str:
+    domain = (email or "").split("@")[-1].lower()
+    if domain in {"voiddo.com", "voiddorescue.com"}:
+        return "internal"
+    if domain in {"gmail.com", "googlemail.com"}:
+        return "gmail"
+    if domain in {"outlook.com", "hotmail.com", "live.com", "msn.com"}:
+        return "microsoft"
+    if domain in {"icloud.com", "me.com", "mac.com"}:
+        return "icloud"
+    if domain == "proton.me" or domain.endswith(".proton.me"):
+        return "proton"
+    if domain == "yahoo.com":
+        return "yahoo"
+    return domain or "unknown"
 
 
 def persist_message(item: Any) -> bool:
@@ -47,6 +69,22 @@ def persist_message(item: Any) -> bool:
                     "INSERT INTO suppression_list(email, reason, source) VALUES (%s, 'unsubscribe_reply', 'inbox')",
                     (sender,),
                 )
+            if item.classification in {"bounce", "auto_reply", "out_of_office", "interested", "ask_price", "ask_details"}:
+                cur.execute(
+                    """
+                    INSERT INTO mail_signals(signal_type, severity, source, mailbox, recipient_hash, provider, message_id, raw_summary)
+                    VALUES (%s, %s, 'inbox_worker', %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        "bounce" if item.classification == "bounce" else "inbox_reply",
+                        "warning" if item.classification == "bounce" else "info",
+                        item.mailbox,
+                        _recipient_hash(sender),
+                        _email_provider(sender),
+                        message_id,
+                        f"classified:{item.classification}",
+                    ),
+                )
             if item.classification in {"legal_threat", "security_accusation", "angry"}:
                 cur.execute(
                     "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, 'critical', %s, %s)",
@@ -55,7 +93,14 @@ def persist_message(item: Any) -> bool:
             if any(marker in item.body.lower() for marker in ["found it in spam", "in spam", "spam folder"]):
                 cur.execute(
                     "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
-                    ("deliverability.spam_observed", "warning", "Test inbox spam placement signal observed", Jsonb({"sender": sender, "subject": item.subject})),
+                    ("deliverability.spam_observed", "warning", "Test inbox spam placement signal observed", Jsonb({"sender_hash": _recipient_hash(sender), "subject": item.subject})),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO mail_signals(signal_type, severity, source, mailbox, recipient_hash, provider, message_id, raw_summary)
+                    VALUES ('spam_signal', 'warning', 'inbox_worker', %s, %s, %s, %s, 'test inbox spam placement observed')
+                    """,
+                    (item.mailbox, _recipient_hash(sender), _email_provider(sender), message_id),
                 )
         conn.commit()
     return True

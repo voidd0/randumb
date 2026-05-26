@@ -39,3 +39,20 @@ Updated: 2026-05-26 14:02 IDT
 - Deliverability diagnostic sends: `0`
 - Warmup sends: `0`
 - Live outreach sends: `0`
+
+## P5 Smoke
+
+Updated: 2026-05-26 14:21 IDT
+
+- `docker compose exec -T api python -m app.db`: PASS
+- migration order includes `005_p3_checkout_manifest.sql` and `008_p5_mail_signals.sql`: PASS
+- `docker compose exec -T api python -m pytest -q`: PASS, `46 passed`
+- warmup blocks on recent bounce/DSN: PASS
+- warmup blocks on recent rate-limit signal: PASS
+- warmup skips suppressed recipient: PASS
+- warmup blocks when mail QA is not PASS: PASS
+- diagnostic minute cap `1/min`: PASS
+- runtime state report generation: PASS
+- `SEND OUTREACH` remains high risk: PASS
+
+Live counters after P5: warmup sent `0`, live outreach sent `0`.

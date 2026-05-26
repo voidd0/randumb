@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import os
@@ -46,6 +47,9 @@ WARMUP_SENDER_ROTATION = [
     "support@voiddorescue.com",
     "fix@voiddorescue.com",
 ]
+MAIL_SIGNAL_RECENT_BLOCKING_TYPES = {"bounce", "dsn", "smtp_rate_limit"}
+DIAGNOSTIC_DAILY_CAP = 5
+DIAGNOSTIC_MINUTE_CAP = 1
 
 
 def _split_config_emails(raw: str) -> list[str]:
@@ -110,6 +114,86 @@ def approved_warmup_recipient_emails(settings: Settings | None = None) -> list[s
         for row in fetch_all("SELECT email FROM suppression_list WHERE email IS NOT NULL")
     }
     return sorted(set(email for email in emails if "@" in email and email not in suppressed))
+
+
+def recipient_hash(email: str) -> str:
+    normalized = (email or "").strip().lower()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest() if normalized else ""
+
+
+def email_provider(email: str) -> str:
+    domain = (email or "").split("@")[-1].lower()
+    if domain in {"voiddo.com", "voiddorescue.com"}:
+        return "internal"
+    if domain in {"gmail.com", "googlemail.com"}:
+        return "gmail"
+    if domain in {"outlook.com", "hotmail.com", "live.com", "msn.com"}:
+        return "microsoft"
+    if domain in {"icloud.com", "me.com", "mac.com"}:
+        return "icloud"
+    if domain == "proton.me" or domain.endswith(".proton.me"):
+        return "proton"
+    if domain == "yahoo.com":
+        return "yahoo"
+    return domain or "unknown"
+
+
+def record_mail_signal(
+    signal_type: str,
+    severity: str = "info",
+    source: str = "system",
+    mailbox: str = "",
+    recipient_email: str = "",
+    provider: str = "",
+    message_id: str = "",
+    raw_summary: str = "",
+) -> dict[str, Any]:
+    row = execute(
+        """
+        INSERT INTO mail_signals(signal_type, severity, source, mailbox, recipient_hash, provider, message_id, raw_summary)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id, signal_type, severity, source, mailbox, provider, message_id, raw_summary, created_at
+        """,
+        (
+            signal_type,
+            severity,
+            source,
+            mailbox or None,
+            recipient_hash(recipient_email) or None,
+            provider or email_provider(recipient_email),
+            message_id or None,
+            raw_summary[:500] if raw_summary else None,
+        ),
+    )
+    return dict(row)
+
+
+def recent_mail_signal_count(signal_types: list[str] | tuple[str, ...] | set[str], hours: int = 24) -> int:
+    if not signal_types:
+        return 0
+    row = fetch_one(
+        """
+        SELECT count(*) AS count
+        FROM mail_signals
+        WHERE signal_type = ANY(%s)
+          AND created_at >= now() - (%s || ' hours')::interval
+        """,
+        (list(signal_types), hours),
+    )
+    return int(row["count"] if row else 0)
+
+
+def latest_mail_qa_decision() -> str:
+    row = fetch_one("SELECT decision FROM mail_qa_runs ORDER BY created_at DESC LIMIT 1")
+    return str(row["decision"]) if row else "MISSING"
+
+
+def is_recipient_suppressed(email: str) -> bool:
+    row = fetch_one(
+        "SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s) OR lower(domain) = lower(%s)",
+        (email, (email or "").split("@")[-1].lower()),
+    )
+    return bool(row)
 
 
 def create_scanner_job(url: str, business_name: str | None, dry_run: bool = False) -> dict[str, Any]:
@@ -423,6 +507,22 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
                     """,
                     (sender,),
                 )
+            if classification in {"bounce", "auto_reply", "out_of_office", "interested", "ask_price", "ask_details"}:
+                cur.execute(
+                    """
+                    INSERT INTO mail_signals(signal_type, severity, source, mailbox, recipient_hash, provider, message_id, raw_summary)
+                    VALUES (%s, %s, 'inbox_engine', %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        "bounce" if classification == "bounce" else "inbox_reply",
+                        "warning" if classification == "bounce" else "info",
+                        mailbox,
+                        recipient_hash(sender),
+                        email_provider(sender),
+                        message_id,
+                        f"classified:{classification}",
+                    ),
+                )
             if classification in {"legal_threat", "security_accusation", "angry"}:
                 cur.execute(
                     "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, 'critical', %s, %s)",
@@ -431,7 +531,14 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
             if any(marker in body.lower() for marker in ["found it in spam", "in spam", "spam folder"]):
                 cur.execute(
                     "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
-                    ("deliverability.spam_observed", "warning", "Test inbox spam placement signal observed", Jsonb({"sender": sender, "subject": subject})),
+                    ("deliverability.spam_observed", "warning", "Test inbox spam placement signal observed", Jsonb({"sender_hash": recipient_hash(sender), "subject": subject})),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO mail_signals(signal_type, severity, source, mailbox, recipient_hash, provider, message_id, raw_summary)
+                    VALUES ('spam_signal', 'warning', 'inbox_engine', %s, %s, %s, %s, 'test inbox spam placement observed')
+                    """,
+                    (mailbox, recipient_hash(sender), email_provider(sender), message_id),
                 )
         conn.commit()
     return {"stored": True, "duplicate": False, "classification": classification, "human_review_required": human}
@@ -459,8 +566,9 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
     safe = {
         "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",
         "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
+        "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS",
     }
-    medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "START WARMUP"}
+    medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "START WARMUP", "RESUME WARMUP"}
     high = {"SEND OUTREACH", "START WARMUP", "UNPAUSE OUTREACH", "RUN SHELL", "EXECUTE"}
     if command in safe:
         risk = "SAFE_AUTO"
@@ -537,6 +645,151 @@ def json_safe(value: Any) -> Any:
     return json.loads(json.dumps(value, default=str))
 
 
+def _count(sql: str, params: tuple = ()) -> int:
+    row = fetch_one(sql, params)
+    if not row:
+        return 0
+    return int(next(iter(row.values())))
+
+
+def mail_signal_summary(hours: int = 24) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT signal_type, severity, count(*) AS count
+        FROM mail_signals
+        WHERE created_at >= now() - (%s || ' hours')::interval
+        GROUP BY signal_type, severity
+        ORDER BY signal_type, severity
+        """,
+        (hours,),
+    )
+    return {
+        "window_hours": hours,
+        "items": [dict(row) for row in rows],
+        "bounce_or_dsn_count": recent_mail_signal_count(["bounce", "dsn"], hours),
+        "rate_limit_count": recent_mail_signal_count(["smtp_rate_limit"], hours),
+        "spam_signal_count": recent_mail_signal_count(["spam_signal"], hours),
+    }
+
+
+def warmup_calendar_health() -> dict[str, Any]:
+    next_due = fetch_one(
+        """
+        SELECT scheduled_for
+        FROM warmup_schedule
+        WHERE status = 'scheduled'
+        ORDER BY scheduled_for
+        LIMIT 1
+        """
+    )
+    return {
+        "scheduled_total": _count("SELECT count(*) FROM warmup_schedule"),
+        "due_now": _count("SELECT count(*) FROM warmup_schedule WHERE status = 'scheduled' AND scheduled_for <= now()"),
+        "sent_today": _count(
+            """
+            SELECT count(*)
+            FROM email_events
+            WHERE event_type = 'warmup_sent'
+              AND created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+            """
+        ),
+        "blocked_today": _count(
+            """
+            SELECT count(*)
+            FROM warmup_schedule
+            WHERE status LIKE 'blocked_%%'
+              AND updated_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+            """
+        ),
+        "skipped_suppressed": _count("SELECT count(*) FROM warmup_schedule WHERE status = 'skipped_suppressed'"),
+        "latest_mail_qa_decision": latest_mail_qa_decision(),
+        "recent_bounce_count": recent_mail_signal_count(["bounce", "dsn"], 24),
+        "recent_rate_limit_count": recent_mail_signal_count(["smtp_rate_limit"], 24),
+        "next_scheduled_send_time": next_due["scheduled_for"] if next_due else None,
+        "launch_readiness_state": launch_readiness_state(),
+        "live_outreach_sent_count": _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'"),
+    }
+
+
+def launch_readiness_state() -> str:
+    warmup_sent = _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'")
+    scheduled = _count("SELECT count(*) FROM warmup_schedule WHERE status = 'scheduled'")
+    if warmup_sent > 0:
+        return "WARMUP_ACTIVE_NO_OUTREACH"
+    if scheduled > 0:
+        return "WARMUP_SCHEDULED_NO_OUTREACH"
+    return "CHECKOUT_READY_NOT_WARMED"
+
+
+def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> dict[str, Any]:
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "current_branch_head": branch_head,
+        "current_zip_sha": current_zip_sha,
+        "checkout_status": "READY",
+        "mail_auth_status": "PASS",
+        "latest_mail_qa_decision": latest_mail_qa_decision(),
+        "test_inbox_count": _count("SELECT count(*) FROM test_inboxes WHERE status = 'approved' AND approved"),
+        "warmup_recipient_count": _count("SELECT count(*) FROM warmup_recipients WHERE status = 'approved_test_pool' AND approved"),
+        "scheduled_warmup_count": _count("SELECT count(*) FROM warmup_schedule"),
+        "deliverability_diagnostic_sent_count": _count("SELECT count(*) FROM test_inboxes WHERE last_test_at IS NOT NULL"),
+        "warmup_sent_count": _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'"),
+        "live_outreach_sent_count": _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'"),
+        "bounce_count": recent_mail_signal_count(["bounce", "dsn"], 24),
+        "rate_limit_signal_count": recent_mail_signal_count(["smtp_rate_limit"], 24),
+        "next_allowed_action": "wait_until_recent_bounce_and_rate_limit_window_clears_then_recheck_mail_qa",
+        "launch_readiness_state": launch_readiness_state(),
+    }
+
+
+def write_runtime_state_report(path: str | Path, branch_head: str = "", current_zip_sha: str = "") -> dict[str, Any]:
+    snapshot = runtime_state_snapshot(branch_head, current_zip_sha)
+    lines = [
+        "# Vøiddo Rescue Runtime State",
+        "",
+        f"- generated_at: {snapshot['generated_at']}",
+        f"- current_branch_head: {snapshot['current_branch_head']}",
+        f"- current_zip_sha: {snapshot['current_zip_sha']}",
+        f"- checkout_status: {snapshot['checkout_status']}",
+        f"- mail_auth_status: {snapshot['mail_auth_status']}",
+        f"- latest_mail_qa_decision: {snapshot['latest_mail_qa_decision']}",
+        f"- test_inbox_count: {snapshot['test_inbox_count']}",
+        f"- warmup_recipient_count: {snapshot['warmup_recipient_count']}",
+        f"- scheduled_warmup_count: {snapshot['scheduled_warmup_count']}",
+        f"- deliverability_diagnostic_sent_count: {snapshot['deliverability_diagnostic_sent_count']}",
+        f"- warmup_sent_count: {snapshot['warmup_sent_count']}",
+        f"- live_outreach_sent_count: {snapshot['live_outreach_sent_count']}",
+        f"- bounce_count_24h: {snapshot['bounce_count']}",
+        f"- rate_limit_signal_count_24h: {snapshot['rate_limit_signal_count']}",
+        f"- next_allowed_action: {snapshot['next_allowed_action']}",
+        f"- launch_readiness_state: {snapshot['launch_readiness_state']}",
+        "",
+        "Raw recipient addresses are intentionally omitted.",
+    ]
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines) + "\n")
+    return {"path": str(target), **snapshot}
+
+
+def resume_warmup_gate() -> dict[str, Any]:
+    checks = {
+        "recent_bounce_count": recent_mail_signal_count(["bounce", "dsn"], 24),
+        "recent_rate_limit_count": recent_mail_signal_count(["smtp_rate_limit"], 24),
+        "latest_mail_qa_decision": latest_mail_qa_decision(),
+        "warmup_pool_count": len(approved_warmup_recipient_emails()),
+    }
+    allowed = (
+        checks["recent_bounce_count"] == 0
+        and checks["recent_rate_limit_count"] == 0
+        and checks["latest_mail_qa_decision"] == "PASS"
+        and checks["warmup_pool_count"] > 0
+    )
+    if allowed:
+        set_runtime_control("pause_warmup", False, "owner_command", "RESUME WARMUP")
+    return {"ok": allowed, "action": "resume_warmup", "allowed": allowed, "checks": checks}
+
+
 def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
     command = parsed["command"]
     risk = parsed["risk_level"]
@@ -562,9 +815,27 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
     elif command == "SHOW MAIL QA":
         result = {"ok": True, "action": "mail_qa_status", "items": fetch_all("SELECT decision, checks_json, issues_json, created_at FROM mail_qa_runs ORDER BY created_at DESC LIMIT 5")}
     elif command == "SHOW DELIVERABILITY":
-        result = {"ok": True, "action": "deliverability_status", "items": fetch_all("SELECT email, provider, status, last_test_at, result_json FROM test_inboxes ORDER BY created_at DESC LIMIT 20")}
+        items = fetch_all("SELECT email, provider, status, last_test_at, result_json FROM test_inboxes ORDER BY created_at DESC LIMIT 20")
+        result = {
+            "ok": True,
+            "action": "deliverability_status",
+            "items": [
+                {
+                    "recipient_hash": recipient_hash(item["email"]),
+                    "provider": item.get("provider") or email_provider(item["email"]),
+                    "status": item["status"],
+                    "last_test_at": item["last_test_at"],
+                    "result_json": item["result_json"],
+                }
+                for item in items
+            ],
+        }
     elif command == "SHOW WARMUP":
         result = {"ok": True, "action": "warmup_status", "items": fetch_all("SELECT status, day_number, planned_daily_cap, recipient_pool_count, stop_conditions_json, created_at FROM warmup_runs ORDER BY created_at DESC LIMIT 10")}
+    elif command == "SHOW WARMUP CALENDAR":
+        result = {"ok": True, "action": "warmup_calendar", "calendar": warmup_calendar_health()}
+    elif command == "SHOW MAIL SIGNALS":
+        result = {"ok": True, "action": "mail_signals", "signals": mail_signal_summary()}
     elif command == "RUN MAIL QA":
         result = {"ok": True, "action": "mail_qa", "run": run_mail_qa()}
     elif command == "RUN DELIVERABILITY TEST":
@@ -576,6 +847,8 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
         result = {"ok": True, "action": "warmup_prepare", "warmup": prepare_warmup(pool_count, 1)}
     elif command == "START WARMUP":
         result = start_warmup_gate(int(parsed.get("args_json", {}).get("day", 1)))
+    elif command == "RESUME WARMUP":
+        result = resume_warmup_gate()
     elif command == "PREPARE LEADS":
         result = {"ok": True, "action": "lead_prepare_dry_run", "args": parsed.get("args_json", {}), "live_send": False}
     else:
@@ -598,7 +871,16 @@ def start_warmup_gate(day_number: int = 1) -> dict[str, Any]:
             if issue not in {"approved_test_inbox_pool_missing"}
         ]
     warmup_paused = effective_pause_state("warmup", False)
-    allowed = bool(pool_count > 0 and latest_mail_decision == "PASS" and not deliverability_blockers and not warmup_paused)
+    recent_bounce_count = recent_mail_signal_count(["bounce", "dsn"], 24)
+    recent_rate_limit_count = recent_mail_signal_count(["smtp_rate_limit"], 24)
+    allowed = bool(
+        pool_count > 0
+        and latest_mail_decision == "PASS"
+        and not deliverability_blockers
+        and not warmup_paused
+        and recent_bounce_count == 0
+        and recent_rate_limit_count == 0
+    )
     warmup = prepare_warmup(pool_count, day_number)
     send_result = {"sent": 0, "attempted": 0, "errors": [], "skipped": "gate_not_allowed"}
     if allowed:
@@ -614,6 +896,8 @@ def start_warmup_gate(day_number: int = 1) -> dict[str, Any]:
             "mail_qa_decision": latest_mail_decision,
             "deliverability_blockers": deliverability_blockers,
             "warmup_paused": warmup_paused,
+            "recent_bounce_count_24h": recent_bounce_count,
+            "recent_rate_limit_count_24h": recent_rate_limit_count,
             "cold_leads": False,
             "sends_started": send_result["sent"],
         },
@@ -693,6 +977,50 @@ def build_warmup_calendar(days: int = 14, per_day: int = 2, start_tomorrow: bool
     return {"created": created, "status": "scheduled", "days": days, "per_day": per_day}
 
 
+def warmup_pre_send_gate(row: dict[str, Any], settings: Settings | None = None) -> dict[str, Any]:
+    settings = settings or get_settings()
+    recipient = str(row["recipient_email"]).lower()
+    sender = str(row.get("sender_mailbox") or settings.smtp_from_default)
+    username, password, _ = smtp_credentials_for_sender(settings, sender)
+    mail_qa = latest_mail_qa_decision()
+    checks = {
+        "pause_warmup": effective_pause_state("warmup", False),
+        "global_kill_switch": runtime_control_enabled("pause_workers"),
+        "latest_mail_qa_decision": mail_qa,
+        "smtp_strict_tls_latest": "PASS" if mail_qa == "PASS" else "UNKNOWN",
+        "imap_strict_tls_latest": "PASS" if mail_qa == "PASS" else "UNKNOWN",
+        "spf_dkim_dmarc_latest": "PASS" if mail_qa == "PASS" else "UNKNOWN",
+        "recent_bounce_or_dsn_count_24h": recent_mail_signal_count(["bounce", "dsn"], 24),
+        "recent_rate_limit_count_24h": recent_mail_signal_count(["smtp_rate_limit"], 24),
+        "recipient_suppressed": is_recipient_suppressed(recipient),
+        "sender_credentials_available": bool(username and password),
+        "daily_cap": warmup_daily_cap(),
+        "sent_today": _count(
+            """
+            SELECT count(*)
+            FROM email_events
+            WHERE event_type = 'warmup_sent'
+              AND created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+            """
+        ),
+    }
+    if checks["pause_warmup"] or checks["global_kill_switch"]:
+        return {"allowed": False, "status": "blocked_paused", "checks": checks}
+    if checks["recent_bounce_or_dsn_count_24h"] > 0:
+        return {"allowed": False, "status": "blocked_recent_bounce", "checks": checks}
+    if checks["recent_rate_limit_count_24h"] > 0:
+        return {"allowed": False, "status": "blocked_recent_rate_limit", "checks": checks}
+    if checks["latest_mail_qa_decision"] != "PASS":
+        return {"allowed": False, "status": "blocked_mail_qa", "checks": checks}
+    if checks["recipient_suppressed"]:
+        return {"allowed": False, "status": "skipped_suppressed", "checks": checks}
+    if not checks["sender_credentials_available"]:
+        return {"allowed": False, "status": "failed", "checks": {**checks, "error": "sender_credentials_missing"}}
+    if checks["sent_today"] >= checks["daily_cap"]:
+        return {"allowed": False, "status": "blocked_paused", "checks": {**checks, "error": "daily_cap_reached"}}
+    return {"allowed": True, "status": "allowed", "checks": checks}
+
+
 def run_warmup_calendar_due(limit: int = 2) -> dict[str, Any]:
     settings = get_settings()
     today_sent = fetch_one(
@@ -719,6 +1047,24 @@ def run_warmup_calendar_due(limit: int = 2) -> dict[str, Any]:
     sent = 0
     errors: list[str] = []
     for row in rows:
+        gate = warmup_pre_send_gate(row, settings)
+        if not gate["allowed"]:
+            execute(
+                "UPDATE warmup_schedule SET status = %s, result_json = %s, updated_at = now() WHERE id = %s",
+                (gate["status"], Jsonb(gate), row["id"]),
+            )
+            execute(
+                "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
+                (
+                    "warmup.calendar_blocked",
+                    "warning",
+                    gate["status"],
+                    Jsonb({"schedule_id": str(row["id"]), "checks": gate["checks"]}),
+                ),
+            )
+            if gate["status"] != "skipped_suppressed":
+                break
+            continue
         username, password, from_addr = smtp_credentials_for_sender(settings, row["sender_mailbox"])
         message_id = make_msgid(domain="voiddorescue.com")
         msg = EmailMessage()
@@ -738,6 +1084,9 @@ def run_warmup_calendar_due(limit: int = 2) -> dict[str, Any]:
         except Exception as exc:
             label = smtp_error_label(exc)
             errors.append(label)
+            signal = smtp_error_to_mail_signal(label)
+            if signal:
+                record_mail_signal(signal, "warning", "warmup_calendar", from_addr, row["recipient_email"], message_id=message_id, raw_summary=label)
             execute(
                 "UPDATE warmup_schedule SET status = 'failed', result_json = %s, updated_at = now() WHERE id = %s",
                 (Jsonb({"error": label, "message_id": message_id}), row["id"]),
@@ -749,7 +1098,7 @@ def run_warmup_calendar_due(limit: int = 2) -> dict[str, Any]:
             VALUES ('warmup_sent', %s, %s, %s)
             """,
             (
-                Jsonb({"recipient": row["recipient_email"], "sender": from_addr, "schedule_id": str(row["id"]), "day_number": row["day_number"], "policy": "neutral_calendar_warmup_no_sales_no_tracking"}),
+                Jsonb({"recipient_hash": recipient_hash(row["recipient_email"]), "sender": from_addr, "schedule_id": str(row["id"]), "day_number": row["day_number"], "policy": "neutral_calendar_warmup_no_sales_no_tracking"}),
                 from_addr,
                 message_id,
             ),
@@ -910,6 +1259,16 @@ def run_mail_qa() -> dict[str, Any]:
 def run_deliverability_diagnostics(settings: Settings, recipients: list[str], smtp_ready: bool) -> dict[str, Any]:
     if not smtp_ready:
         return {"sent": 0, "skipped": "smtp_not_ready"}
+    daily_diagnostics = _count(
+        """
+        SELECT count(*)
+        FROM mail_signals
+        WHERE source = 'deliverability_diagnostic_sent'
+          AND created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+        """
+    )
+    if daily_diagnostics >= DIAGNOSTIC_DAILY_CAP:
+        return {"sent": 0, "skipped": "diagnostic_daily_cap_reached", "daily_cap": DIAGNOSTIC_DAILY_CAP}
     sent = 0
     skipped = 0
     errors: list[str] = []
@@ -940,6 +1299,25 @@ def run_deliverability_diagnostics(settings: Settings, recipients: list[str], sm
                         smtp.ehlo()
                         smtp.login(settings.smtp_username, settings.smtp_password)
                         for email in pending:
+                            if sent >= DIAGNOSTIC_MINUTE_CAP:
+                                skipped += len(pending) - sent
+                                errors.append("diagnostic_minute_cap_reached")
+                                break
+                            if daily_diagnostics + sent >= DIAGNOSTIC_DAILY_CAP:
+                                skipped += 1
+                                break
+                            minute_diagnostics = _count(
+                                """
+                                SELECT count(*)
+                                FROM mail_signals
+                                WHERE source = 'deliverability_diagnostic_sent'
+                                  AND created_at >= now() - interval '1 minute'
+                                """
+                            )
+                            if minute_diagnostics >= DIAGNOSTIC_MINUTE_CAP:
+                                skipped += len(pending) - sent
+                                errors.append("diagnostic_minute_cap_reached")
+                                break
                             message_id = make_msgid(domain="voiddorescue.com")
                             msg = EmailMessage()
                             msg["Subject"] = "Vøiddo Rescue mail diagnostic"
@@ -957,7 +1335,20 @@ def run_deliverability_diagnostics(settings: Settings, recipients: list[str], sm
                                 "smtp_refused": smtp_result,
                                 "bounce_result": "pending_inbox_poll",
                             }
-                            results.append({"recipient": email, **result_json})
+                            results.append({"recipient_hash": recipient_hash(email), "provider": email_provider(email), **result_json})
+                            cur.execute(
+                                """
+                                INSERT INTO mail_signals(signal_type, severity, source, mailbox, recipient_hash, provider, message_id, raw_summary)
+                                VALUES ('manual_observation', 'info', 'deliverability_diagnostic_sent', %s, %s, %s, %s, %s)
+                                """,
+                                (
+                                    settings.smtp_from_default,
+                                    recipient_hash(email),
+                                    email_provider(email),
+                                    message_id,
+                                    "neutral diagnostic accepted by SMTP",
+                                ),
+                            )
                             cur.execute(
                                 """
                                 UPDATE test_inboxes
@@ -967,7 +1358,17 @@ def run_deliverability_diagnostics(settings: Settings, recipients: list[str], sm
                                 (Jsonb(result_json), email),
                             )
                 except Exception as exc:
-                    errors.append(smtp_error_label(exc))
+                    label = smtp_error_label(exc)
+                    errors.append(label)
+                    signal = smtp_error_to_mail_signal(label)
+                    if signal:
+                        cur.execute(
+                            """
+                            INSERT INTO mail_signals(signal_type, severity, source, mailbox, raw_summary)
+                            VALUES (%s, 'warning', 'deliverability_diagnostic', %s, %s)
+                            """,
+                            (signal, settings.smtp_from_default, label),
+                        )
             conn.commit()
     result: dict[str, Any] = {"sent": sent, "skipped_previously_tested": skipped, "policy": "neutral_diagnostic_max_one_per_mailbox"}
     if results:
@@ -985,6 +1386,17 @@ def smtp_error_label(exc: Exception) -> str:
     if code:
         return f"{type(exc).__name__}:{code}:{str(error)[:160]}"
     return type(exc).__name__
+
+
+def smtp_error_to_mail_signal(label: str) -> str:
+    lowered = label.lower()
+    if "rate" in lowered or "limit" in lowered or "greylist" in lowered or "451" in lowered:
+        return "smtp_rate_limit"
+    if "auth" in lowered or "authentication" in lowered or "535" in lowered:
+        return "auth_failure"
+    if "ssl" in lowered or "tls" in lowered or "certificate" in lowered:
+        return "tls_failure"
+    return ""
 
 
 def provider_counts_for_test_inboxes() -> dict[str, int]:

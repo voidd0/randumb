@@ -70,3 +70,17 @@ Current result:
 ## Decision
 
 `WARMUP_SCHEDULED_NO_OUTREACH`
+
+## P5 Safety Gate
+
+Updated: 2026-05-26 14:21 IDT
+
+Every scheduled warmup send now checks `pause_warmup`, global worker pause, latest mail QA, recent bounce/DSN count, recent SMTP rate-limit count, suppression, sender credentials and the daily cap immediately before SMTP.
+
+Current structural mail signals:
+
+- bounce/DSN, last 24h: `2`
+- SMTP rate-limit, last 24h: `1`
+- spam signal, last 24h: `0`
+
+Because bounce/DSN and rate-limit counts are non-zero, the calendar is safety-blocked until the 24-hour window clears and mail QA is rerun. Warmup sent remains `0`.

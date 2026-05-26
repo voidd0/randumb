@@ -54,3 +54,17 @@ Blocking reasons:
 - Mailcow/Rspamd rate limit `5 / 1m`
 
 External deliverability must not be marked PASS yet. Gmail SMTP acceptance is useful signal, but the pass is blocked by rate-limit and bounce/DSN observations.
+
+## P5 Diagnostic Policy
+
+Updated: 2026-05-26 14:21 IDT
+
+Diagnostic sender hardening:
+
+- daily diagnostic cap is enforced.
+- minute cap is `1` diagnostic per minute.
+- duplicate diagnostics are not sent to inboxes with `last_test_at`.
+- diagnostic SMTP errors are converted into structured `mail_signals`.
+- reports use provider counts and hashes, not raw recipient addresses.
+
+Current decision remains blocked for warmup sending while recent bounce/DSN and SMTP rate-limit signals exist.

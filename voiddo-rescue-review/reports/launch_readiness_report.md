@@ -55,3 +55,24 @@ This is not live outreach ready.
 - Inbox poll: completed, `3` messages seen.
 
 Live outreach remains blocked. Warmup is scheduled as an autonomous low-volume internal/test-recipient calendar.
+
+## P5 Update
+
+Updated: 2026-05-26 14:21 IDT
+
+Decision: `WARMUP_SCHEDULED_NO_OUTREACH`, not live-outreach-ready.
+
+P5 adds a hard pre-send safety gate to every scheduled warmup send. The gate blocks if any bounce/DSN or SMTP rate-limit signal exists in the last 24 hours, if latest mail QA is not PASS, if warmup is paused, if the global worker kill switch is active, if the recipient is suppressed, if sender credentials are unavailable, or if the daily cap is reached.
+
+Current P5 counters:
+
+- approved test inboxes: `7`
+- approved warmup recipients: `7`
+- scheduled warmup messages: `28`
+- warmup sent: `0`
+- live outreach sent: `0`
+- bounce/DSN signals in last 24h: `2`
+- SMTP rate-limit signals in last 24h: `1`
+- spam signals in last 24h: `0`
+
+Next allowed action: wait for the 24-hour bounce/rate-limit window to clear, rerun mail QA, then let the warmup timer proceed through the gate. Cold outreach remains blocked.
