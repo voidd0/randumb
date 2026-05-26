@@ -22,3 +22,20 @@ Generated: 2026-05-26T14:21:21+03:00
 Canonical decision: not live-outreach-ready. Warmup is scheduled but safety-blocked by recent mail signals.
 
 Raw recipient addresses are intentionally omitted.
+
+## P5 Cleanup Update
+
+Generated: 2026-05-26T14:52:52+03:00
+
+- clean review package status: PASS
+- approved test inbox count: 7
+- approved warmup recipient count: 7
+- scheduled warmup count: 28
+- warmup sent count: 0
+- live outreach sent count: 0
+- bounce/DSN count, last 24h: 2
+- rate-limit signal count, last 24h: 1
+- next scheduled warmup send: 2026-05-27 10:15 Asia/Jerusalem
+- launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
+
+The warmup calendar remains scheduled but safety-blocked by recent bounce/DSN and SMTP rate-limit signals.

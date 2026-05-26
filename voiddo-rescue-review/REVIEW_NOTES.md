@@ -1,34 +1,53 @@
-# Vøiddo Rescue P5 Review Notes
+# Vøiddo Rescue P5 Clean Review Notes
 
 Original ZIP path on VPS:
-`/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p5-warmup-safety-2026-05-26.zip`
+`/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p5-clean-review-2026-05-26.zip`
 
 SHA256:
-`753fe3c65c8ad564bca1b1184827be1609e949f98bae5f89f153f00ea5ef8904`
+`d90a1f8e5b7af5d147e259c0a2893ed5578cdc4c5c4b0bf8594b177439384135`
 
 Included under this branch folder:
 `voiddo-rescue-review/`
 
-Excluded from review files:
+Excluded from review files and clean export:
 
 - `.env` and `*.env` except `.env.example`
 - mailbox passwords and runtime secrets
+- private keys
 - `storage/`
+- `exports/`
+- `screenshots/`
 - `logs/`
 - `backups/`
+- `.venv/`
+- `venv/`
+- `.pytest_cache/`
 - `node_modules/`
 - `.next/`
-- `__pycache__/` and `*.pyc`
-- PNG screenshots and runtime visual captures
+- `__pycache__/`
+- `*.pyc`
+- `*.png`
+- `*.log`
 
-Secret scan result:
-No raw secrets, mailbox passwords, `.env`, or personal owner/test addresses are included in the review folder. Findings are limited to environment variable names, `.env.example`, redacted reports, and provider-domain literals used for classification.
+Secret/artifact scan result:
 
-P5 summary:
-Warmup pre-send safety gate, `mail_signals`, diagnostic send caps, owner warmup/signal commands, migration manifest, runtime state report, and 46 passing API tests.
+- `.venv`: absent
+- `.pytest_cache`: absent
+- `__pycache__`: absent
+- `*.pyc`: absent
+- `.env`: absent
+- runtime storage/screenshots/exports/logs: absent
+- raw mailbox passwords: absent
+- private keys: absent
+- owner/test personal addresses: absent
+
+Functional verification:
+
+- API tests: `46 passed`
+- smoke script: PASS
+- API/web/worker/postgres/redis healthy
+- warmup sent: 0
+- live outreach sent: 0
 
 Exact commit SHA:
 Pending until commit is created.
-
-Live activity confirmation:
-Cold outreach sent: 0. Warmup sent: 0. Non-Rescue projects untouched.

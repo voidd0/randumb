@@ -56,3 +56,16 @@ Updated: 2026-05-26 14:21 IDT
 - `SEND OUTREACH` remains high risk: PASS
 
 Live counters after P5: warmup sent `0`, live outreach sent `0`.
+
+## P5 Cleanup Smoke
+
+Updated: 2026-05-26 14:52 IDT
+
+- `docker compose exec -T api python -m pytest -q`: PASS, `46 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS, includes compose config, API compile, worker compile, and pytest `46 passed`
+- API/web/worker/postgres/redis health: PASS
+- warmup calendar still scheduled: 28 rows
+- warmup sent: `0`
+- live outreach sent: `0`
+- recent bounce/DSN still blocks warmup: `2`
+- recent rate-limit still blocks warmup: `1`

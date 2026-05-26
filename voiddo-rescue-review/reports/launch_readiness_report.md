@@ -76,3 +76,18 @@ Current P5 counters:
 - spam signals in last 24h: `0`
 
 Next allowed action: wait for the 24-hour bounce/rate-limit window to clear, rerun mail QA, then let the warmup timer proceed through the gate. Cold outreach remains blocked.
+
+## P5 Cleanup Update
+
+Updated: 2026-05-26 14:52 IDT
+
+Review/export hygiene is now PASS: `.venv`, `.pytest_cache`, `__pycache__`, `*.pyc`, runtime storage, logs, screenshots, `.env`, and private keys are excluded from the clean review package.
+
+Functional state after cleanup:
+
+- tests: `46 passed`
+- smoke: PASS
+- services: API/web/worker/postgres/redis healthy
+- warmup sent: `0`
+- live outreach sent: `0`
+- launch readiness: `WARMUP_SCHEDULED_NO_OUTREACH`
