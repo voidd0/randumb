@@ -1,10 +1,8 @@
 .env.example
 .gitignore
 ARCHIVE_FILELIST.txt
-ARCHIVE_SHA256.txt
 MIGRATIONS.md
 README.md
-REVIEW_NOTES.md
 apps/api/Dockerfile
 apps/api/app/__init__.py
 apps/api/app/audit_strength.py
@@ -83,6 +81,7 @@ apps/api/migrations/024_recipient_resolver_audit.sql
 apps/api/migrations/025_mailer_ops_runs.sql
 apps/api/migrations/026_mailer_ops_run_retention.sql
 apps/api/migrations/027_mailer_digest_reports.sql
+apps/api/migrations/028_mailer_ops_retention_reports.sql
 apps/api/requirements.txt
 apps/api/tests/test_core.py
 apps/api/tests/test_p0_integration.py
@@ -275,8 +274,10 @@ reports/p47_mailer_ops_retention_report_file.md
 reports/p47_next_self_written_tz.md
 reports/p48_mailer_ops_retention_report_admin_metadata.md
 reports/p48_next_self_written_tz.md
+reports/p49_mailer_ops_retention_report_history.md
 reports/p49_next_self_written_tz.md
 reports/p4_deliverability_warmup_day1_report.md
+reports/p50_next_self_written_tz.md
 reports/p5_review_package_hygiene_report.md
 reports/p5_warmup_safety_report.md
 reports/p6_autonomous_mailer_report.md

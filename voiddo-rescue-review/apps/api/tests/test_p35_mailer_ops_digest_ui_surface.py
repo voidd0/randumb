@@ -71,7 +71,7 @@ def test_digest_report_metadata_omits_raw_recipients_and_secrets():
     report = mailer_digest_summary()["digest_agent_report"]
     assert report["raw_recipient_addresses_included"] is False
     assert report["secrets_included"] is False
-    assert "gkorner@" not in str(report)
+    assert "owner-private@" not in str(report)
     assert "SMTP_PASSWORD" not in str(report)
     execute("DELETE FROM mailer_action_queue WHERE id = %s", (run["result_json"]["owner_report_action"]["id"],))
 
@@ -104,7 +104,7 @@ def test_digest_summary_includes_sanitized_history():
     assert history["latest"]["email_sent"] is False
     assert history["raw_recipient_addresses_included"] is False
     assert history["secrets_included"] is False
-    assert "gkorner@" not in str(history)
+    assert "owner-private@" not in str(history)
     execute("DELETE FROM mailer_action_queue WHERE id = %s", (run["result_json"]["owner_report_action"]["id"],))
     execute("DELETE FROM mailer_digest_reports WHERE id = %s", (run["result_json"]["digest_agent_report"]["history_id"],))
 
@@ -161,7 +161,7 @@ def test_digest_history_retention_summary_omits_raw_recipients_and_send_flags():
     assert retention["latest_email_sent"] is False
     assert retention["raw_recipient_addresses_included"] is False
     assert retention["secrets_included"] is False
-    assert "gkorner@" not in str(retention)
+    assert "owner-private@" not in str(retention)
     assert "SMTP_PASSWORD" not in str(retention)
     execute("DELETE FROM mailer_action_queue WHERE id = %s", (run["result_json"]["owner_report_action"]["id"],))
     execute("DELETE FROM mailer_digest_reports WHERE id = %s", (run["result_json"]["digest_agent_report"]["history_id"],))

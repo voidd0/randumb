@@ -315,10 +315,37 @@ def write_mailer_ops_retention_agent_report(agent_run_id: str, retention: dict[s
         "Raw recipient addresses, message bodies, mailbox passwords, and secrets are intentionally omitted.",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    history = execute(
+        """
+        INSERT INTO mailer_ops_retention_reports(
+            agent_run_id,
+            report_path,
+            deleted_synthetic_count,
+            retained_real_count,
+            retained_synthetic_count,
+            send_mail,
+            smtp_called,
+            live_outreach_allowed,
+            raw_recipient_addresses_included,
+            secrets_included
+        )
+        VALUES (%s, %s, %s, %s, %s, false, false, false, false, false)
+        RETURNING id, created_at
+        """,
+        (
+            agent_run_id,
+            str(path),
+            int(retention.get("deleted_count", 0) or 0),
+            int(retention.get("retained_real_count", summary.get("real_count", 0)) or 0),
+            int(summary.get("synthetic_count", 0) or 0),
+        ),
+    )
     return json_safe(
         {
             "path": str(path),
             "agent_run_id": agent_run_id,
+            "history_id": history["id"],
+            "history_created_at": history["created_at"],
             "deleted_synthetic_count": int(retention.get("deleted_count", 0) or 0),
             "retained_real_count": int(retention.get("retained_real_count", summary.get("real_count", 0)) or 0),
             "retained_synthetic_count": int(summary.get("synthetic_count", 0) or 0),

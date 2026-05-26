@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -16,6 +17,16 @@ from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary, runtime
 
 def _rows(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
     return [dict(row) for row in fetch_all(sql, params)]
+
+
+def _redact_mailer_summary(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _redact_mailer_summary(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_mailer_summary(item) for item in value]
+    if isinstance(value, str):
+        return re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", "[redacted-email]", value)
+    return value
 
 
 def mailer_control_room_summary(write_snapshot: bool = False) -> dict[str, Any]:
@@ -67,7 +78,8 @@ def mailer_control_room_summary(write_snapshot: bool = False) -> dict[str, Any]:
     warmup_allowed = not blockers and warmup["scheduled_total"] > 0
     next_action = "wait_until_recent_signal_window_clears_then_recheck_mail_qa" if blockers else "rerun_mail_qa_then_allow_natural_warmup_timer"
     return json_safe(
-        {
+        _redact_mailer_summary(
+            {
             "latest_snapshot": dict(snapshot) if snapshot else {},
             "recent_statuses": recent_statuses,
             "signals": signals,
@@ -79,7 +91,8 @@ def mailer_control_room_summary(write_snapshot: bool = False) -> dict[str, Any]:
             "next_allowed_action": next_action,
             "live_outreach_allowed": False,
             "live_outreach_reason": "live_outreach_requires_separate_final_launch_flag",
-        }
+            }
+        )
     )
 
 
@@ -212,7 +225,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     email_sent = False
     send_decision = "blocked_recent_mail_signals" if blocked else "not_sent_draft_only"
     if send_if_safe and not blocked:
-        send_decision = "ready_but_no_transport_send_in_report_path"
+        send_decision = "not_sent_draft_only"
 
     path = Path(settings.storage_root) / "reports" / "autonomous_owner_status_report.md"
     path.parent.mkdir(parents=True, exist_ok=True)

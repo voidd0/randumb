@@ -1,50 +1,12 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 01:22 IDT
-
-## Source
-
-- Source tree: `/opt/voiddo-rescue`
-- Review folder: `voiddo-rescue-review/`
-- Branch: `voiddo-rescue-mvp-review-20260526-files`
-- Current completed pass: P48 Mailer Ops Retention Report Admin Metadata
-
-## Included
-
-- Application source
-- Docker Compose config
-- Migrations
-- Scripts
-- WordPress plugin source
-- Redacted reports
-- `.env.example`
-- `ARCHIVE_FILELIST.txt`
-- `ARCHIVE_SHA256.txt`
-
-## Excluded
-
-- `.env`, `*.env`, mailbox passwords, private keys, raw secrets
-- `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`
-- `node_modules`, `.next`
-- runtime `storage`, `exports`, `screenshots`, `logs`, `backups`
-- visual QA PNG screenshots
-
-## Secret Scan
-
-Secret and artifact scans are required before every push. P48 scan result: clean.
-
-## Runtime Status
-
+- package: P49 mailer ops retention report history
+- source path: `/opt/voiddo-rescue`
+- excluded: `.env`, `*.env`, mailbox passwords, private keys, storage runtime, screenshots, exports, logs, virtualenv/cache folders, `node_modules`, `.next`, `__pycache__`, `*.pyc`
+- secret scan: PASS in this pass
+- artifact scan: PASS in this pass
+- owner personal email exposure scan: PASS in this pass
 - live outreach sent: `0`
 - warmup sent: `0`
-- retained real mailer ops rows: `1`
-- retained synthetic mailer ops rows: `0`
-- latest retained mailer ops evidence: `digest_history_cleanup:completed:send=false`
-- latest mailer ops retention agent: `completed:0:1:send=false`
-- latest mailer ops retention report: `/app/storage/reports/mailer_ops_retention_agent_report.md`
-- report metadata state: `stored`
-- launch state: `WARMUP_SCHEDULED_NO_OUTREACH`
-
-## Commit
-
-The exact branch commit SHA is returned by `git rev-parse HEAD` after the P48 commit and push.
+- tests: full API `278 passed`; smoke `278 passed` + `ok`; targeted post-redaction regression `47 passed`
+- notes: P49 adds persisted retention report history for the autonomous mailer ops retention agent and keeps no-send/no-secret evidence queryable.

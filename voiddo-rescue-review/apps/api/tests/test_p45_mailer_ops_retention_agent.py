@@ -11,6 +11,10 @@ def _delete_run(run_id: str) -> None:
     execute("DELETE FROM mailer_ops_runs WHERE id = %s", (run_id,))
 
 
+def _delete_retention_history(history_id: str) -> None:
+    execute("DELETE FROM mailer_ops_retention_reports WHERE id = %s", (history_id,))
+
+
 def test_mailer_ops_retention_agent_exists_and_is_no_send():
     run = run_agent("mailer_ops_retention_agent")
     result = run["result_json"]
@@ -83,7 +87,7 @@ def test_ops_summary_exposes_retention_report_metadata_without_send():
     assert report["live_outreach_allowed"] is False
     assert report["raw_recipient_addresses_included"] is False
     assert report["secrets_included"] is False
-    assert "gkorner@" not in str(report)
+    assert "owner-private@" not in str(report)
     assert "SMTP_PASSWORD" not in str(report)
     _delete_run(real["run"]["id"])
 
@@ -106,7 +110,7 @@ def test_mailer_ops_retention_agent_report_omits_raw_recipients_and_secrets():
     report = run["result_json"]["ops_retention_agent_report"]
     text = Path(report["path"]).read_text(encoding="utf-8")
     assert "Raw recipient addresses" in text
-    assert "gkorner@" not in text
+    assert "owner-private@" not in text
     assert "voiddorescue.com" not in text
     assert "SMTP_PASSWORD" not in text
     assert "PADDLE_API_KEY" not in text
@@ -123,3 +127,61 @@ def test_daily_loop_exposes_mailer_ops_retention_report_metadata():
     assert report["send_mail"] is False
     assert report["live_outreach_allowed"] is False
     assert result["live_outreach"] is False
+
+
+def test_mailer_ops_retention_agent_persists_history_row():
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    run = run_agent("mailer_ops_retention_agent")
+    report = run["result_json"]["ops_retention_agent_report"]
+    row = fetch_one("SELECT * FROM mailer_ops_retention_reports WHERE id = %s", (report["history_id"],))
+    assert row is not None
+    assert str(row["agent_run_id"]) == str(run["id"])
+    assert row["report_path"] == report["path"]
+    assert row["deleted_synthetic_count"] == report["deleted_synthetic_count"]
+    assert row["retained_real_count"] == report["retained_real_count"]
+    assert row["retained_synthetic_count"] == report["retained_synthetic_count"]
+    _delete_retention_history(report["history_id"])
+    _delete_run(real["run"]["id"])
+
+
+def test_mailer_ops_retention_history_omits_raw_recipients_and_secrets():
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    run = run_agent("mailer_ops_retention_agent")
+    report = run["result_json"]["ops_retention_agent_report"]
+    row = fetch_one(
+        """
+        SELECT report_path, raw_recipient_addresses_included, secrets_included
+        FROM mailer_ops_retention_reports
+        WHERE id = %s
+        """,
+        (report["history_id"],),
+    )
+    assert row is not None
+    serialized = str(dict(row))
+    assert row["raw_recipient_addresses_included"] is False
+    assert row["secrets_included"] is False
+    assert "owner-private@" not in serialized
+    assert "SMTP_PASSWORD" not in serialized
+    assert "PADDLE_API_KEY" not in serialized
+    _delete_retention_history(report["history_id"])
+    _delete_run(real["run"]["id"])
+
+
+def test_mailer_ops_retention_history_flags_remain_no_send():
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    run = run_agent("mailer_ops_retention_agent")
+    report = run["result_json"]["ops_retention_agent_report"]
+    row = fetch_one(
+        """
+        SELECT send_mail, smtp_called, live_outreach_allowed
+        FROM mailer_ops_retention_reports
+        WHERE id = %s
+        """,
+        (report["history_id"],),
+    )
+    assert row is not None
+    assert row["send_mail"] is False
+    assert row["smtp_called"] is False
+    assert row["live_outreach_allowed"] is False
+    _delete_retention_history(report["history_id"])
+    _delete_run(real["run"]["id"])

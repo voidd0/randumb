@@ -170,7 +170,7 @@ def run_clean_window_recovery(window_hours: int = 24) -> dict[str, Any]:
             VALUES ('blocked_recent_signals', %s, %s, false, %s, %s)
             RETURNING *
             """,
-            (window_hours, latest_mail_qa_decision(), Jsonb(signals), Jsonb({"learning": {"lessons_recorded": learning["lessons_recorded"]}, "policy": "no_send_recovery"})),
+            (window_hours, latest_mail_qa_decision(), Jsonb(json_safe(signals)), Jsonb({"learning": {"lessons_recorded": learning["lessons_recorded"]}, "policy": "no_send_recovery"})),
         )
         return dict(row)
     mail_qa = run_mail_qa(allow_deliverability_send=False)
@@ -190,8 +190,8 @@ def run_clean_window_recovery(window_hours: int = 24) -> dict[str, Any]:
             window_hours,
             mail_qa["decision"],
             repair.get("id") if repair else None,
-            Jsonb(signals),
-            Jsonb({"mail_qa": mail_qa, "spacing_repair": repair, "policy": "no_send_recovery"}),
+            Jsonb(json_safe(signals)),
+            Jsonb(json_safe({"mail_qa": mail_qa, "spacing_repair": repair, "policy": "no_send_recovery"})),
         ),
     )
     return dict(row)

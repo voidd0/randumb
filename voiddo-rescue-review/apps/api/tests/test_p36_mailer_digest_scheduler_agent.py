@@ -73,7 +73,7 @@ def test_mailer_digest_agent_runtime_report_omits_raw_recipients():
     run = run_agent("mailer_digest_agent")
     text = Path(run["result_json"]["digest_agent_report"]["path"]).read_text(encoding="utf-8")
     assert "Raw recipient addresses" in text
-    assert "gkorner@" not in text
+    assert "owner-private@" not in text
     assert "voiddorescue.com" not in text
     assert "SMTP_PASSWORD" not in text
     _cleanup(run["result_json"]["owner_report_action"]["id"])
@@ -115,7 +115,7 @@ def test_mailer_digest_agent_persists_history_row():
 def test_mailer_digest_history_omits_raw_recipients_and_secrets():
     run = run_agent("mailer_digest_agent")
     row = fetch_one("SELECT report_path, blockers_json FROM mailer_digest_reports WHERE id = %s", (run["result_json"]["digest_agent_report"]["history_id"],))
-    assert "gkorner@" not in str(row)
+    assert "owner-private@" not in str(row)
     assert "SMTP_PASSWORD" not in str(row)
     assert "voiddorescue.com" not in str(row)
     _cleanup(run["result_json"]["owner_report_action"]["id"])

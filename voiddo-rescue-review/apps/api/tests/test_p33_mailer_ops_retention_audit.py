@@ -72,7 +72,7 @@ def test_digest_history_cleanup_ops_action_is_sanitized_no_send():
     assert result["result"]["smtp_called"] is False
     assert result["result"]["live_outreach_allowed"] is False
     assert result["result"]["raw_recipient_addresses_included"] is False
-    assert "gkorner@" not in str(result)
+    assert "owner-private@" not in str(result)
     assert "SMTP_PASSWORD" not in str(result)
     execute("DELETE FROM mailer_ops_runs WHERE id = %s", (result["run"]["id"],))
 
