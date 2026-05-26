@@ -15,7 +15,7 @@ from .mailer_control_room import cleanup_mailer_digest_history, write_mailer_dig
 from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mailer_closed_loop import run_mailer_closed_loop
-from .mailer_ops_actions import cleanup_mailer_ops_synthetic_history
+from .mailer_ops_actions import cleanup_mailer_ops_synthetic_history, write_mailer_ops_retention_agent_report
 from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
@@ -48,6 +48,9 @@ def _record_agent(agent: str, func: Callable[[], dict[str, Any]]) -> dict[str, A
         if agent == "mailer_digest_agent":
             digest_report = write_mailer_digest_agent_report(str(row["id"]), result)
             result["digest_agent_report"] = digest_report
+        if agent == "mailer_ops_retention_agent":
+            retention_report = write_mailer_ops_retention_agent_report(str(row["id"]), result)
+            result["ops_retention_agent_report"] = retention_report
         done = execute(
             "UPDATE agent_runs SET status = 'completed', completed_at = now(), result_json = %s WHERE id = %s RETURNING *",
             (Jsonb(result), row["id"]),

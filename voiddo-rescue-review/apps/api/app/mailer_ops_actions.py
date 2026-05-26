@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from psycopg.types.json import Jsonb
 
 from .customer_mail_simulation import run_customer_mail_simulation
+from .config import get_settings
 from .db import execute, fetch_all, fetch_one
 from .mailer_action_queue import enqueue_mailer_action, process_mailer_action_queue, transport_dry_run
 from .p0 import json_safe
@@ -264,5 +267,47 @@ def cleanup_mailer_ops_synthetic_history() -> dict[str, Any]:
             "smtp_called": False,
             "live_outreach_allowed": False,
             "raw_recipient_addresses_included": False,
+        }
+    )
+
+
+def write_mailer_ops_retention_agent_report(agent_run_id: str, retention: dict[str, Any]) -> dict[str, Any]:
+    settings = get_settings()
+    summary = mailer_ops_action_summary()
+    latest_real = summary.get("latest_real") or {}
+    path = Path(settings.storage_root) / "reports" / "mailer_ops_retention_agent_report.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "# Vøiddo Rescue Mailer Ops Retention Agent Report",
+        "",
+        f"- generated_at: {datetime.now(timezone.utc).isoformat()}",
+        f"- agent_run_id: `{agent_run_id}`",
+        f"- deleted_synthetic_count: `{retention.get('deleted_count', 0)}`",
+        f"- retained_real_count: `{retention.get('retained_real_count', summary.get('real_count', 0))}`",
+        f"- retained_synthetic_count: `{summary.get('synthetic_count', 0)}`",
+        f"- latest_retained_real_action: `{latest_real.get('action', 'none')}`",
+        f"- latest_retained_real_status: `{latest_real.get('status', 'none')}`",
+        f"- send_mail: `{str(bool(retention.get('send_mail'))).lower()}`",
+        f"- smtp_called: `{str(bool(retention.get('smtp_called'))).lower()}`",
+        f"- live_outreach_allowed: `{str(bool(retention.get('live_outreach_allowed'))).lower()}`",
+        f"- raw_recipient_addresses_included: `{str(bool(retention.get('raw_recipient_addresses_included'))).lower()}`",
+        "",
+        "Raw recipient addresses, message bodies, mailbox passwords, and secrets are intentionally omitted.",
+    ]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return json_safe(
+        {
+            "path": str(path),
+            "agent_run_id": agent_run_id,
+            "deleted_synthetic_count": int(retention.get("deleted_count", 0) or 0),
+            "retained_real_count": int(retention.get("retained_real_count", summary.get("real_count", 0)) or 0),
+            "retained_synthetic_count": int(summary.get("synthetic_count", 0) or 0),
+            "latest_retained_real_action": latest_real.get("action", "none"),
+            "latest_retained_real_status": latest_real.get("status", "none"),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
         }
     )

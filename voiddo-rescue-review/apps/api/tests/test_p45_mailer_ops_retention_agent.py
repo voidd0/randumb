@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
 from app.mailer_ops_actions import cleanup_mailer_ops_synthetic_history, mailer_ops_action_summary, run_mailer_ops_action
@@ -66,3 +68,40 @@ def test_ops_summary_exposes_retention_agent_evidence_without_send():
     assert summary["latest_retention_agent"]["raw_recipient_addresses_included"] is False
     assert summary["retention_agent_runs"] >= 1
     _delete_run(real["run"]["id"])
+
+
+def test_mailer_ops_retention_agent_writes_runtime_report_file():
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    run = run_agent("mailer_ops_retention_agent")
+    report = run["result_json"]["ops_retention_agent_report"]
+    assert report["agent_run_id"] == str(run["id"])
+    assert report["send_mail"] is False
+    assert report["smtp_called"] is False
+    assert report["live_outreach_allowed"] is False
+    assert Path(report["path"]).exists()
+    _delete_run(real["run"]["id"])
+
+
+def test_mailer_ops_retention_agent_report_omits_raw_recipients_and_secrets():
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    run = run_agent("mailer_ops_retention_agent")
+    report = run["result_json"]["ops_retention_agent_report"]
+    text = Path(report["path"]).read_text(encoding="utf-8")
+    assert "Raw recipient addresses" in text
+    assert "gkorner@" not in text
+    assert "voiddorescue.com" not in text
+    assert "SMTP_PASSWORD" not in text
+    assert "PADDLE_API_KEY" not in text
+    assert report["raw_recipient_addresses_included"] is False
+    assert report["secrets_included"] is False
+    _delete_run(real["run"]["id"])
+
+
+def test_daily_loop_exposes_mailer_ops_retention_report_metadata():
+    result = run_daily_loop()
+    retention_run = [item for item in result["runs"] if item["agent"] == "mailer_ops_retention_agent"][0]
+    report = retention_run["result_json"]["ops_retention_agent_report"]
+    assert Path(report["path"]).exists()
+    assert report["send_mail"] is False
+    assert report["live_outreach_allowed"] is False
+    assert result["live_outreach"] is False

@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 01:06 IDT
+Generated: 2026-05-27 01:13 IDT
 
 ## Decision
 
@@ -33,6 +33,7 @@ P43 added digest history cleanup to persisted mailer ops evidence.
 P44 exposed digest history cleanup as a protected admin Mailer Ops Control and verified that the latest ops list shows the retained no-send cleanup action.
 P45 added `mailer_ops_retention_agent` to the autonomous daily loop so synthetic ops rows are cleaned automatically while real no-send evidence is retained.
 P46 exposed autonomous mailer ops retention evidence in the protected admin dashboard, including retained synthetic rows, latest retained real action, latest retention agent status, cleanup count, retained real count, and no-send/privacy state.
+P47 added a dedicated runtime report file for `mailer_ops_retention_agent`.
 
 ## Passed Gates
 
@@ -69,11 +70,12 @@ P46 exposed autonomous mailer ops retention evidence in the protected admin dash
 - mailer digest retention admin visibility: implemented and protected
 - mailer ops retention agent evidence: implemented
 - mailer ops retention admin summary: implemented and protected
+- mailer ops retention report file: implemented
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: Playwright/axe/pa11y PASS
-- API tests: `271 passed`
+- API tests: `274 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -95,11 +97,12 @@ P46 exposed autonomous mailer ops retention evidence in the protected admin dash
 - ops action system events after test cleanup: retained no-send admin evidence only
 - mailer ops run rows retained: `1`
 - mailer ops synthetic rows retained: `0`
-- mailer ops retention agent runs: `31`
+- mailer ops retention agent runs: `54`
 - latest mailer ops retention agent: `completed:0:1:send=false`
+- latest mailer ops retention report: `/app/storage/reports/mailer_ops_retention_agent_report.md`
 - latest retained ops action: `digest_history_cleanup:completed:send=false`
 - digest report history rows: `2`
 
 ## Next Exact Action
 
-Continue the self-written build cycle with `P47 Mailer Ops Retention Report File`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
+Continue the self-written build cycle with `P48 Mailer Ops Retention Report Admin Metadata`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
