@@ -1,17 +1,18 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 00:19 IDT
+Generated: 2026-05-27 00:28 IDT
 
 ## Scope
 
 This review tree contains the Vøiddo Rescue MVP source tree and redacted reports for branch `voiddo-rescue-mvp-review-20260526-files`.
 
-## P40 Update
+## P41 Update
 
-- Protected admin Daily Digest Evidence now shows sanitized digest history count and latest no-send state.
-- No raw recipients, owner personal address, message bodies, secrets, or mailbox passwords are exposed.
-- Full smoke/API suite: `254 passed`.
-- Huanshu/Playwright/axe/pa11y authenticated admin visual QA: PASS.
+- Added sanitized digest history retention summary and cleanup guard.
+- Added protected no-send endpoint `POST /admin/mailer/digest-history/cleanup`.
+- Cleanup keeps the newest 90 digest rows and does not touch action queue, send ledger, recipient resolver audit, warmup, outreach, or SMTP.
+- Focused digest/retention tests: `24 passed`.
+- Full smoke/API suite: `258 passed`.
 - Live outreach sent: `0`.
 - Warmup sent: `0`.
 

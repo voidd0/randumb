@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-27 00:18 IDT
+Generated: 2026-05-27 00:27 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `254 passed`
+- API tests: `258 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -106,6 +106,10 @@ PASS
 - digest history omits raw recipients and secrets: PASS
 - digest summary includes sanitized history: PASS
 - admin digest history counter visible: PASS
+- digest history cleanup keeps newest rows: PASS
+- digest history cleanup preserves action queue and send ledger: PASS
+- digest history retention summary omits raw recipients and secrets: PASS
+- digest history cleanup endpoint requires auth and remains no-send: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

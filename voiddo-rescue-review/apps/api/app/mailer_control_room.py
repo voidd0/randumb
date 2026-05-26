@@ -190,6 +190,7 @@ def mailer_digest_summary() -> dict[str, Any]:
             "digest_agent_history": {
                 "count": int(digest_history_count["count"]) if digest_history_count else 0,
                 "latest": dict(digest_history_latest) if digest_history_latest else None,
+                "retention": mailer_digest_retention_summary(),
                 "raw_recipient_addresses_included": False,
                 "secrets_included": False,
             },
@@ -345,3 +346,69 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
     digest["history_id"] = str(row["id"])
     digest["history_created_at"] = row["created_at"].isoformat()
     return digest
+
+
+def mailer_digest_retention_summary() -> dict[str, Any]:
+    summary = fetch_one(
+        """
+        SELECT count(*) AS total_rows,
+               count(*) FILTER (WHERE created_at > now() - interval '24 hours') AS rows_last_24h,
+               min(created_at) AS oldest_retained_at,
+               max(created_at) AS latest_retained_at
+        FROM mailer_digest_reports
+        """
+    )
+    latest = fetch_one(
+        """
+        SELECT email_sent, warmup_sent_count, live_outreach_sent_count, created_at
+        FROM mailer_digest_reports
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    return json_safe(
+        {
+            "total_rows": int(summary["total_rows"]) if summary else 0,
+            "rows_last_24h": int(summary["rows_last_24h"]) if summary else 0,
+            "oldest_retained_at": summary["oldest_retained_at"] if summary else None,
+            "latest_retained_at": summary["latest_retained_at"] if summary else None,
+            "latest_email_sent": bool(latest["email_sent"]) if latest else False,
+            "latest_warmup_sent_count": int(latest["warmup_sent_count"]) if latest else 0,
+            "latest_live_outreach_sent_count": int(latest["live_outreach_sent_count"]) if latest else 0,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )
+
+
+def cleanup_mailer_digest_history(keep: int = 90) -> dict[str, Any]:
+    keep = max(1, int(keep))
+    before = mailer_digest_retention_summary()
+    deleted = execute(
+        """
+        WITH retained AS (
+            SELECT id
+            FROM mailer_digest_reports
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s
+        ),
+        removed AS (
+            DELETE FROM mailer_digest_reports
+            WHERE id NOT IN (SELECT id FROM retained)
+            RETURNING id
+        )
+        SELECT count(*) AS deleted_count FROM removed
+        """,
+        (keep,),
+    )
+    after = mailer_digest_retention_summary()
+    return {
+        "keep": keep,
+        "deleted_count": int(deleted["deleted_count"]) if deleted else 0,
+        "before": before,
+        "after": after,
+        "send_mail": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }

@@ -5,8 +5,8 @@ import os
 from fastapi.testclient import TestClient
 
 from app.autonomous_agents import run_agent
-from app.db import execute
-from app.mailer_control_room import mailer_digest_summary, write_owner_status_report
+from app.db import execute, fetch_one
+from app.mailer_control_room import cleanup_mailer_digest_history, mailer_digest_summary, write_owner_status_report
 from app.main import app
 
 
@@ -107,3 +107,71 @@ def test_digest_summary_includes_sanitized_history():
     assert "gkorner@" not in str(history)
     execute("DELETE FROM mailer_action_queue WHERE id = %s", (run["result_json"]["owner_report_action"]["id"],))
     execute("DELETE FROM mailer_digest_reports WHERE id = %s", (run["result_json"]["digest_agent_report"]["history_id"],))
+
+
+def test_digest_history_cleanup_keeps_newest_rows():
+    execute("DELETE FROM mailer_digest_reports WHERE report_path LIKE %s", ("%p41-retention-%",))
+    execute(
+        """
+        INSERT INTO mailer_digest_reports(
+            report_path, email_sent, warmup_sent_count, live_outreach_sent_count,
+            bounce_or_dsn_count_24h, rate_limit_signal_count_24h, blockers_json, created_at
+        )
+        SELECT '/app/storage/reports/p41-retention-' || gs::text || '.md',
+               false, 0, 0, 0, 0, '[]'::jsonb, now() - (gs || ' minutes')::interval
+        FROM generate_series(1, 95) AS gs
+        """
+    )
+    result = cleanup_mailer_digest_history(90)
+    rows = fetch_one("SELECT count(*) AS count FROM mailer_digest_reports WHERE report_path LIKE %s", ("%p41-retention-%",))
+    assert result["deleted_count"] >= 5
+    assert rows["count"] <= 90
+    assert result["after"]["total_rows"] <= 90
+    execute("DELETE FROM mailer_digest_reports WHERE report_path LIKE %s", ("%p41-retention-%",))
+
+
+def test_digest_history_cleanup_never_touches_action_queue_or_send_ledger():
+    action = execute(
+        """
+        INSERT INTO mailer_action_queue(action_type, risk_level, status, payload_json)
+        VALUES ('owner_report', 'SAFE_AUTO', 'queued', '{"source":"p41-retention-test"}'::jsonb)
+        RETURNING id
+        """
+    )
+    execute(
+        """
+        INSERT INTO mailer_send_ledger(action_id, action_type, mailbox, status)
+        VALUES (%s, 'owner_report', 'support@voiddorescue.com', 'transport_blocked')
+        """,
+        (action["id"],),
+    )
+    before_queue = fetch_one("SELECT count(*) AS count FROM mailer_action_queue WHERE id = %s", (action["id"],))["count"]
+    before_ledger = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger WHERE action_id = %s", (action["id"],))["count"]
+    cleanup_mailer_digest_history(90)
+    after_queue = fetch_one("SELECT count(*) AS count FROM mailer_action_queue WHERE id = %s", (action["id"],))["count"]
+    after_ledger = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger WHERE action_id = %s", (action["id"],))["count"]
+    assert before_queue == after_queue == 1
+    assert before_ledger == after_ledger == 1
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (action["id"],))
+
+
+def test_digest_history_retention_summary_omits_raw_recipients_and_send_flags():
+    run = run_agent("mailer_digest_agent")
+    retention = mailer_digest_summary()["digest_agent_history"]["retention"]
+    assert retention["latest_email_sent"] is False
+    assert retention["raw_recipient_addresses_included"] is False
+    assert retention["secrets_included"] is False
+    assert "gkorner@" not in str(retention)
+    assert "SMTP_PASSWORD" not in str(retention)
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (run["result_json"]["owner_report_action"]["id"],))
+    execute("DELETE FROM mailer_digest_reports WHERE id = %s", (run["result_json"]["digest_agent_report"]["history_id"],))
+
+
+def test_digest_history_cleanup_endpoint_requires_auth_and_is_no_send():
+    assert client.post("/admin/mailer/digest-history/cleanup", json={"keep": 90}).status_code == 401
+    response = client.post("/admin/mailer/digest-history/cleanup", json={"keep": 90}, headers=admin_headers())
+    assert response.status_code == 200
+    cleanup = response.json()["cleanup"]
+    assert cleanup["send_mail"] is False
+    assert cleanup["live_outreach_allowed"] is False
+    assert cleanup["raw_recipient_addresses_included"] is False
