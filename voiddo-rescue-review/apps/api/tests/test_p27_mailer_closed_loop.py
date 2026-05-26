@@ -97,10 +97,10 @@ def test_customer_mail_resolver_missing_blocks_and_records_ledger(monkeypatch):
         result = send_customer_mail(10)
         sent = next(item for item in result["actions"] if item["id"] == action["id"])
         assert sent["status"] == "transport_blocked"
-        assert "recipient_resolver_missing" in sent["result_json"]["blockers"]
+        assert "customer_id_invalid" in sent["result_json"]["blockers"]
         ledger = fetch_one("SELECT status, result_json FROM mailer_send_ledger WHERE action_id = %s", (action["id"],))
         assert ledger["status"] == "transport_blocked"
-        assert "recipient_resolver_missing" in ledger["result_json"]["blockers"]
+        assert "customer_id_invalid" in ledger["result_json"]["blockers"]
     finally:
         _cleanup(marker)
 

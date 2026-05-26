@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import ssl
 import smtplib
+import uuid
 from email.message import EmailMessage
 from email.utils import make_msgid
 from typing import Any
@@ -77,6 +78,42 @@ def record_send_ledger(action: dict[str, Any], status: str, gate: dict[str, Any]
         ),
     )
     return json_safe(dict(row))
+
+
+def _audit_recipient_resolution(action: dict[str, Any], customer_id: str | None, recipient_hash: str, status: str, reason: str) -> None:
+    execute(
+        """
+        INSERT INTO recipient_resolver_audit(action_id, customer_id, recipient_hash, status, reason)
+        VALUES (%s, NULLIF(%s, '')::uuid, %s, %s, %s)
+        """,
+        (action["id"], customer_id or "", recipient_hash, status, reason),
+    )
+
+
+def resolve_customer_recipient(action: dict[str, Any]) -> dict[str, Any]:
+    payload = action.get("payload_json") or {}
+    customer_id = str(payload.get("customer_id") or "")
+    if not customer_id:
+        _audit_recipient_resolution(action, None, action.get("recipient_hash", ""), "blocked", "customer_id_missing")
+        return {"resolved": False, "blocker": "customer_id_missing", "recipient_hash": action.get("recipient_hash", "")}
+    try:
+        uuid.UUID(customer_id)
+    except ValueError:
+        _audit_recipient_resolution(action, None, action.get("recipient_hash", ""), "blocked", "customer_id_invalid")
+        return {"resolved": False, "blocker": "customer_id_invalid", "recipient_hash": action.get("recipient_hash", "")}
+    customer = fetch_one("SELECT id, email FROM customers WHERE id = %s", (customer_id,))
+    if not customer:
+        _audit_recipient_resolution(action, None, action.get("recipient_hash", ""), "blocked", "customer_not_found")
+        return {"resolved": False, "blocker": "customer_not_found", "recipient_hash": action.get("recipient_hash", "")}
+    email = str(customer["email"]).strip().lower()
+    domain = email.rsplit("@", 1)[-1] if "@" in email else ""
+    recipient_hash = _hash_recipient(email)
+    suppressed = fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s) OR lower(domain) = lower(%s)", (email, domain))
+    if suppressed:
+        _audit_recipient_resolution(action, customer_id, recipient_hash, "blocked", "recipient_suppressed")
+        return {"resolved": False, "blocker": "recipient_suppressed", "recipient_hash": recipient_hash}
+    _audit_recipient_resolution(action, customer_id, recipient_hash, "resolved", "customer_email_resolved")
+    return {"resolved": True, "recipient_email": email, "recipient_hash": recipient_hash}
 
 
 def enqueue_mailer_action(payload: dict[str, Any]) -> dict[str, Any]:
@@ -305,9 +342,10 @@ def _real_send_gate(action: dict[str, Any], preview: dict[str, Any] | None = Non
 
 def send_customer_mail_via_smtp(action: dict[str, Any], preview: dict[str, Any]) -> dict[str, Any]:
     settings = get_settings()
-    recipient = str((action.get("payload_json") or {}).get("recipient_email", "")).strip()
-    if not recipient:
-        return {"sent": False, "smtp_called": False, "blocker": "recipient_resolver_missing"}
+    resolved = resolve_customer_recipient(action)
+    if not resolved.get("resolved"):
+        return {"sent": False, "smtp_called": False, "blocker": resolved.get("blocker", "recipient_resolver_missing")}
+    recipient = str(resolved["recipient_email"])
     username, password, from_addr = smtp_credentials_for_sender(settings, str(action.get("mailbox") or settings.smtp_from_default))
     if not username or not password:
         return {"sent": False, "smtp_called": False, "blocker": "smtp_credentials_missing"}

@@ -1,33 +1,30 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 22:01 IDT
+Generated: 2026-05-26 22:12 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - target folder: `voiddo-rescue-review/`
-- file count after manifest regeneration: `259`
+- file count after manifest regeneration: `263`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## P27 Summary
+## P28 Summary
 
-- Added `023_mailer_closed_loop.sql`.
-- Added `idempotency_key` for customer mail queue dedupe.
-- Added `mailer_send_ledger` for attempted, blocked, failed, and sent customer mail actions.
-- Added protected closed-loop endpoints:
-  - `GET /admin/mailer/closed-loop`
-  - `POST /admin/mailer/closed-loop/run`
-- Added `autonomous_mailer_executor_agent` to the agent registry and daily loop.
-- Closed-loop executor processes queued actions, applies customer transport gates, records ledger evidence, summarizes owner/inbound state, and writes a private runtime report.
+- Added migration `024_recipient_resolver_audit.sql`.
+- Added private customer recipient resolver boundary.
+- Customer email is resolved from the private `customers` table only inside the transport path.
+- Resolver audit stores hash/status/reason only.
+- Transport now blocks cleanly on missing, invalid, unknown, or suppressed customers.
 
 ## Verification
 
-- focused P26-P27 tests: `12 passed`
-- full API tests: `202 passed`
+- focused P27-P28 tests: `11 passed`
+- full API tests: `207 passed`
 - smoke script: PASS
 - docker compose config: PASS
 - Docker services: API/web/worker/postgres/redis healthy
-- migration `023_mailer_closed_loop.sql`: applied
+- migration `024_recipient_resolver_audit.sql`: applied
 - live outreach sent: `0`
 - warmup sent: `0`
 - real customer SMTP sends: `0`
@@ -42,4 +39,4 @@ Secret/artifact scan is run before push/export. No secrets, private keys, raw ma
 
 ## Notes
 
-This package is still not launch-ready. Real customer mail, warmup, auto-replies, and cold outreach remain blocked by default until explicit flags are enabled and runtime mail risk signals clear.
+This package is still not launch-ready. Recipient resolution is now available for future customer mail transport, but real sends remain blocked by flags and recent mail-signal gates.

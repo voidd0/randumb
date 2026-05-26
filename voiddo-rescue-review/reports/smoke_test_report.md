@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 22:01 IDT
+Generated: 2026-05-26 22:12 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `202 passed`
+- API tests: `207 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -54,6 +54,11 @@ PASS
 - closed-loop executor records agent run: PASS
 - closed-loop summary and endpoint omit raw recipients: PASS
 - closed-loop endpoint requires auth: PASS
+- recipient resolver returns customer email only inside transport boundary: PASS
+- missing customer blocks transport: PASS
+- suppressed customer blocks transport: PASS
+- resolver audit omits raw customer email: PASS
+- closed-loop default flags keep customer mail unsent: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 
