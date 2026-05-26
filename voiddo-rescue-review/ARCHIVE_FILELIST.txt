@@ -28,6 +28,7 @@ apps/api/app/lead_scoring.py
 apps/api/app/mail_recovery.py
 apps/api/app/mailer_autonomy.py
 apps/api/app/mailer_control.py
+apps/api/app/mailer_control_room.py
 apps/api/app/mailer_readiness.py
 apps/api/app/mailer_throttle.py
 apps/api/app/main.py
@@ -75,6 +76,7 @@ apps/api/tests/test_p13_mailer_autonomy.py
 apps/api/tests/test_p14_customer_reply_journey.py
 apps/api/tests/test_p15_customer_access_monitoring.py
 apps/api/tests/test_p16_monitoring_scheduler_customer_ui.py
+apps/api/tests/test_p17_mailer_control_room.py
 apps/api/tests/test_p1_launch_gate.py
 apps/api/tests/test_p5_warmup_safety.py
 apps/api/tests/test_p6_self_operating.py
@@ -82,8 +84,8 @@ apps/api/tests/test_p7_revenue_simulation.py
 apps/api/tests/test_p8_quality_language.py
 apps/api/tests/test_p9_campaign_mailer_control.py
 apps/api/tests/test_production_autonomy.py
-apps/web/.lighthouseci/lhr-1779814352235.html
-apps/web/.lighthouseci/lhr-1779814352235.json
+apps/web/.lighthouseci/lhr-1779815277426.html
+apps/web/.lighthouseci/lhr-1779815277426.json
 apps/web/Dockerfile
 apps/web/app/admin/page.tsx
 apps/web/app/api/health/route.ts
@@ -129,6 +131,7 @@ docker-compose.yml
 packages/shared/outreach-template.schema.json
 reports/autonomous_agents_report.md
 reports/autonomous_inbox_and_quality_policy.md
+reports/autonomous_owner_status_report.md
 reports/blockers_report.md
 reports/checkout_scenario_report.md
 reports/customer_onboarding_fix_workflow_report.md
@@ -167,7 +170,9 @@ reports/p15_customer_token_monitoring_report.md
 reports/p15_next_self_written_tz.md
 reports/p16_monitoring_scheduler_customer_ui_report.md
 reports/p16_next_self_written_tz.md
+reports/p17_mailer_control_room_monitoring_report.md
 reports/p17_next_self_written_tz.md
+reports/p18_next_self_written_tz.md
 reports/p1_launch_gate_fix_report.md
 reports/p2_mail_checkout_warmup_report.md
 reports/p3_checkout_deliverability_warmup_report.md

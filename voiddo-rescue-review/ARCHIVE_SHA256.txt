@@ -1,6 +1,6 @@
 source_tree: /opt/voiddo-rescue
 review_folder: voiddo-rescue-review/
-generated_at: 2026-05-26 19:55 IDT
-zip_path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p16-monitoring-scheduler-customer-ui-2026-05-26.zip
-zip_sha256_initial: 04be7baae7f9f0b178c375129f7fc10358fcaab6b03e9cf3ce0b64e507b815e1
+generated_at: 2026-05-26 20:09 IDT
+zip_path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p17-mailer-control-room-2026-05-26.zip
+zip_sha256_initial: 50d3a55e05d11c4ef855f283895bda567a5d98408b875f4114a40e78f1908dd2
 package: clean source tree export, no runtime artifacts

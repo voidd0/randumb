@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 19:55 IDT
+Generated: 2026-05-26 20:09 IDT
 
 ## Result
 
@@ -8,26 +8,18 @@ PASS
 
 ## Test Results
 
-- API tests: `144 passed`
+- API tests: `150 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
 - Docker services: healthy
 
-## P16 Coverage
+## P17 Coverage
 
-- monitoring scheduler tests: PASS
-- customer token dashboard API tests: PASS
-- sanitized customer token payload tests: PASS
-- admin monitoring due endpoint auth tests: PASS
-
-## Visual QA Results
-
-- Huanshu local adapter: PASS
-- `axe-core-playwright`: PASS
-- `pa11y`: PASS
-- `pixelmatch`: PASS
-- `lighthouse-ci`: PASS_WITH_WARNINGS, no blocker
+- mailer control-room auth and blocker tests: PASS
+- monitoring summary auth/no-send tests: PASS
+- owner status report no-send test: PASS
+- clean-window recovery no-send test: PASS
 
 ## Safety Counters
 

@@ -48,6 +48,7 @@ from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_au
 from .mailer_control import evaluate_outbound_message
 from .mailer_readiness import mailbox_health_score, run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
+from .mailer_control_room import mailer_control_room_summary, monitoring_control_room_summary, write_owner_status_report
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
@@ -527,6 +528,17 @@ def mailer_template_qa_run():
     return {"ok": True, "template_qa": email_template_autonomy_qa()}
 
 
+@app.get("/admin/mailer/control-room", dependencies=[Depends(require_admin)])
+def mailer_control_room_get():
+    return {"ok": True, "control_room": mailer_control_room_summary()}
+
+
+@app.post("/admin/mailer/owner-status-report", dependencies=[Depends(require_admin)])
+async def mailer_owner_status_report(request: Request):
+    payload = await request.json()
+    return {"ok": True, "report": write_owner_status_report(bool(payload.get("send_if_safe", False)))}
+
+
 @app.get("/admin/customers/{customer_id}/journey", dependencies=[Depends(require_admin)])
 def customer_journey_get(customer_id: str):
     return {"ok": True, "journey": customer_journey_snapshot(customer_id=customer_id)}
@@ -555,6 +567,11 @@ async def monitoring_target_create(customer_id: str, request: Request):
 async def monitoring_due_run(request: Request):
     payload = await request.json()
     return {"ok": True, "result": process_due_monitoring_targets(int(payload.get("limit", 5)), bool(payload.get("dry_run", True)))}
+
+
+@app.get("/admin/monitoring/summary", dependencies=[Depends(require_admin)])
+def monitoring_summary_get():
+    return {"ok": True, "summary": monitoring_control_room_summary()}
 
 
 @app.post("/admin/monitoring/{target_id}/run", dependencies=[Depends(require_admin)])

@@ -1,6 +1,6 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-26 19:55 IDT
+Generated: 2026-05-26 20:09 IDT
 
 ## Canonical Gate
 
@@ -23,10 +23,6 @@ Huanshu local adapter remains the canonical visual gate for Rescue.
 - `pixelmatch`: PASS
 - `lighthouse-ci`: PASS_WITH_WARNINGS, no blocker
 
-## P16 Fix
+## P17 Notes
 
-Huanshu initially blocked the token dashboard because the CTA was not visible above the fold on mobile. The customer dashboard hero was tightened and rechecked to PASS.
-
-## Decision
-
-PASS for P16 visual gate. Blocking visual issues: `0`.
+The updated admin control room was screenshot-tested with auth headers. Blocking visual issues: `0`.

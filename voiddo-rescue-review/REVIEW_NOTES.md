@@ -1,10 +1,10 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 19:55 IDT
+Generated: 2026-05-26 20:09 IDT
 
 ## Scope
 
-This review tree contains the Vøiddo Rescue MVP source tree after P16 monitoring scheduler and customer-token dashboard work.
+This review tree contains the Vøiddo Rescue source tree after P17 mailer autonomy control-room and monitoring evidence work.
 
 ## Included
 
@@ -24,10 +24,11 @@ This review tree contains the Vøiddo Rescue MVP source tree after P16 monitorin
 
 ## Verification
 
-- API tests: `144 passed`
+- API tests: `150 passed`
 - smoke: PASS
-- Huanshu: PASS, including token dashboard and admin-auth screenshots
+- Huanshu: PASS, including updated authenticated admin control room
 - extra design/QA plugins: PASS or non-blocking warning; blockers `0`
+- owner status report email_sent: `false`
 - live outreach sent: `0`
 - warmup sent: `0`
 
@@ -39,8 +40,8 @@ This review tree contains the Vøiddo Rescue MVP source tree after P16 monitorin
 
 No raw secrets are intentionally included. `.env.example` is included as a template only.
 
-## P16 Export
+## P17 Export
 
-- zip path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p16-monitoring-scheduler-customer-ui-2026-05-26.zip
-- initial zip SHA256 before metadata refresh: 04be7baae7f9f0b178c375129f7fc10358fcaab6b03e9cf3ce0b64e507b815e1
-- branch before commit: 4329e362a878965b069400e3ba43d1a812a9d437
+- zip path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p17-mailer-control-room-2026-05-26.zip
+- initial zip SHA256 before metadata refresh: 50d3a55e05d11c4ef855f283895bda567a5d98408b875f4114a40e78f1908dd2
+- branch before commit: 26bb7d31e30e2cbd61f0106fbca165696a0b93d2

@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 19:55 IDT
+Generated: 2026-05-26 20:09 IDT
 
 ## Canonical Latest State
 
@@ -18,22 +18,20 @@ Generated: 2026-05-26 19:55 IDT
 - SMTP rate-limit signal count, last 24h: `1`
 - launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-## Customer And Monitoring
+## Customer, Monitoring, And Mailer Autonomy
 
-- customer journey snapshots: implemented
-- customer access token table: implemented
-- token dashboard API: implemented and sanitized
-- token dashboard web route: implemented at `/customer/dashboard/[token]`
-- monitoring targets: implemented
-- monitoring runs: implemented
+- customer token dashboard web route: implemented and sanitized
 - monitoring due scheduler: implemented and kill-switch/scanner-pause gated
-- monitoring failure handling: system event + review task
+- monitoring summary endpoint: implemented
+- mailer control-room endpoint: implemented
+- owner status report endpoint: implemented, file-only under current mail blockers
+- admin dashboard: shows mailer signals, lessons, clean-window recovery, monitoring evidence, and warmup calendar evidence
 
 ## Verification
 
-- API tests: `144 passed`
+- API tests: `150 passed`
 - smoke test: PASS
-- Huanshu local adapter: PASS including token dashboard and admin-auth screenshots
+- Huanshu local adapter: PASS including admin control room
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
 - API/web/worker/postgres/redis: healthy
 

@@ -16,12 +16,22 @@ export default async function AdminPage() {
   const requestHeaders = await headers();
   const authorization = requestHeaders.get("authorization") || "";
   const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
+  const mailerData = await fetchJson("/admin/mailer/control-room", authorization ? { Authorization: authorization } : {});
+  const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
+  const mailer = mailerData?.control_room || {};
+  const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
   const emails = metrics.emails || {};
   const switches = metrics.kill_switches || {};
   const latestMailer = metrics.latest_mailer_status || {};
+  const mailerSignals = mailer.signals || {};
+  const mailerWarmup = mailer.warmup || {};
+  const mailerLessons = mailer.lessons || [];
+  const cleanRecovery = mailer.latest_clean_window_recovery || {};
+  const monitoringStatuses = monitoring.target_statuses || [];
+  const monitoringRuns = monitoring.latest_runs || [];
   const ops = [
     ["scouts", metrics.scout_runs ?? 0],
     ["campaigns", metrics.campaigns ?? 0],
@@ -105,6 +115,37 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">status</span><span>latest autonomous mailer state</span><span className="score">{latestMailer.status ?? "unknown"}</span></div>
             <div className="row"><span className="tag">next</span><span>safe mail action</span><span className="score">{latestMailer.next_safe_action ?? "wait"}</span></div>
             <div className="row"><span className="tag">send</span><span>live outreach gate</span><span className="score">blocked</span></div>
+          </div>
+          <div className="panel">
+            <h2>Mailer Autonomy</h2>
+            <div className="row"><span className="tag">qa</span><span>latest mail QA</span><span className="score">{mailer.latest_snapshot?.mail_qa_decision ?? metrics.latest_mailer_status?.mail_qa_decision ?? "unknown"}</span></div>
+            <div className="row"><span className="tag">bounce</span><span>recent bounce or DSN signals</span><span className="score">{mailerSignals.bounce_or_dsn_count ?? 0}</span></div>
+            <div className="row"><span className="tag">limit</span><span>recent SMTP rate-limit signals</span><span className="score">{mailerSignals.rate_limit_count ?? 0}</span></div>
+            <div className="row"><span className="tag">next</span><span>autonomous next action</span><span className="score">{mailer.next_allowed_action ?? "wait"}</span></div>
+            <div className="row"><span className="tag">warmup</span><span>warmup gate</span><span className="score">{mailer.warmup_allowed ? "armed" : "blocked"}</span></div>
+            <div className="row"><span className="tag">clean</span><span>latest clean-window recovery</span><span className="score">{cleanRecovery.status ?? "not run"}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Mail Signal Lessons</h2>
+            {mailerLessons.length ? mailerLessons.slice(0, 5).map((lesson: any) => (
+              <div className="row" key={lesson.lesson_key}><span className="tag">{lesson.severity}</span><span>{lesson.signal_type}</span><span className="score">active</span></div>
+            )) : <div className="row"><span className="tag">clear</span><span>no active lessons recorded</span><span className="score">0</span></div>}
+          </div>
+          <div className="panel">
+            <h2>Monitoring Control</h2>
+            <div className="row"><span className="tag">due</span><span>targets due for safe check</span><span className="score">{monitoring.due_now ?? 0}</span></div>
+            <div className="row"><span className="tag">runs</span><span>latest monitoring runs shown</span><span className="score">{monitoringRuns.length}</span></div>
+            <div className="row"><span className="tag">policy</span><span>customer site changes</span><span className="score">blocked</span></div>
+            {monitoringStatuses.length ? monitoringStatuses.map((item: any) => (
+              <div className="row" key={item.status}><span className="tag">{item.status}</span><span>monitoring targets</span><span className="score">{item.count}</span></div>
+            )) : <div className="row"><span className="tag">none</span><span>monitoring targets</span><span className="score">0</span></div>}
+          </div>
+          <div className="panel">
+            <h2>Warmup Calendar Evidence</h2>
+            <div className="row"><span className="tag">scheduled</span><span>warmup messages planned</span><span className="score">{mailerWarmup.scheduled_total ?? 0}</span></div>
+            <div className="row"><span className="tag">due</span><span>warmup due now</span><span className="score">{mailerWarmup.due_now ?? 0}</span></div>
+            <div className="row"><span className="tag">sent</span><span>warmup sent today</span><span className="score">{mailerWarmup.sent_today ?? 0}</span></div>
+            <div className="row"><span className="tag">blocked</span><span>warmup blocked today</span><span className="score">{mailerWarmup.blocked_today ?? 0}</span></div>
           </div>
           <div className="panel">
             <h2>Autonomous Agents</h2>
