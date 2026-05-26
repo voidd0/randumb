@@ -50,6 +50,7 @@ from .mailer_readiness import mailbox_health_score, run_clean_window_transition,
 from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
+from .customer_journey import customer_journey_snapshot
 from .language_gate import check_no_ai_public_language
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
@@ -522,6 +523,11 @@ async def mailer_signal_learning_run(request: Request):
 @app.get("/admin/mailer/template-qa", dependencies=[Depends(require_admin)])
 def mailer_template_qa_run():
     return {"ok": True, "template_qa": email_template_autonomy_qa()}
+
+
+@app.get("/admin/customers/{customer_id}/journey", dependencies=[Depends(require_admin)])
+def customer_journey_get(customer_id: str):
+    return {"ok": True, "journey": customer_journey_snapshot(customer_id=customer_id)}
 
 
 @app.post("/admin/warmup/provider-spacing-plan", dependencies=[Depends(require_admin)])

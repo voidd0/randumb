@@ -1,25 +1,15 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 19:13 IDT
+Generated: 2026-05-26 19:25 IDT
 
 ## Result
 
 PASS
 
-## Commands Run
-
-- `docker compose exec -T api python -m app.db`
-- `docker compose exec -T api python -m pytest -q`
-- `bash scripts/run_smoke_tests.sh`
-- local API health curl
-- local web health curl
-- Huanshu local adapter checks
-- extra QA plugin checks
-
 ## Test Results
 
-- API tests: `126 passed`
-- smoke script: PASS, includes `126 passed`
+- API tests: `132 passed`
+- smoke script: PASS, includes `132 passed`
 - API health: PASS
 - web health: PASS
 - Docker services: healthy

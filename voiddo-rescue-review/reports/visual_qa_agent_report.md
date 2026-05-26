@@ -1,6 +1,6 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-26 19:13 IDT
+Generated: 2026-05-26 19:25 IDT
 
 ## Canonical Gate
 
@@ -24,5 +24,5 @@ Huanshu local adapter remains the canonical visual gate for Rescue. Extra design
 
 ## Decision
 
-PASS for P13. Continue requiring Huanshu plus at least three secondary QA/design plugins before every money-facing visual change.
+PASS for P14.
 

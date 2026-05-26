@@ -21,6 +21,7 @@ export default async function AdminPage() {
   const scans = metrics.scans || {};
   const emails = metrics.emails || {};
   const switches = metrics.kill_switches || {};
+  const latestMailer = metrics.latest_mailer_status || {};
   const ops = [
     ["scouts", metrics.scout_runs ?? 0],
     ["campaigns", metrics.campaigns ?? 0],
@@ -49,6 +50,7 @@ export default async function AdminPage() {
     ["mailer snapshots", metrics.mailer_status_snapshots ?? 0],
     ["mail lessons", metrics.mail_signal_lessons ?? 0],
     ["clean recoveries", metrics.clean_window_recovery_runs ?? 0],
+    ["customer journeys", metrics.customer_journey_snapshots ?? 0],
     ["scout checks", metrics.scout_self_checks ?? 0],
     ["scout provenance", metrics.scout_provenance_scores ?? 0],
     ["audit strength", metrics.audit_strength_scores ?? 0],
@@ -95,6 +97,12 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">stored</span><span>gated inbox commands</span><span className="score">{metrics.owner_commands ?? 0}</span></div>
             <div className="row"><span className="tag">visual</span><span>QA runs</span><span className="score">{metrics.visual_qa_runs ?? 0}</span></div>
             <div className="row"><span className="tag">mail</span><span>QA runs</span><span className="score">{metrics.mail_qa_runs ?? 0}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Mailer Control</h2>
+            <div className="row"><span className="tag">status</span><span>latest autonomous mailer state</span><span className="score">{latestMailer.status ?? "unknown"}</span></div>
+            <div className="row"><span className="tag">next</span><span>safe mail action</span><span className="score">{latestMailer.next_safe_action ?? "wait"}</span></div>
+            <div className="row"><span className="tag">send</span><span>live outreach gate</span><span className="score">blocked</span></div>
           </div>
           <div className="panel">
             <h2>Autonomous Agents</h2>

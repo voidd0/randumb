@@ -282,6 +282,7 @@ def admin_metrics_from_db() -> dict[str, Any]:
 
     scan_rows = fetch_all("SELECT status, count(*) AS count FROM scanner_jobs GROUP BY status")
     email_rows = fetch_all("SELECT status, count(*) AS count FROM outreach_messages GROUP BY status")
+    latest_mailer = fetch_one("SELECT status, next_safe_action FROM mailer_status_snapshots ORDER BY created_at DESC LIMIT 1")
     return {
         "leads_total": scalar("SELECT count(*) FROM leads"),
         "scans": {
@@ -345,6 +346,8 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "mailer_status_snapshots": scalar("SELECT count(*) FROM mailer_status_snapshots"),
         "mail_signal_lessons": scalar("SELECT count(*) FROM mail_signal_lessons"),
         "clean_window_recovery_runs": scalar("SELECT count(*) FROM clean_window_recovery_runs"),
+        "customer_journey_snapshots": scalar("SELECT count(*) FROM customer_journey_snapshots"),
+        "latest_mailer_status": dict(latest_mailer) if latest_mailer else {},
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,

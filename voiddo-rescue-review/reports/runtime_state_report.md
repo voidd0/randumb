@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 19:13 IDT
+Generated: 2026-05-26 19:25 IDT
 
 ## Canonical Latest State
 
@@ -25,30 +25,20 @@ Generated: 2026-05-26 19:13 IDT
 - next safe action: `wait_until_recent_signal_window_clears`
 - clean-window recovery: `blocked_recent_signals`
 - recovery sends started: `false`
-- email template QA: PASS, `17` rendered samples checked
 - signal learning: active
-- daily loop agents executed: `19`
 
-## Service Health
+## Customer Journey
 
-- `voiddo_rescue_api`: healthy
-- `voiddo_rescue_web`: healthy
-- `voiddo_rescue_worker`: healthy
-- `voiddo_rescue_postgres`: healthy
-- `voiddo_rescue_redis`: healthy
-
-## Visual And Design QA
-
-- Huanshu local adapter: PASS on public routes and authenticated admin
-- `axe-core-playwright`: PASS
-- `pa11y`: PASS
-- `pixelmatch`: PASS
-- `lighthouse-ci`: PASS_WITH_WARNINGS, no blocker
+- customer journey snapshots table: present
+- paid fix request to Codex task linking: implemented
+- protected customer journey endpoint: implemented
+- customer-facing token access: not yet implemented, assigned to P15
 
 ## Verification
 
-- API tests: `126 passed`
+- API tests: `132 passed`
 - smoke test: PASS
-- public health endpoints: PASS
-- admin auth route checked with bearer token
+- Huanshu local adapter: PASS
+- secondary QA plugins: PASS or non-blocking warning
+- API/web/worker/postgres/redis: healthy
 

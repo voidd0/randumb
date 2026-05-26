@@ -1,6 +1,6 @@
-# Vøiddo Rescue P13 Review Notes
+# Vøiddo Rescue P14 Review Notes
 
-Generated: 2026-05-26 19:14 IDT
+Generated: 2026-05-26 19:26 IDT
 
 ## Source
 
@@ -8,9 +8,9 @@ Original runtime tree: `/opt/voiddo-rescue`
 Review folder: `voiddo-rescue-review/`
 Branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## P13 Summary
+## P14 Summary
 
-P13 adds the autonomous mailer control plane: mailer status snapshots, no-send clean-window recovery, mail-signal learning, template QA, protected admin endpoints, and daily-loop agents. It keeps sending blocked on recent bounce/DSN and SMTP rate-limit signals.
+P14 adds customer journey snapshots, paid fix request to Codex task linking, protected customer journey admin endpoint, admin mailer control-room status, and reply handling matrix hardening. Live outreach and forced warmup remain blocked.
 
 ## Excluded From Review Tree And Export
 
@@ -26,7 +26,7 @@ No raw secrets, env files, mailbox passwords, private keys, virtualenvs, cache d
 
 ## Verification
 
-- API tests: `126 passed`
+- API tests: `132 passed`
 - smoke: PASS
 - Huanshu: PASS
 - extra QA plugins: PASS or non-blocking warning
@@ -35,4 +35,4 @@ No raw secrets, env files, mailbox passwords, private keys, virtualenvs, cache d
 
 ## Commit SHA
 
-Final pushed commit SHA is reported in the handoff response after Git creates it. This file cannot embed its own final commit SHA without changing that SHA again.
+Final pushed commit SHA is reported in the handoff response after Git creates it.

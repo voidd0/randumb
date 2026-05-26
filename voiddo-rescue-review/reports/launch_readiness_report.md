@@ -1,12 +1,12 @@
 # Launch Readiness Report
 
-Generated: 2026-05-26 19:13 IDT
+Generated: 2026-05-26 19:25 IDT
 
 ## Decision
 
 Launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-Vøiddo Rescue is not approved for cold outreach. The app, checkout, mail auth, visual QA, and autonomous mailer control plane pass, but recent delivery-risk signals still block all sending.
+Vøiddo Rescue is not approved for cold outreach. Core app, checkout, mail auth, visual QA, autonomous mailer control, customer journey snapshots, and reply handling pass tests, but recent delivery-risk signals still block sending.
 
 ## Passed Gates
 
@@ -16,12 +16,15 @@ Vøiddo Rescue is not approved for cold outreach. The app, checkout, mail auth, 
 - strict IMAP TLS: PASS
 - mail QA latest decision: PASS
 - autonomous mailer status endpoint: PASS
-- clean-window recovery: implemented and no-send
+- clean-window recovery: no-send and gated
 - signal learning: implemented
 - email template QA: PASS
+- customer journey snapshots: implemented
+- paid fix request -> Codex task: implemented
+- reply matrix: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: PASS or non-blocking warning
-- API tests: `126 passed`
+- API tests: `132 passed`
 - smoke: PASS
 - admin auth: enforced
 - live outreach sent: `0`
@@ -33,21 +36,9 @@ Vøiddo Rescue is not approved for cold outreach. The app, checkout, mail auth, 
 - bounce/DSN count in last 24h: `2`
 - SMTP rate-limit count in last 24h: `1`
 
-These signals block:
-
-- warmup sends
-- diagnostic sends
-- live outreach
-- automatic provider-spacing application
-- clean-window recovery completion
+These signals block warmup, diagnostics, live outreach, and clean-window recovery completion.
 
 ## Next Exact Action
 
-After the 24h signal window clears:
-
-1. run `/admin/mailer/clean-window-recovery`
-2. rerun mail QA without deliverability diagnostic sends
-3. apply provider spacing only if safe
-4. allow the existing warmup timer to send only if a natural slot is due and every pre-send gate passes
-5. keep `OUTREACH_PAUSED=true` and `FIRST_LIVE_SEND_FLAG=false`
+Proceed with P15: customer-safe token access and monitoring loop. Separately, after the 24h signal window clears, run clean-window recovery.
 
