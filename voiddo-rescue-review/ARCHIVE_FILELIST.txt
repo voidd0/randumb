@@ -1,6 +1,7 @@
 .env.example
 .gitignore
 ARCHIVE_FILELIST.txt
+ARCHIVE_SHA256.txt
 README.md
 REVIEW_NOTES.md
 apps/api/Dockerfile

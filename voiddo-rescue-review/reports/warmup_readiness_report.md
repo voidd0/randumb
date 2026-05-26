@@ -1,6 +1,6 @@
 # Warmup Readiness Report
 
-Updated: 2026-05-26 IDT
+Updated: 2026-05-26 11:10 IDT
 
 ## Status
 
@@ -9,6 +9,7 @@ Warmup is prepared in dry-run only and has not started.
 Current blocker:
 
 - Owner has not provided an approved warmup recipient pool.
+- Mail QA is not PASS because strict SMTP/IMAP TLS still fails.
 
 ## Daily Cap Model
 

@@ -1,6 +1,6 @@
 # Mail QA Agent Report
 
-Updated: 2026-05-26 IDT
+Updated: 2026-05-26 11:10 IDT
 
 ## Host Decision
 
@@ -60,5 +60,7 @@ No Mailcow restart or certificate mutation was performed in this pass.
 ## Decision
 
 `FAIL_BLOCK_LAUNCH`
+
+Latest agent run: `FAIL_BLOCK_LAUNCH` with `smtp_strict_tls_login_failed`, `imap_strict_tls_login_failed`, and `approved_test_inbox_pool_missing`.
 
 Live outreach remains blocked. Mailcow certificate repair requires explicit approval before touching the shared Mailcow runtime.

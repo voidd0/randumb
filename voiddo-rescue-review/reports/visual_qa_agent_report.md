@@ -1,6 +1,6 @@
 # Visual QA Agent Report
 
-Updated: 2026-05-26 IDT
+Updated: 2026-05-26 11:10 IDT
 
 ## Agents
 
@@ -60,4 +60,4 @@ Latest decisions:
 
 ## Notes
 
-The previous `BLOCKED_HUANSHU_NOT_AVAILABLE` state is resolved for the local Rescue P1 gate. Live-domain/public-route visual QA is still separately blocked by reverse proxy route gaps for nested Rescue subdomains.
+The previous `BLOCKED_HUANSHU_NOT_AVAILABLE` state is resolved for the local Rescue P1 gate. Live-domain/public-route visual QA now passes on the Rescue subdomains listed in `reverse_proxy_rescue_routes_report.md`.

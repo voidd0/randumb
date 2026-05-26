@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Updated: 2026-05-26 IDT
+Updated: 2026-05-26 11:10 IDT
 
 ## Decision
 
@@ -30,7 +30,7 @@ Updated: 2026-05-26 IDT
 - DMARC typo `TTL: Automatic` is not present.
 - Warmup planner exists and is dry-run only.
 - Lead batch importer exists and is dry-run only.
-- Smoke tests pass: `26 passed`.
+- Smoke tests pass: `26 passed` on 2026-05-26 11:10 IDT.
 
 ## Blocking Gates
 

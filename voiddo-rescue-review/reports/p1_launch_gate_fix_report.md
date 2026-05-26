@@ -1,6 +1,6 @@
 # P1 Launch-Gate Fix Report
 
-Updated: 2026-05-26 IDT
+Updated: 2026-05-26 11:10 IDT
 
 ## Completed In This Pass
 
@@ -31,7 +31,6 @@ Updated: 2026-05-26 IDT
 - Host Huanshu CLI version check: PASS.
 - API container Huanshu CLI version check: PASS.
 - Worker container Huanshu CLI version check: PASS.
-- API test suite: `25 passed`.
 - Updated API/smoke suite after checkout and command-id fixes: `26 passed`.
 - Visual route QA:
   - landing: PASS
@@ -48,6 +47,7 @@ Updated: 2026-05-26 IDT
   - `audit.rescue.voiddo.com/r/demo`: 200
   - `go.rescue.voiddo.com/unsubscribe/test`: 200
   - `status.rescue.voiddo.com`: 200
+  - `go.rescue.voiddo.com/checkout/contact_form_repair?audit=demo`: 503 expected, checkout closed until Paddle hosted checkout is configured
 
 ## Still Blocked
 
@@ -55,7 +55,11 @@ Updated: 2026-05-26 IDT
 - Strict IMAP TLS login still blocked by Mailcow certificate trust/SAN setup.
 - Deliverability test inbox pool is still missing.
 - Warmup recipient pool is still missing.
-- Public nested Rescue reverse proxy routes are still incomplete.
+- Paddle hosted checkout base URL is still missing.
+
+## Route Status
+
+Public nested Rescue reverse proxy routes now pass. They are no longer a launch blocker.
 
 ## Safety
 
