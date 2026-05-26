@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Updated: 2026-05-26 13:33 IDT
+Updated: 2026-05-26 13:55 IDT
 
 ## Commands
 
@@ -8,8 +8,8 @@ Updated: 2026-05-26 13:33 IDT
 - `docker compose exec -T api sh -lc 'python -m py_compile app/*.py'`: PASS
 - `docker compose exec -T worker sh -lc 'python -m py_compile worker/*.py'`: PASS
 - `docker compose exec -T api python -m app.db`: PASS
-- `docker compose exec -T api python -m pytest -q`: PASS, `36 passed`
-- `bash scripts/run_smoke_tests.sh`: PASS, `36 passed`
+- `docker compose exec -T api python -m pytest -q`: PASS, `37 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS before runtime pool send, `36 passed`
 
 ## Runtime Health
 
@@ -26,6 +26,8 @@ Updated: 2026-05-26 13:33 IDT
 - Warmup refuses empty approved warmup pool.
 - Warmup day-1 executor sends max five neutral messages in tests when all gates are mocked PASS.
 - Deliverability diagnostic result records Message-ID, SMTP result, and pending bounce state in tests.
+- Mail QA now blocks if deliverability diagnostics return SMTP/rate-limit errors.
+- Tests no longer send to real runtime pools while checking missing-DKIM behavior.
 - Owner command `START WARMUP DAY=1` remains blocked in real runtime because pools are missing.
 - `SEND OUTREACH` remains high risk and blocked.
 - Mail QA strict SMTP/IMAP remains PASS, but final decision is blocked by missing approved test inbox pool.

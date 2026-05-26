@@ -204,6 +204,42 @@ def test_deliverability_pool_missing_blocks(monkeypatch):
     assert "approved_test_inbox_pool_missing" in result["issues_json"]
 
 
+def test_mail_qa_blocks_deliverability_errors(monkeypatch):
+    import app.p0 as p0
+
+    class FakeSMTP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def ehlo(self): pass
+        def starttls(self, context=None): pass
+        def login(self, user, password): pass
+
+    class FakeIMAP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def login(self, user, password): pass
+        def select(self, *args, **kwargs): pass
+        def logout(self): pass
+
+    def fake_dig(record_type: str, name: str) -> str:
+        if name.startswith("dkim."):
+            return "v=DKIM1; p=test"
+        if name.startswith("_dmarc."):
+            return "v=DMARC1; p=none"
+        return "ok"
+
+    monkeypatch.setattr(p0, "_dig", fake_dig)
+    monkeypatch.setattr(p0.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setattr(p0.imaplib, "IMAP4_SSL", FakeIMAP)
+    monkeypatch.setattr(p0, "approved_test_inbox_emails", lambda settings=None: ["qa@example.test"])
+    monkeypatch.setattr(p0, "run_deliverability_diagnostics", lambda settings, recipients, smtp_ready: {"sent": 0, "errors": ["SMTPDataError:451:rate limit"]})
+    result = run_mail_qa()
+    assert result["decision"] == "FAIL_BLOCK_LAUNCH"
+    assert "deliverability_diagnostic_failed" in result["issues_json"]
+
+
 def test_deliverability_diagnostic_sends_max_one(monkeypatch):
     import app.p0 as p0
 

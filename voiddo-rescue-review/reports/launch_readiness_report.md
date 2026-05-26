@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Updated: 2026-05-26 13:33 IDT
+Updated: 2026-05-26 13:55 IDT
 
 ## Decision
 
@@ -31,8 +31,9 @@ This is not live outreach ready.
 
 ## Blocking Gates
 
-- `TEST_INBOX_POOL` / approved deliverability test inbox addresses missing from runtime config/DB.
-- `WARMUP_RECIPIENT_POOL` / approved warmup recipient addresses missing from runtime config/DB.
+- Deliverability diagnostics hit Mailcow/Rspamd rate limit.
+- Bounce/DSN messages were observed after diagnostics.
+- Warmup day 1 sent `0` and remains blocked.
 
 ## Safety Flags
 
@@ -44,11 +45,11 @@ This is not live outreach ready.
 
 ## Live Activity
 
-- Deliverability diagnostic sends: `0`
+- Deliverability diagnostic sends: `7`
 - Warmup sends: `0`
 - Live outreach sends: `0`
-- Bounce count: `0`
+- Bounce count: `2`
 - Spam signal count: `0` observed; inbox placement cannot be measured without approved test inboxes.
-- Inbox poll: completed, `0` messages seen.
+- Inbox poll: completed, `3` messages seen.
 
 Launch remains blocked until approved test and warmup pools exist and warmup day 1 is explicitly approved through the gated owner command.

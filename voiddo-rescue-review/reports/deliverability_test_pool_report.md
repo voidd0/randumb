@@ -1,10 +1,10 @@
 # Deliverability Test Pool Report
 
-Updated: 2026-05-26 13:33 IDT
+Updated: 2026-05-26 13:55 IDT
 
 ## Status
 
-No owner-approved deliverability test inbox pool is configured in runtime config or DB.
+Owner-approved deliverability test inbox pool is configured in DB. It contains internal controls plus external control providers.
 
 ## Implemented
 
@@ -18,22 +18,31 @@ No owner-approved deliverability test inbox pool is configured in runtime config
 
 ## Current Preflight
 
-- Approved test inboxes: `0`
-- Runtime import accepted: `0`
+- Approved test inboxes: `7`
+- Runtime import accepted: `7`
 - Runtime import rejected: `0`
 - SMTP strict TLS: `PASS`
 - IMAP strict TLS: `PASS`
 - SPF/DKIM/DMARC: `PASS`
-- Deliverability diagnostic sends: `0`
+- Deliverability diagnostic sends: `7`
 - Cold outreach sends: `0`
-- Bounce count after inbox poll: `0`
+- Bounce count after inbox poll: `2`
+
+Provider-level status:
+
+- internal control: `4` approved, local delivery accepted/saved
+- Gmail: `1` approved, remote SMTP accepted by Gmail
+- custom `gamil.com` domain: `1` approved, DSN/bounce observed
+- Clalit corporate: `1` approved, accepted/pending observation
 
 ## Decision
 
 `FAIL_BLOCK_LAUNCH`
 
-Blocking reason:
+Blocking reasons:
 
-- `approved_test_inbox_pool_missing`
+- `deliverability_diagnostic_failed`
+- `bounce_detected_or_dsn_seen`
+- Mailcow/Rspamd rate limit `5 / 1m`
 
-No diagnostic email was sent in P4 because the approved test inbox pool has no actual addresses.
+External deliverability must not be marked PASS yet. Gmail SMTP acceptance is useful signal, but the pass is blocked by rate-limit and bounce/DSN observations.

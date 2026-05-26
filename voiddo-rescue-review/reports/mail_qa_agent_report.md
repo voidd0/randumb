@@ -1,6 +1,6 @@
 # Mail QA Agent Report
 
-Updated: 2026-05-26 13:33 IDT
+Updated: 2026-05-26 13:55 IDT
 
 ## Host Decision
 
@@ -34,11 +34,12 @@ Updated: 2026-05-26 13:33 IDT
 Latest real mail QA run:
 
 - Decision: `FAIL_BLOCK_LAUNCH`
-- Issues: `approved_test_inbox_pool_missing`
-- Approved test inboxes: `0`
-- Deliverability diagnostic sends: `0`
-- Inbox poll after runtime gate: PASS, `0` messages seen
-- Bounce count after poll: `0`
+- Issues: `deliverability_diagnostic_failed`, `bounce_detected_or_dsn_seen`
+- Approved test inboxes: `7`
+- Deliverability diagnostic sends: `7`
+- Inbox poll after runtime gate: PASS, `3` messages seen
+- Bounce count after poll: `2`
+- Warmup sent: `0`
 
 ## Safety State
 
@@ -50,4 +51,4 @@ Latest real mail QA run:
 
 `FAIL_BLOCK_LAUNCH`
 
-Exact blocker: owner-approved deliverability test inbox pool has no actual runtime/DB addresses.
+Exact blocker: Mailcow/Rspamd rate limit and bounce/DSN observation after diagnostics.

@@ -145,12 +145,16 @@ def test_mail_qa_blocks_missing_dkim(monkeypatch):
         return "ok"
 
     monkeypatch.setattr(p0, "_dig", fake_dig)
+    monkeypatch.setattr(p0, "approved_test_inbox_emails", lambda settings=None: [])
     result = run_mail_qa()
     assert result["decision"] == "FAIL_BLOCK_LAUNCH"
     assert "missing_dkim" in result["issues_json"]
 
 
-def test_warmup_cannot_start_without_recipient_pool():
+def test_warmup_cannot_start_without_recipient_pool(monkeypatch):
+    import app.p0 as p0
+
+    monkeypatch.setattr(p0, "approved_warmup_recipient_emails", lambda settings=None: [])
     result = prepare_warmup(recipient_pool_count=0, day_number=1)
     assert result["status"] == "blocked_no_recipient_pool"
 

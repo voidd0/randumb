@@ -730,6 +730,15 @@ def run_mail_qa() -> dict[str, Any]:
         issues.append("approved_test_inbox_pool_missing")
     deliverability = run_deliverability_diagnostics(settings, approved_test_inboxes, smtp_ready) if approved_test_inboxes else {"sent": 0, "skipped": "no_approved_test_inboxes"}
     checks["deliverability_diagnostics"] = deliverability
+    if deliverability.get("errors"):
+        issues.append("deliverability_diagnostic_failed")
+    external_providers = provider_counts_for_test_inboxes().get("external", 0)
+    internal_only = bool(checks["approved_test_inboxes"] > 0 and external_providers == 0)
+    if internal_only and not issues:
+        issues.append("external_deliverability_pool_missing")
+        checks["deliverability_scope"] = "PASS_INTERNAL_ONLY"
+    else:
+        checks["deliverability_scope"] = "EXTERNAL_POOL_PRESENT" if external_providers else "NO_POOL"
     decision = "PASS" if not issues else "FAIL_BLOCK_LAUNCH"
     row = execute(
         """
@@ -802,7 +811,7 @@ def run_deliverability_diagnostics(settings: Settings, recipients: list[str], sm
                                 (Jsonb(result_json), email),
                             )
                 except Exception as exc:
-                    errors.append(type(exc).__name__)
+                    errors.append(smtp_error_label(exc))
             conn.commit()
     result: dict[str, Any] = {"sent": sent, "skipped_previously_tested": skipped, "policy": "neutral_diagnostic_max_one_per_mailbox"}
     if results:
@@ -810,6 +819,33 @@ def run_deliverability_diagnostics(settings: Settings, recipients: list[str], sm
     if errors:
         result["errors"] = errors
     return result
+
+
+def smtp_error_label(exc: Exception) -> str:
+    code = getattr(exc, "smtp_code", None)
+    error = getattr(exc, "smtp_error", b"")
+    if isinstance(error, bytes):
+        error = error.decode("utf-8", errors="replace")
+    if code:
+        return f"{type(exc).__name__}:{code}:{str(error)[:160]}"
+    return type(exc).__name__
+
+
+def provider_counts_for_test_inboxes() -> dict[str, int]:
+    rows = fetch_all(
+        """
+        SELECT
+          CASE
+            WHEN lower(split_part(email, '@', 2)) IN ('voiddo.com', 'voiddorescue.com') THEN 'internal'
+            ELSE 'external'
+          END AS scope,
+          count(*) AS count
+        FROM test_inboxes
+        WHERE status = 'approved' AND approved
+        GROUP BY scope
+        """
+    )
+    return {str(row["scope"]): int(row["count"]) for row in rows}
 
 
 def prepare_warmup(recipient_pool_count: int = 0, day_number: int = 1) -> dict[str, Any]:
@@ -882,7 +918,7 @@ def run_warmup_day(day_number: int = 1, warmup_run_id: str | None = None) -> dic
                 try:
                     smtp.send_message(msg)
                 except Exception as exc:
-                    errors.append(f"{email}:{type(exc).__name__}")
+                    errors.append(f"{email}:{smtp_error_label(exc)}")
                     break
                 sent += 1
                 execute(

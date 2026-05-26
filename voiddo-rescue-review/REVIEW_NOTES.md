@@ -1,44 +1,39 @@
-# Vøiddo Rescue P4 Runtime Pool Review Notes
+# Vøiddo Rescue P4 Runtime Diagnostics Review Notes
 
-Updated: 2026-05-26 13:33 IDT
+Updated: 2026-05-26 13:55 IDT
 
 ## Scope
 
-This branch folder contains the Vøiddo Rescue source tree after the P4 runtime pool import attempt, deliverability diagnostics gate, inbox poll, and warmup day-1 gate.
+This branch folder contains the Vøiddo Rescue source tree after the P4 runtime diagnostic send with owner-approved internal/external control inboxes.
 
-## Original Runtime Path
+## Runtime Result
 
-- Project root: `/opt/voiddo-rescue`
-- Runtime export path: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p4-runtime-pools-2026-05-26.zip`
+- Approved test inbox count: 7
+- Approved warmup recipient count: 7
+- Diagnostic sent count: 7
+- Warmup sent count: 0
+- Bounce/DSN count after inbox poll: 2
+- Live outreach sent count: 0
+- Launch readiness: `CHECKOUT_READY_NOT_WARMED`
+
+Warmup did not start because the diagnostic pass hit Mailcow/Rspamd rate limiting and bounce/DSN messages were observed.
+
+## Export
+
+- Runtime export path: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p4-runtime-diagnostics-2026-05-26.zip`
 
 ## Excluded
 
 - `.env`
 - mailbox passwords
-- Mailcow backups and certificate/private-key backups
-- `.venv`
-- `node_modules`
-- `.next`
-- pycache
+- private keys and certificate backups
+- `.venv`, `node_modules`, `.next`, pycache
 - runtime logs
 - runtime storage exports
 - runtime audit/screenshot storage
 - PNG screenshots
+- owner personal email addresses
 
 ## Secret Scan
 
-No raw secrets are intentionally included. Public review files contain placeholders and redacted reports only.
-
-## Runtime Result
-
-- Approved test inbox count: 0
-- Approved warmup recipient count: 0
-- Deliverability diagnostic sent count: 0
-- Warmup sent count: 0
-- Bounce count: 0
-- Live outreach sent count: 0
-- Launch readiness: `CHECKOUT_READY_NOT_WARMED`
-
-The runtime pool variables currently contain no parseable approved email addresses, so no diagnostic or warmup messages were sent.
-
-The exact pushed commit SHA is returned in the operator final report because self-referencing a commit SHA inside the same commit would invalidate that SHA.
+No raw secrets or owner personal email addresses are intentionally included.
