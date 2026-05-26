@@ -1,6 +1,6 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-26 20:47 IDT
+Generated: 2026-05-26 20:59 IDT
 
 ## Canonical Gate
 
@@ -23,6 +23,6 @@ Huanshu local adapter remains the canonical visual gate for Rescue.
 - `pixelmatch`: PASS
 - `lighthouse-ci`: PASS_WITH_WARNINGS, no blocker
 
-## P20 Notes
+## P21 Notes
 
-The authenticated admin panel, including post-window timer/readiness evidence, was screenshot-tested with auth headers. Blocking visual issues: `0`.
+The authenticated admin panel, including post-window timer/readiness evidence and the new mailer ledger panel, was screenshot-tested with auth headers. Blocking visual issues: `0`.

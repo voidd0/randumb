@@ -50,6 +50,7 @@ from .mailer_control import evaluate_outbound_message
 from .mailer_readiness import mailbox_health_score, run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mailer_control_room import mailer_control_room_summary, monitoring_control_room_summary, write_owner_status_report
+from .mailer_autonomy_ledger import mailer_autonomy_ledger
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
@@ -566,6 +567,11 @@ def mailer_template_qa_run():
 @app.get("/admin/mailer/control-room", dependencies=[Depends(require_admin)])
 def mailer_control_room_get():
     return {"ok": True, "control_room": mailer_control_room_summary()}
+
+
+@app.get("/admin/mailer/autonomy-ledger", dependencies=[Depends(require_admin)])
+def mailer_autonomy_ledger_get():
+    return {"ok": True, "ledger": mailer_autonomy_ledger()}
 
 
 @app.post("/admin/mailer/owner-status-report", dependencies=[Depends(require_admin)])

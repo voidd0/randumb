@@ -18,6 +18,9 @@ P20 wired the post-window no-send recheck into Rescue automation so the system c
 
 ## Runtime Result
 
+- branch HEAD: `89f973ca66890c30ef418ab22a3a6dedc1a6fdf4`
+- export: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p20-post-window-timer-2026-05-26.zip`
+- export SHA256: `5491fbec323a4522f9eee4f708213b08a021872ccd9e4fe65c01c5808d7bef58`
 - systemd timer: `voiddo-rescue-post-window-recheck.timer`
 - timer status: `active (waiting)`
 - latest runner status: `not_due`

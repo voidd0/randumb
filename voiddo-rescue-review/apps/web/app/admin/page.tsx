@@ -19,11 +19,13 @@ export default async function AdminPage() {
   const mailerData = await fetchJson("/admin/mailer/control-room", authorization ? { Authorization: authorization } : {});
   const recheckData = await fetchJson("/admin/mailer/clean-window-recheck", authorization ? { Authorization: authorization } : {});
   const postWindowData = await fetchJson("/admin/mailer/post-window-recheck", authorization ? { Authorization: authorization } : {});
+  const ledgerData = await fetchJson("/admin/mailer/autonomy-ledger", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
   const recheck = recheckData?.summary || {};
   const postWindow = postWindowData?.summary || {};
+  const ledger = ledgerData?.ledger || {};
   const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
@@ -34,6 +36,11 @@ export default async function AdminPage() {
   const mailerWarmup = mailer.warmup || {};
   const mailerLessons = mailer.lessons || [];
   const cleanRecovery = mailer.latest_clean_window_recovery || {};
+  const ledgerGates = ledger.gates || {};
+  const ledgerOwner = ledger.owner_commands || {};
+  const ledgerInbound = ledger.inbound || {};
+  const ledgerOutbound = ledger.outbound || {};
+  const ledgerThrottle = ledger.throttle || {};
   const monitoringStatuses = monitoring.target_statuses || [];
   const monitoringRuns = monitoring.latest_runs || [];
   const ops = [
@@ -130,6 +137,19 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">next</span><span>autonomous next action</span><span className="score">{mailer.next_allowed_action ?? "wait"}</span></div>
             <div className="row"><span className="tag">warmup</span><span>warmup gate</span><span className="score">{mailer.warmup_allowed ? "armed" : "blocked"}</span></div>
             <div className="row"><span className="tag">clean</span><span>latest clean-window recovery</span><span className="score">{cleanRecovery.status ?? "not run"}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Mailer Ledger</h2>
+            <div className="row"><span className="tag">policy</span><span>all mail input and output</span><span className="score">gated</span></div>
+            <div className="row"><span className="tag">owner</span><span>stored owner commands</span><span className="score">{ledgerOwner.total ?? 0}</span></div>
+            <div className="row"><span className="tag">inbox</span><span>human-review threads</span><span className="score">{ledgerInbound.human_review_required ?? 0}</span></div>
+            <div className="row"><span className="tag">send</span><span>live outreach from ledger</span><span className="score">{ledgerGates.live_outreach_allowed ? "armed" : "blocked"}</span></div>
+            <div className="row"><span className="tag">reply</span><span>auto-replies</span><span className="score">{ledgerGates.auto_replies_allowed ? "armed" : "paused"}</span></div>
+            <div className="row"><span className="tag">throttle</span><span>active throttle states</span><span className="score">{ledgerThrottle.states ?? 0}</span></div>
+            <div className="row"><span className="tag">backoff</span><span>active mail backoffs</span><span className="score">{ledgerThrottle.backoff_active ?? 0}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw addresses in admin payload</span><span className="score">{ledger.privacy?.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">blockers</span><span>current mailer gate blockers</span><span className="score">{Array.isArray(ledgerGates.blockers) ? ledgerGates.blockers.length : 0}</span></div>
+            <div className="row"><span className="tag">outbound</span><span>outbound status groups</span><span className="score">{Array.isArray(ledgerOutbound.messages_by_status) ? ledgerOutbound.messages_by_status.length : 0}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>

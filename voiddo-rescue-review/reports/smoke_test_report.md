@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 20:47 IDT
+Generated: 2026-05-26 20:59 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `167 passed`
+- API tests: `172 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -24,6 +24,9 @@ PASS
 - post-window runner honors recovery env: PASS
 - runner source has no outreach/warmup send path: PASS
 - systemd timer installed and active: PASS
+- mailer autonomy ledger endpoint requires auth: PASS
+- mailer autonomy ledger omits raw addresses: PASS
+- mailer autonomy ledger keeps live outreach blocked: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

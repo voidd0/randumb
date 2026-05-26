@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 20:47 IDT
+Generated: 2026-05-26 20:59 IDT
 
 ## Canonical Latest State
 
@@ -30,9 +30,19 @@ Generated: 2026-05-26 20:47 IDT
 - timer state: `active (waiting)`
 - timer policy: no-send readiness evidence only
 
+## Mailer Ledger
+
+- policy: `autonomous_mailer_all_io_gated_no_raw_addresses`
+- live outreach allowed: `false`
+- auto replies allowed: `false`
+- owner commands tracked: `772`
+- human-review inbox threads: `0`
+- raw addresses included: `false`
+- active blockers: `outreach_paused_env`, `first_live_send_flag_false`, `auto_replies_paused_env`, `recent_bounce_or_dsn`, `recent_rate_limit`
+
 ## Verification
 
-- API tests: `167 passed`
+- API tests: `172 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including admin transition panel
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
