@@ -121,3 +121,23 @@ The authenticated admin panel now includes sanitized digest-agent runtime report
 - no-send status visible: `true`
 - screenshots: `reports/visual_qa_p38/admin-desktop.png`, `reports/visual_qa_p38/admin-mobile.png`
 - blocking visual issues: `0`
+
+## P40 Notes
+
+The authenticated admin panel now includes sanitized digest history count and latest history no-send state.
+
+- Huanshu local adapter: PASS
+- Playwright screenshots: 2, both nonblank
+- `axe-core-playwright`: PASS, 0 violations
+- `pa11y`: PASS, 0 issues
+- horizontal overflow: `false`
+- broken images: `0`
+- console errors: `0`
+- page errors: `0`
+- unresolved template variables: `false`
+- raw JSON visible: `false`
+- raw owner email visible: `false`
+- digest history rows visible: `true`
+- latest digest history no-send visible: `true`
+- screenshots: `reports/visual_qa_p40/admin-desktop.png`, `reports/visual_qa_p40/admin-mobile.png`
+- blocking visual issues: `0`

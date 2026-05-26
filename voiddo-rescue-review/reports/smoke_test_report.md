@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-27 00:07 IDT
+Generated: 2026-05-27 00:18 IDT
 
 ## Result
 
@@ -105,6 +105,7 @@ PASS
 - digest history row written on agent run: PASS
 - digest history omits raw recipients and secrets: PASS
 - digest summary includes sanitized history: PASS
+- admin digest history counter visible: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

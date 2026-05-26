@@ -1,6 +1,6 @@
 # Warmup Calendar Health Report
 
-Generated: 2026-05-27 00:07 IDT
+Generated: 2026-05-27 00:18 IDT
 
 ## State
 
@@ -21,6 +21,7 @@ Generated: 2026-05-27 00:07 IDT
 - P37 mailer digest runtime report: PASS, no send unlock
 - P38 mailer digest admin metadata: PASS, no send unlock
 - P39 mailer digest history persistence: PASS, no send unlock
+- P40 mailer digest history admin counter: PASS, no send unlock
 
 ## P12 Schedule Gate
 

@@ -45,6 +45,8 @@ export default async function AdminPage() {
   const digest = digestData?.digest || {};
   const digestOps = digest.mailer_ops || {};
   const digestReport = digest.digest_agent_report || {};
+  const digestHistory = digest.digest_agent_history || {};
+  const latestDigestHistory = digestHistory.latest || {};
   const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
@@ -245,10 +247,13 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">agent</span><span>digest agent runtime report</span><span className="score">{digestReport.exists ? "written" : "missing"}</span></div>
             <div className="row"><span className="tag">path</span><span>digest runtime report location</span><span className="score">{digestReport.path ? "stored" : "none"}</span></div>
             <div className="row"><span className="tag">time</span><span>digest report last updated</span><span className="score">{digestReport.modified_at ? new Date(digestReport.modified_at).toLocaleString("en-GB") : "not yet"}</span></div>
+            <div className="row"><span className="tag">history</span><span>digest report history rows</span><span className="score">{digestHistory.count ?? 0}</span></div>
+            <div className="row"><span className="tag">latest</span><span>latest digest history no-send state</span><span className="score">{latestDigestHistory.email_sent ? "sent" : "no-send"}</span></div>
             <div className="row"><span className="tag">send</span><span>daily digest email send state</span><span className="score">{digest.email_sent ? "sent" : "no-send"}</span></div>
             <div className="row"><span className="tag">agent send</span><span>digest agent transport state</span><span className="score">{digestReport.email_sent ? "sent" : "no-send"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in digest summary</span><span className="score">{digest.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in digest report metadata</span><span className="score">{digestReport.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in digest history</span><span className="score">{digestHistory.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>

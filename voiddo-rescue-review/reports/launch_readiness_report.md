@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 00:07 IDT
+Generated: 2026-05-27 00:18 IDT
 
 ## Decision
 
@@ -26,6 +26,7 @@ P36 added `mailer_digest_agent` to the autonomous agent loop.
 P37 added a dedicated `mailer_digest_agent_report.md` runtime report file with agent run ID, owner-report action ID, no-send decision, and current mail blockers.
 P38 exposed sanitized digest-agent report metadata in the protected admin digest evidence panel.
 P39 added sanitized digest-agent report history persistence.
+P40 exposed sanitized digest history count and latest no-send state in the protected admin panel.
 
 ## Passed Gates
 
@@ -55,6 +56,7 @@ P39 added sanitized digest-agent report history persistence.
 - mailer digest runtime report file: implemented
 - mailer digest admin report metadata: implemented and protected
 - mailer digest history persistence: implemented
+- mailer digest history admin counter: implemented and protected
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
@@ -84,4 +86,4 @@ P39 added sanitized digest-agent report history persistence.
 
 ## Next Exact Action
 
-Continue the self-written build cycle with `P40 Digest History Admin Counter`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
+Continue the self-written build cycle with `P41 Mailer Digest Daily Loop Retention Guard`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
