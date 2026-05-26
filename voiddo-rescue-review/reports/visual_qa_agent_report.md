@@ -66,3 +66,27 @@ P3 checkout visual smoke captured the public checkout page with no horizontal ov
 ## Notes
 
 The previous `BLOCKED_HUANSHU_NOT_AVAILABLE` state is resolved for the local Rescue P1 gate. Live-domain/public-route visual QA now passes on the Rescue subdomains listed in `reverse_proxy_rescue_routes_report.md`.
+
+## Production Autonomy Visual Recheck
+
+Updated: 2026-05-26 15:18 IDT
+
+After the production-autonomy visual rebuild, Huanshu local adapter was rerun on:
+
+- landing `/`: PASS
+- audit demo `/r/demo`: PASS
+- customer `/customer`: PASS
+- status `/status`: PASS
+- unsubscribe `/unsubscribe/demo-token`: PASS
+- authenticated admin `/admin`: PASS
+
+The authenticated admin route also passed the extra DOM design gate:
+
+- no horizontal overflow
+- no unresolved template variables
+- no placeholder/lorem text
+- no raw JSON
+- CTA visible above fold on desktop and mobile
+- no console errors
+
+Screenshots were captured inside runtime storage only and are excluded from review/export packages.

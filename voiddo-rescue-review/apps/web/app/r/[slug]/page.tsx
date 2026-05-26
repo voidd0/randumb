@@ -46,7 +46,7 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
     <div className="shell">
       <header className="nav"><div className="brand"><span className="mark">vø</span> Rescue Audit</div><nav className="navlinks"><a href="/">Product</a><a href="/status">Status</a></nav></header>
       <main id="main" className="main">
-        <section className="band">
+        <section className="band audit-hero">
           <div className="eyebrow">Public non-invasive website check</div>
           <h1>{audit.business?.name || audit.domain}</h1>
           <p className="lede">{audit.url}</p>
@@ -58,6 +58,11 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
           <div className="actions">
             <a className="button primary" href={links.contact_form_repair || links.emergency_fix || "https://rescue.voiddo.com"}>Fix this issue today</a>
             <a className="button secondary" href={links.monitor_monthly || "https://rescue.voiddo.com"}>Start monitoring</a>
+          </div>
+          <div className="proof-strip">
+            <span>checked from a normal browser session</span>
+            <span>screenshots stored as evidence</span>
+            <span>no hidden security claims</span>
           </div>
           <div className="panel">
             <h2>Top Issues</h2>
@@ -79,6 +84,13 @@ export default async function AuditPage({ params }: { params: Promise<{ slug: st
                   <figcaption>{shot.type} · {shot.viewport}</figcaption>
                 </figure>
               )) : <p className="lede">Screenshot evidence will appear here after a real scanner job completes.</p>}
+            </div>
+          </div>
+          <div className="offer-band compact">
+            <div><h2>Repair options</h2><p className="muted">Choose a one-time fix for visible issues or monthly monitoring for recurring checks.</p></div>
+            <div className="price-grid">
+              <a className="price" href={links.contact_form_repair || "/checkout/contact_form_repair"}><strong>$99</strong><span>Contact repair</span></a>
+              <a className="price" href={links.monitor_monthly || "/checkout/monitor_monthly"}><strong>$19/mo</strong><span>Monitoring</span></a>
             </div>
           </div>
           <p className="lede" style={{fontSize: 14}}>Legal note: this is a public non-invasive website check from a normal browser session. It does not claim hidden security vulnerabilities.</p>

@@ -1,4 +1,5 @@
 import { fetchJson } from "../lib/api";
+import { headers } from "next/headers";
 
 const labels: Record<string, string> = {
   leads_total: "leads total",
@@ -12,12 +13,20 @@ const labels: Record<string, string> = {
 };
 
 export default async function AdminPage() {
-  const data = await fetchJson("/admin/metrics");
+  const requestHeaders = await headers();
+  const authorization = requestHeaders.get("authorization") || "";
+  const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
   const emails = metrics.emails || {};
   const switches = metrics.kill_switches || {};
+  const ops = [
+    ["scouts", metrics.scout_runs ?? 0],
+    ["campaigns", metrics.campaigns ?? 0],
+    ["agents", metrics.agent_runs ?? 0],
+    ["onboarding", metrics.onboarding_tasks ?? 0],
+  ];
 
   return (
     <div className="shell">
@@ -25,12 +34,12 @@ export default async function AdminPage() {
       <main id="main" className="dashboard">
         <aside className="sidebar">
           <div className="eyebrow">Control room</div>
-          <h1 style={{fontSize: 34, lineHeight: 1.05}}>Pipeline is gated</h1>
-          <p className="lede" style={{fontSize: 15}}>Live sends, warmup, auto-replies, and Paddle customer-facing provisioning stay paused until P0 gates pass.</p>
-          <div className="actions">
+          <div className="actions tight">
             <a className="button primary" href="/admin">Open pipeline</a>
             <a className="button secondary" href="/r/demo">View audit</a>
           </div>
+          <h1 style={{fontSize: 34, lineHeight: 1.05}}>Pipeline is gated</h1>
+          <p className="lede" style={{fontSize: 15}}>Live sends, warmup, auto-replies, and Paddle customer-facing provisioning stay paused until P0 gates pass.</p>
         </aside>
         <section className="content">
           <div className="metric-grid">
@@ -59,6 +68,12 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">stored</span><span>gated inbox commands</span><span className="score">{metrics.owner_commands ?? 0}</span></div>
             <div className="row"><span className="tag">visual</span><span>QA runs</span><span className="score">{metrics.visual_qa_runs ?? 0}</span></div>
             <div className="row"><span className="tag">mail</span><span>QA runs</span><span className="score">{metrics.mail_qa_runs ?? 0}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Autonomous Agents</h2>
+            {ops.map(([label, value]) => (
+              <div className="row" key={String(label)}><span className="tag">agent</span><span>{String(label)}</span><span className="score">{String(value)}</span></div>
+            ))}
           </div>
           <div className="panel">
             <h2>Launch Pools</h2>

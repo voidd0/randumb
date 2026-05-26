@@ -10,17 +10,22 @@ export default function Page() {
         </nav>
       </header>
       <main id="main" className="main">
-        <section className="hero">
+        <section className="hero hero-proof">
           <div>
-            <div className="eyebrow">Public checks. Proof first. Dry-run gated.</div>
+            <div className="eyebrow">Autonomous website rescue for local businesses</div>
             <h1>Vøiddo Rescue</h1>
             <p className="lede">
-              Finds visible website problems, turns them into proof-based audit pages, queues compliant outreach,
-              and routes paid fixes into onboarding and monitoring.
+              Public browser checks, proof audit pages, controlled outreach, Paddle checkout, onboarding,
+              fix requests, and monitoring in one gated revenue pipeline.
             </p>
             <div className="actions">
-              <a className="button primary" href="/admin">Open pipeline</a>
+              <a className="button primary" href="/r/demo">View proof audit</a>
               <a className="button secondary" href="/r/demo">View audit format</a>
+            </div>
+            <div className="trust-strip" aria-label="Safety markers">
+              <span>public non-invasive check</span>
+              <span>unsubscribe-safe</span>
+              <span>Paddle checkout</span>
             </div>
           </div>
           <div className="console" aria-label="Pipeline preview">
@@ -42,10 +47,21 @@ export default function Page() {
             </div>
           </div>
         </section>
-        <section className="band grid" aria-label="Capabilities">
-          <div className="tile"><h2>Safe Scanner</h2><p>Homepage availability, HTTPS, screenshots, metadata, contact paths, and dead public CTAs only.</p></div>
-          <div className="tile"><h2>Controlled Outreach</h2><p>Templates, suppression, unsubscribe, rate limits, dry-run previews, and launch flag before live sends.</p></div>
-          <div className="tile"><h2>Paid Workflow</h2><p>Paddle webhooks create customers, onboarding, fix requests, and ongoing monitoring tasks.</p></div>
+        <section className="band grid" aria-label="How it works">
+          <div className="tile"><h2>1. Find visible issues</h2><p>Safe public checks detect availability, HTTPS, metadata, screenshots, contact paths, and dead CTAs.</p></div>
+          <div className="tile"><h2>2. Show proof</h2><p>Each qualified lead gets a clear audit page with screenshots, top issues, impact, and repair options.</p></div>
+          <div className="tile"><h2>3. Convert carefully</h2><p>Outreach stays template-bound, suppressed, throttled, QA-checked, and blocked until launch gates pass.</p></div>
+        </section>
+        <section className="band offer-band" aria-label="Pricing">
+          <div>
+            <div className="eyebrow">Offers</div>
+            <h2>Simple paid paths after proof.</h2>
+          </div>
+          <div className="price-grid">
+            <div className="price"><strong>$19/mo</strong><span>Website Monitor</span></div>
+            <div className="price"><strong>$99</strong><span>Contact Form Repair</span></div>
+            <div className="price"><strong>$149</strong><span>Emergency Website Fix</span></div>
+          </div>
         </section>
       </main>
       <footer className="footer">Built by vøiddo — a small studio shipping AI-flavoured products, free dev tools, Chrome extensions and weird browser games.</footer>

@@ -1,53 +1,31 @@
-# Vøiddo Rescue P5 Clean Review Notes
+# Vøiddo Rescue Review Notes
 
-Original ZIP path on VPS:
-`/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p5-clean-review-2026-05-26.zip`
+Original source path: `/opt/voiddo-rescue`
 
-SHA256:
-`d90a1f8e5b7af5d147e259c0a2893ed5578cdc4c5c4b0bf8594b177439384135`
+Export package is generated from this folder after artifact cleanup.
 
-Included under this branch folder:
-`voiddo-rescue-review/`
-
-Excluded from review files and clean export:
+## Excluded
 
 - `.env` and `*.env` except `.env.example`
-- mailbox passwords and runtime secrets
-- private keys
-- `storage/`
-- `exports/`
-- `screenshots/`
-- `logs/`
-- `backups/`
-- `.venv/`
-- `venv/`
-- `.pytest_cache/`
-- `node_modules/`
-- `.next/`
-- `__pycache__/`
-- `*.pyc`
-- `*.png`
-- `*.log`
+- mailbox passwords, API keys, private keys
+- `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`
+- `node_modules`, `.next`
+- runtime `storage`, `exports`, `screenshots`, `logs`, `backups`
+- generated image artifacts
 
-Secret/artifact scan result:
+## Secret Scan
 
-- `.venv`: absent
-- `.pytest_cache`: absent
-- `__pycache__`: absent
-- `*.pyc`: absent
-- `.env`: absent
-- runtime storage/screenshots/exports/logs: absent
-- raw mailbox passwords: absent
-- private keys: absent
-- owner/test personal addresses: absent
+Result: no raw secrets intentionally included. Reports are redacted. Runtime addresses and private mailbox credentials are excluded.
 
-Functional verification:
+## Functional Status
 
-- API tests: `46 passed`
-- smoke script: PASS
-- API/web/worker/postgres/redis healthy
-- warmup sent: 0
-- live outreach sent: 0
+- Tests: 61 passed
+- Smoke: PASS
+- Huanshu visual checks: PASS for landing, audit demo, customer, status, unsubscribe, authenticated admin
+- Live outreach sent: 0
+- Warmup sent: 0
+- Launch readiness: WARMUP_SCHEDULED_NO_OUTREACH
 
-Exact commit SHA:
-Pending until commit is created.
+## Commit SHA
+
+Filled after commit in final response.

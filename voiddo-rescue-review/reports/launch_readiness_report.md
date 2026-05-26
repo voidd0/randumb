@@ -91,3 +91,33 @@ Functional state after cleanup:
 - warmup sent: `0`
 - live outreach sent: `0`
 - launch readiness: `WARMUP_SCHEDULED_NO_OUTREACH`
+
+## Production Autonomy Build Update
+
+Updated: 2026-05-26 15:18 IDT
+
+Decision: `WARMUP_SCHEDULED_NO_OUTREACH`, not production-ready and not live-outreach-ready.
+
+New passed gates:
+
+- Scout import/agent foundation exists.
+- Lead scoring exists and explains scores.
+- Campaign preview exists and remains dry-run.
+- Email template system renders and QA-checks 17 samples.
+- Agent run table exists and latest safe daily loop completed 7/7 agents.
+- Mail throttle blocks sends on recent bounce/DSN and SMTP rate-limit signals.
+- Checkout scenario tests pass for configured/unconfigured flows and Paddle webhook mocks.
+- Onboarding/fix workflow tables exist and are populated by mock payment events.
+- Huanshu visual checks pass for landing, audit demo, customer, status, unsubscribe, and authenticated admin.
+- Full pytest count is now `61 passed`; smoke script also passes.
+
+Still blocking:
+
+- Recent bounce/DSN signals in last 24h: `2`.
+- Recent SMTP rate-limit signal in last 24h: `1`.
+- Warmup sent remains `0`.
+- Live outreach sent remains `0`.
+- Production external lead discovery is not yet connected beyond import scouts.
+- Full production customer auth/WP-plugin connection is not complete.
+
+No launch flag was enabled.

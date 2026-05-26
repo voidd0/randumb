@@ -36,6 +36,11 @@ from .outreach import outreach_allowed, render_template
 from .scanner import deterministic_safe_scan
 from .security import verify_paddle_signature
 from .visual_quality import check_visual_publish_gate
+from .autonomous_agents import run_agent, run_daily_loop
+from .email_templates import render_email_template, qa_email_template, render_all_samples
+from .lead_scoring import score_lead
+from .mailer_throttle import throttle_decision
+from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, process_scout_run
 
 app = FastAPI(title="Vøiddo Rescue API", version="0.1.0")
 settings = get_settings()
@@ -308,3 +313,83 @@ async def codex_task(request: Request):
         payload.get("evidence", "No evidence supplied."),
     )
     return {"ok": True, "path": str(path)}
+
+
+@app.post("/admin/scouts/sources", dependencies=[Depends(require_admin)])
+async def scout_source_create(request: Request):
+    payload = await request.json()
+    return {"ok": True, "source": create_scout_source(payload)}
+
+
+@app.post("/admin/scouts/runs", dependencies=[Depends(require_admin)])
+async def scout_run_create(request: Request):
+    payload = await request.json()
+    source_id = payload.get("source_id")
+    run = create_scout_run(source_id, payload)
+    if payload.get("process_now", False):
+        return {"ok": True, "run": run, "result": process_scout_run(str(run["id"]))}
+    return {"ok": True, "run": run}
+
+
+@app.get("/admin/scouts/runs/{run_id}", dependencies=[Depends(require_admin)])
+def scout_run_get(run_id: str):
+    run = get_scout_run(run_id)
+    if not run:
+        return Response(status_code=404, content="scout run not found")
+    return {"ok": True, "run": run}
+
+
+@app.post("/admin/campaigns", dependencies=[Depends(require_admin)])
+async def campaign_create(request: Request):
+    payload = await request.json()
+    return {"ok": True, "campaign": create_campaign(payload)}
+
+
+@app.post("/admin/campaigns/{campaign_id}/prepare", dependencies=[Depends(require_admin)])
+async def campaign_prepare(campaign_id: str, request: Request):
+    payload = await request.json()
+    return {"ok": True, "result": prepare_campaign(campaign_id, int(payload.get("threshold", 70)), int(payload.get("limit", 20)))}
+
+
+@app.get("/admin/campaigns/{campaign_id}", dependencies=[Depends(require_admin)])
+def campaign_get(campaign_id: str):
+    campaign = get_campaign(campaign_id)
+    if not campaign:
+        return Response(status_code=404, content="campaign not found")
+    return {"ok": True, "campaign": campaign}
+
+
+@app.post("/admin/leads/{lead_id}/score", dependencies=[Depends(require_admin)])
+async def lead_score_create(lead_id: str, request: Request):
+    payload = await request.json()
+    return {"ok": True, "score": score_lead(lead_id, payload.get("audit_id"))}
+
+
+@app.post("/admin/agents/{agent}", dependencies=[Depends(require_admin)])
+async def agent_run(agent: str, request: Request):
+    payload = await request.json()
+    return {"ok": True, "run": run_agent(agent, payload)}
+
+
+@app.post("/admin/daily-loop/run", dependencies=[Depends(require_admin)])
+def daily_loop_run():
+    return {"ok": True, "loop": run_daily_loop()}
+
+
+@app.post("/admin/mail/throttle-check", dependencies=[Depends(require_admin)])
+async def mail_throttle_check(request: Request):
+    payload = await request.json()
+    return {"ok": True, "throttle": throttle_decision(payload.get("scope", "global"), payload.get("scope_key", "diagnostic"), int(payload.get("min_delay_seconds", 600)))}
+
+
+@app.post("/email-templates/render", dependencies=[Depends(require_admin)])
+async def email_template_render(request: Request):
+    payload = await request.json()
+    rendered = render_email_template(payload.get("template_key", "first_audit_notice"), payload.get("language", "en"), payload.get("data") or {})
+    return {"ok": True, "rendered": rendered, "qa": qa_email_template(rendered)}
+
+
+@app.get("/email-templates/samples", dependencies=[Depends(require_admin)])
+def email_template_samples():
+    samples = render_all_samples()
+    return {"ok": True, "count": len(samples), "all_pass": all(item["qa"]["passed"] for item in samples), "samples": samples}

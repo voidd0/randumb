@@ -48,3 +48,34 @@ Live activity:
 - warmup sent: 0
 
 Raw recipient addresses are intentionally omitted.
+
+## Production Autonomy Repack Check
+
+Generated: 2026-05-26T15:18:39+03:00
+
+The review tree was regenerated after the production-autonomy buildout with the same hygiene policy.
+
+Artifact scan result:
+
+- `.venv/`: absent
+- `venv/`: absent
+- `.pytest_cache/`: absent
+- `__pycache__/`: absent
+- `*.pyc`: absent
+- `node_modules/`: absent
+- `.next/`: absent
+- `.env`: absent
+- private keys: absent
+- PNG/JPG/WebP screenshots: absent
+- runtime storage/export/log files: absent
+
+Private-address scan:
+
+- owner/test personal addresses are absent from the review tree.
+
+Secret scan:
+
+- only safe placeholders such as `.env.example` and Compose fallback examples matched.
+- no raw mailbox password, API key, or private key was included.
+
+Decision: `PASS_CLEAN_REVIEW_PACKAGE`

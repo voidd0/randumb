@@ -312,6 +312,13 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "test_inboxes": scalar("SELECT count(*) FROM test_inboxes WHERE status = 'approved'"),
         "lead_batches": scalar("SELECT count(*) FROM lead_batches"),
         "outreach_preview_batches": scalar("SELECT count(*) FROM outreach_preview_batches"),
+        "scout_sources": scalar("SELECT count(*) FROM scout_sources"),
+        "scout_runs": scalar("SELECT count(*) FROM scout_runs"),
+        "campaigns": scalar("SELECT count(*) FROM campaigns"),
+        "campaign_leads": scalar("SELECT count(*) FROM campaign_leads"),
+        "agent_runs": scalar("SELECT count(*) FROM agent_runs"),
+        "onboarding_tasks": scalar("SELECT count(*) FROM onboarding_tasks"),
+        "monitoring_targets": scalar("SELECT count(*) FROM monitoring_targets"),
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,
@@ -409,6 +416,14 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
         )
         if not provisioning_paused:
             actions.append("onboarding_email_task_created")
+            execute(
+                """
+                INSERT INTO onboarding_tasks(customer_id, product_key, task_type, title, payload_json)
+                VALUES (%s, %s, 'payment_onboarding', 'Customer onboarding started', %s)
+                """,
+                (customer_id, product_key, Jsonb({"paddle_transaction_id": data.get("id")})),
+            )
+            actions.append("onboarding_task_created")
         return {"event_type": event_type, "actions": actions, "provisioning_paused": provisioning_paused}
 
     if event_type in {"subscription.created", "subscription.activated", "subscription.updated", "subscription.canceled"}:
@@ -440,6 +455,14 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
         actions.append("subscription_recorded")
         if not provisioning_paused and event_type in {"subscription.created", "subscription.activated"}:
             actions.append("onboarding_email_task_created")
+            execute(
+                """
+                INSERT INTO onboarding_tasks(customer_id, product_key, task_type, title, payload_json)
+                VALUES (%s, %s, 'subscription_onboarding', 'Subscription onboarding started', %s)
+                """,
+                (customer_id, product_key, Jsonb({"paddle_subscription_id": data.get("id")})),
+            )
+            actions.append("onboarding_task_created")
         execute(
             "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
             (f"paddle.{event_type}", "info", "Paddle subscription event processed", Jsonb({"actions": actions, "provisioning_paused": provisioning_paused})),

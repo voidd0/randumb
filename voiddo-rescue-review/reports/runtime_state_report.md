@@ -39,3 +39,25 @@ Generated: 2026-05-26T14:52:52+03:00
 - launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
 
 The warmup calendar remains scheduled but safety-blocked by recent bounce/DSN and SMTP rate-limit signals.
+
+## Production Autonomy Build Update
+
+Generated: 2026-05-26T15:18:39+03:00
+
+- checkout status: READY
+- mail auth status: PASS
+- latest mail QA decision: PASS
+- visual/Huanshu decision: PASS for landing, audit demo, customer, status, unsubscribe, and authenticated admin
+- approved test inbox count: 7
+- approved warmup recipient count: 7
+- scheduled warmup count: 28
+- deliverability diagnostic sent count: 8
+- warmup sent count: 0
+- live outreach sent count: 0
+- bounce/DSN count, last 24h: 2
+- rate-limit signal count, last 24h: 1
+- agent runs recorded: 62
+- latest manual daily loop: 7 agents completed, live_outreach=false
+- launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
+
+Canonical decision: not production/live-outreach-ready. The codebase now has scout, scoring, agent, template, checkout, onboarding, and throttle foundations, but warmup remains blocked by recent mail signals and production lead sourcing is import-based.

@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from .inbox_engine import poll_all
 from .pipeline import process_one_scanner_job
+from .scouts import process_one_scout_run
 
 
 def log(event: str, **payload):
@@ -19,6 +20,9 @@ def main():
         else:
             log("worker_tick", scanning_paused=os.environ.get("SCANNING_PAUSED", "true"))
             if os.environ.get("SCANNING_PAUSED", "true").lower() != "true":
+                scout_result = process_one_scout_run()
+                if scout_result.get("processed"):
+                    log("scout_run_processed", **scout_result)
                 result = process_one_scanner_job()
                 if result.get("processed"):
                     log("scanner_job_processed", **result)

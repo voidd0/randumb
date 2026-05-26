@@ -57,6 +57,26 @@ Updated: 2026-05-26 14:21 IDT
 
 Live counters after P5: warmup sent `0`, live outreach sent `0`.
 
+## Production Autonomy Build Smoke
+
+Updated: 2026-05-26 15:18 IDT
+
+- `docker compose exec -T api python -m pytest -q`: PASS, `61 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS, includes compose/API/worker/DB checks and `61 passed`
+- API/web/worker/postgres/redis health: PASS
+- Huanshu visual checks:
+  - landing: PASS
+  - audit demo: PASS
+  - customer: PASS
+  - status: PASS
+  - unsubscribe: PASS
+  - authenticated admin: PASS
+- Manual safe daily loop: PASS, 7/7 agents completed
+- warmup sent: `0`
+- live outreach sent: `0`
+- recent bounce/DSN still blocks warmup: `2`
+- recent rate-limit still blocks warmup: `1`
+
 ## P5 Cleanup Smoke
 
 Updated: 2026-05-26 14:52 IDT
