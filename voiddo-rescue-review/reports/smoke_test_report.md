@@ -174,6 +174,34 @@ Updated: 2026-05-26 18:24 IDT
 - warmup sent: `0`
 - live outreach sent: `0`
 
+## P10 Mail Clean Window + Readiness Smoke
+
+Updated: 2026-05-26 18:34 IDT
+
+- `docker compose exec -T api python -m app.db`: PASS
+- `docker compose exec -T api python -m pytest -q`: PASS, `107 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS, `107 passed`, `ok`
+- clean-window transition tests: PASS
+- mailbox health tests: PASS
+- sender rotation tests: PASS
+- interested reply -> mocked checkout/onboarding/fix scenario: PASS
+- protected admin endpoint tests: PASS
+- daily loop: PASS, 14 agents completed
+- Huanshu:
+  - landing: PASS
+  - audit demo: PASS
+  - customer: PASS
+  - status: PASS
+  - unsubscribe: PASS
+  - authenticated admin screenshots: PASS
+- extra quality plugins:
+  - axe-core/playwright: PASS
+  - pa11y: PASS
+  - pixelmatch: PASS
+  - Lighthouse CI: PASS_WITH_WARNINGS
+- warmup sent: `0`
+- live outreach sent: `0`
+
 ## P5 Cleanup Smoke
 
 Updated: 2026-05-26 14:52 IDT

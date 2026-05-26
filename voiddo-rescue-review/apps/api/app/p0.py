@@ -337,6 +337,9 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "outbound_mailer_decisions": scalar("SELECT count(*) FROM outbound_mailer_decisions"),
         "reply_action_plans": scalar("SELECT count(*) FROM reply_action_plans"),
         "scout_provenance_scores": scalar("SELECT count(*) FROM scout_provenance_scores"),
+        "mail_clean_window_transitions": scalar("SELECT count(*) FROM mail_clean_window_transitions"),
+        "mailbox_health_scores": scalar("SELECT count(*) FROM mailbox_health_scores"),
+        "sender_rotation_readiness": scalar("SELECT count(*) FROM sender_rotation_readiness"),
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,
@@ -1222,7 +1225,7 @@ def _dig(record_type: str, name: str) -> str:
         return f"ERROR:{type(exc).__name__}"
 
 
-def run_mail_qa() -> dict[str, Any]:
+def run_mail_qa(allow_deliverability_send: bool = True) -> dict[str, Any]:
     settings = get_settings()
     checks = {
         "a_mail": _dig("A", "mail.voiddorescue.com"),
@@ -1274,7 +1277,12 @@ def run_mail_qa() -> dict[str, Any]:
     checks["approved_test_inboxes"] = len(approved_test_inboxes)
     if checks["approved_test_inboxes"] <= 0:
         issues.append("approved_test_inbox_pool_missing")
-    deliverability = run_deliverability_diagnostics(settings, approved_test_inboxes, smtp_ready) if approved_test_inboxes else {"sent": 0, "skipped": "no_approved_test_inboxes"}
+    if approved_test_inboxes and allow_deliverability_send:
+        deliverability = run_deliverability_diagnostics(settings, approved_test_inboxes, smtp_ready)
+    elif approved_test_inboxes:
+        deliverability = {"sent": 0, "skipped": "disabled_for_clean_window_transition"}
+    else:
+        deliverability = {"sent": 0, "skipped": "no_approved_test_inboxes"}
     checks["deliverability_diagnostics"] = deliverability
     if deliverability.get("errors"):
         issues.append("deliverability_diagnostic_failed")

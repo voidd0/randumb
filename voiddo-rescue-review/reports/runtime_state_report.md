@@ -139,3 +139,24 @@ Generated: 2026-05-26T18:24:00+03:00
 - bounce/DSN count, last 24h: `2`
 - SMTP rate-limit count, last 24h: `1`
 - launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
+
+## P10 Mail Clean Window + Readiness Update
+
+Generated: 2026-05-26T18:34:00+03:00
+
+- clean-window transition: implemented, no-send policy
+- mailbox health scores: implemented
+- sender rotation readiness: implemented
+- run_mail_qa no-send mode: implemented with `allow_deliverability_send=false`
+- tests: `107 passed`
+- smoke: PASS
+- Huanshu: PASS for landing, audit demo, customer, status, unsubscribe, and authenticated admin screenshots
+- extra quality plugins: axe/pa11y/pixelmatch PASS; Lighthouse CI PASS_WITH_WARNINGS
+- daily loop: 14 agents completed
+- latest clean-window transition: `blocked_recent_signals`, sends_started `false`
+- latest sender rotation readiness: `blocked`, ready_sender_count `0`, provider_spacing_status `needs_spacing`
+- warmup sent: `0`
+- live outreach sent: `0`
+- bounce/DSN count, last 24h: `2`
+- SMTP rate-limit count, last 24h: `1`
+- launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH

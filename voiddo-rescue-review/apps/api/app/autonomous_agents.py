@@ -10,6 +10,7 @@ from .email_templates import render_all_samples
 from .economics import run_economics_audit
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
+from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
 from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
@@ -85,6 +86,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "quality_plugin_agent": lambda: latest_quality_summary(),
         "revenue_simulation_agent": lambda: run_synthetic_lead_simulation(int(payload.get("count", 25))),
         "mail_clean_window_agent": lambda: check_mail_clean_window(24),
+        "mail_clean_window_transition_agent": lambda: run_clean_window_transition(24),
+        "sender_rotation_readiness_agent": lambda: sender_rotation_ready(),
         "public_language_gate_agent": lambda: check_no_ai_public_language(),
     }
     if agent not in agents:
@@ -105,6 +108,8 @@ def run_daily_loop() -> dict[str, Any]:
         "autonomous_mailer_agent",
         "outbound_mailer_gate_agent",
         "reply_action_agent",
+        "mail_clean_window_transition_agent",
+        "sender_rotation_readiness_agent",
         "self_audit_agent",
     ]
     runs = [run_agent(agent) for agent in selected]

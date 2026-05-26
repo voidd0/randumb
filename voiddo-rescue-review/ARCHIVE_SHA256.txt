@@ -1,2 +1,2 @@
-Archive: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p9-campaign-mailer-control-2026-05-26.zip
+Archive: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p10-mail-clean-window-readiness-2026-05-26.zip
 SHA256: generated after clean export; see adjacent .sha256 file and final report.

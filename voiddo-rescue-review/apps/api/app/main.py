@@ -46,6 +46,7 @@ from .campaign_control import campaign_readiness_snapshot
 from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
 from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
+from .mailer_readiness import mailbox_health_score, run_clean_window_transition, sender_rotation_ready
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .language_gate import check_no_ai_public_language
@@ -480,6 +481,23 @@ async def autonomous_mailer_inbound(request: Request):
 async def outbound_message_decision(request: Request):
     payload = await request.json()
     return {"ok": True, "decision": evaluate_outbound_message(payload)}
+
+
+@app.post("/admin/mailer/clean-window-transition", dependencies=[Depends(require_admin)])
+async def mail_clean_window_transition_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "transition": run_clean_window_transition(int(payload.get("window_hours", 24)))}
+
+
+@app.post("/admin/mailer/mailbox-health", dependencies=[Depends(require_admin)])
+async def mailbox_health_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "health": mailbox_health_score(payload.get("mailbox", "audit@voiddorescue.com"))}
+
+
+@app.post("/admin/mailer/sender-rotation", dependencies=[Depends(require_admin)])
+def sender_rotation_run():
+    return {"ok": True, "readiness": sender_rotation_ready()}
 
 
 @app.post("/admin/replies/action-plan", dependencies=[Depends(require_admin)])

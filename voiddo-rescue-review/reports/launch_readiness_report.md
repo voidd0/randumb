@@ -152,6 +152,33 @@ Still blocking launch:
 
 No cold outreach was sent. No manual warmup send was forced.
 
+## P10 Mail Clean Window + Readiness Update
+
+Updated: 2026-05-26 18:34 IDT
+
+Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
+
+New passes:
+
+- Clean-window transition state exists and is no-send.
+- `run_mail_qa()` can be rerun in no-deliverability-send mode for autonomous transition checks.
+- Mailbox health scoring exists.
+- Sender rotation readiness exists.
+- Admin dashboard exposes clean transitions, mailbox health, and sender rotation counters.
+- Daily loop completed 14 agents with no sends.
+- Tests: `107 passed`.
+- Smoke: PASS.
+- Huanshu and extra quality plugin gates pass.
+
+Still blocking:
+
+- bounce/DSN count, last 24h: `2`
+- SMTP rate-limit count, last 24h: `1`
+- sender rotation readiness: `blocked`
+- provider spacing: `needs_spacing`
+
+No cold outreach was sent. No manual warmup send was forced. The transition agent started `0` sends.
+
 ## P7 Revenue Simulation Update
 
 Updated: 2026-05-26 17:56 IDT
