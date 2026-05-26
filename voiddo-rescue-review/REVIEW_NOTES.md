@@ -47,4 +47,4 @@ Confirmation:
 - GitHub `main`/`master` is not modified; this review content lives on the dedicated branch only.
 
 Commit SHA:
-- Filled after initial import commit.
+- Artifact import commit: 
