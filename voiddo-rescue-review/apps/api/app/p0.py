@@ -405,6 +405,39 @@ def upsert_customer(email: str, paddle_customer_id: str | None) -> str:
     return str(row["id"])
 
 
+def _customer_mail_hash(email: str) -> str:
+    normalized = (email or "").strip().lower()
+    if not normalized:
+        return ""
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
+
+
+def enqueue_customer_mail_action(
+    action_type: str,
+    customer_id: str,
+    customer_email: str,
+    product_key: str,
+    template_key: str,
+    source_event: str,
+    payload: dict[str, Any] | None = None,
+) -> str:
+    safe_payload = {
+        "customer_id": customer_id,
+        "product_key": product_key,
+        "source_event": source_event,
+        **(payload or {}),
+    }
+    row = execute(
+        """
+        INSERT INTO mailer_action_queue(action_type, risk_level, mailbox, recipient_hash, template_key, payload_json)
+        VALUES (%s, 'SAFE_AUTO', 'support@voiddorescue.com', %s, %s, %s)
+        RETURNING id
+        """,
+        (action_type, _customer_mail_hash(customer_email), template_key, Jsonb(json_safe(safe_payload))),
+    )
+    return str(row["id"])
+
+
 def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> dict[str, Any]:
     settings = get_settings()
     event_type = payload.get("event_type", "unknown")
@@ -428,7 +461,7 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
         )
         actions.append("payment_recorded")
         if product_key in ONETIME_FIX_PRODUCTS:
-            execute(
+            fix_row = execute(
                 """
                 INSERT INTO fix_requests(customer_id, product_key, status, priority, title, description, evidence_json)
                 VALUES (%s, %s, 'new', 'P1', %s, %s, %s)
@@ -443,6 +476,17 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
                 ),
             )
             actions.append("fix_request_created")
+            if not provisioning_paused:
+                enqueue_customer_mail_action(
+                    "fix_request_created",
+                    customer_id,
+                    email,
+                    product_key,
+                    "fix_request_created",
+                    "transaction.paid",
+                    {"fix_request_id": str(fix_row["id"]), "paddle_transaction_id": data.get("id")},
+                )
+                actions.append("fix_request_mail_action_queued")
         execute(
             "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
             ("paddle.transaction_paid", "info", "Paddle transaction paid processed", Jsonb({"actions": actions, "provisioning_paused": provisioning_paused})),
@@ -457,6 +501,26 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
                 (customer_id, product_key, Jsonb({"paddle_transaction_id": data.get("id")})),
             )
             actions.append("onboarding_task_created")
+            enqueue_customer_mail_action(
+                "customer_onboarding",
+                customer_id,
+                email,
+                product_key,
+                "payment_onboarding",
+                "transaction.paid",
+                {"paddle_transaction_id": data.get("id")},
+            )
+            actions.append("customer_onboarding_mail_action_queued")
+            enqueue_customer_mail_action(
+                "monitoring_report",
+                customer_id,
+                email,
+                product_key,
+                "monitoring_setup_reminder",
+                "transaction.paid",
+                {"paddle_transaction_id": data.get("id"), "mode": "setup_reminder"},
+            )
+            actions.append("monitoring_setup_mail_action_queued")
         return {"event_type": event_type, "actions": actions, "provisioning_paused": provisioning_paused}
 
     if event_type in {"subscription.created", "subscription.activated", "subscription.updated", "subscription.canceled"}:
@@ -496,6 +560,26 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
                 (customer_id, product_key, Jsonb({"paddle_subscription_id": data.get("id")})),
             )
             actions.append("onboarding_task_created")
+            enqueue_customer_mail_action(
+                "customer_onboarding",
+                customer_id,
+                email,
+                product_key,
+                "payment_onboarding",
+                event_type,
+                {"paddle_subscription_id": data.get("id")},
+            )
+            actions.append("customer_onboarding_mail_action_queued")
+            enqueue_customer_mail_action(
+                "monitoring_report",
+                customer_id,
+                email,
+                product_key,
+                "monitoring_setup_reminder",
+                event_type,
+                {"paddle_subscription_id": data.get("id"), "mode": "setup_reminder"},
+            )
+            actions.append("monitoring_setup_mail_action_queued")
         execute(
             "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
             (f"paddle.{event_type}", "info", "Paddle subscription event processed", Jsonb({"actions": actions, "provisioning_paused": provisioning_paused})),

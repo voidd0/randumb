@@ -1,20 +1,20 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 21:11 IDT
+Generated: 2026-05-26 21:24 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - target folder: `voiddo-rescue-review/`
-- file count: `241`
+- file count: `244`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## P22 Summary
+## P23 Summary
 
-- Added `mailer_action_queue` migration.
-- Added protected mailer action queue and no-send router endpoints.
-- Added admin action queue panel.
-- Router prepares or blocks actions with gate evidence and keeps send_mail=false.
+- Connected Paddle provisioning to customer mail actions.
+- Added customer onboarding, fix-request, and monitoring setup mail actions.
+- Customer mail is queued/prepared through the mailer action router and remains no-send while gates block.
+- Customer email addresses are hashed/omitted from queue summaries and reports.
 - Live outreach sent: `0`.
 - Warmup sent: `0`.
 
@@ -24,7 +24,7 @@ Excluded from review/export: `.env`, `*.env`, mailbox passwords, private keys, `
 
 ## Verification
 
-- API tests: `177 passed`.
+- API tests: `181 passed`.
 - Smoke script: PASS.
 - Huanshu: PASS on money-facing/public/admin/customer routes.
 - Extra design/accessibility/regression plugins: PASS with `0` blockers.

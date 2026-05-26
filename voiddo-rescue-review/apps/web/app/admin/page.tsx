@@ -43,6 +43,8 @@ export default async function AdminPage() {
   const ledgerInbound = ledger.inbound || {};
   const ledgerOutbound = ledger.outbound || {};
   const ledgerThrottle = ledger.throttle || {};
+  const actionCounts = Array.isArray(actionQueue.counts) ? actionQueue.counts : [];
+  const customerMailCounts = actionCounts.filter((item: any) => ["customer_onboarding", "fix_request_created", "monitoring_report"].includes(item.action_type));
   const monitoringStatuses = monitoring.target_statuses || [];
   const monitoringRuns = monitoring.latest_runs || [];
   const ops = [
@@ -162,6 +164,9 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">privacy</span><span>raw addresses in queue payload</span><span className="score">{actionQueue.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">send</span><span>router send capability</span><span className="score">{actionQueue.send_mail ? "armed" : "evidence only"}</span></div>
             <div className="row"><span className="tag">blockers</span><span>current ledger blockers</span><span className="score">{Array.isArray(actionQueue.ledger_blockers) ? actionQueue.ledger_blockers.length : 0}</span></div>
+            {customerMailCounts.length ? customerMailCounts.slice(0, 5).map((item: any) => (
+              <div className="row" key={`${item.action_type}-${item.status}`}><span className="tag">{item.status}</span><span>{String(item.action_type).replaceAll("_", " ")}</span><span className="score">{item.count}</span></div>
+            )) : <div className="row"><span className="tag">customer</span><span>customer mail actions</span><span className="score">0</span></div>}
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>

@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 21:10 IDT
+Generated: 2026-05-26 21:23 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `177 passed`
+- API tests: `181 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -32,6 +32,10 @@ PASS
 - mailer action router prepares owner report without sending: PASS
 - mailer action router blocks warmup outside natural timer: PASS
 - mailer action summary omits raw addresses: PASS
+- Paddle paid event enqueues customer onboarding action: PASS
+- one-time fix purchase enqueues fix-request mail action: PASS
+- customer mail action prepares without sending while gated: PASS
+- customer email omitted from action queue summary: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

@@ -23,8 +23,9 @@ def _cleanup(marker: str) -> None:
 def test_cold_outreach_action_remains_blocked():
     marker = "p22-cold"
     try:
+        _cleanup(marker)
         enqueue_mailer_action({"action_type": "cold_outreach", "recipient_email": "cold@example.test", "marker": marker})
-        result = process_mailer_action_queue(5)
+        result = process_mailer_action_queue(100)
         action = next(item for item in result["actions"] if item["action_type"] == "cold_outreach")
         assert action["status"] == "blocked"
         assert "high_risk_action_requires_review" in action["gate_result_json"]["blockers"]
@@ -36,9 +37,10 @@ def test_cold_outreach_action_remains_blocked():
 def test_owner_report_prepared_but_not_sent_when_mail_signals_block():
     marker = "p22-owner"
     try:
+        _cleanup(marker)
         action = enqueue_mailer_action({"action_type": "owner_report", "marker": marker})
         assert action["status"] == "queued"
-        result = process_mailer_action_queue(5)
+        result = process_mailer_action_queue(100)
         processed = [item for item in result["actions"] if item["action_type"] == "owner_report"]
         assert processed
         assert processed[-1]["status"] == "prepared"
@@ -50,8 +52,9 @@ def test_owner_report_prepared_but_not_sent_when_mail_signals_block():
 def test_warmup_action_blocked_by_recent_signals_or_natural_timer_gate():
     marker = "p22-warmup"
     try:
+        _cleanup(marker)
         enqueue_mailer_action({"action_type": "warmup_slot", "marker": marker})
-        result = process_mailer_action_queue(5)
+        result = process_mailer_action_queue(100)
         action = next(item for item in result["actions"] if item["action_type"] == "warmup_slot")
         assert action["status"] == "blocked"
         assert "natural_warmup_timer_only" in action["gate_result_json"]["blockers"]
@@ -63,6 +66,7 @@ def test_action_queue_summary_omits_raw_addresses():
     marker = "p22-raw-address"
     raw = "private-p22@example.test"
     try:
+        _cleanup(marker)
         enqueue_mailer_action({"action_type": "safe_reply_draft", "recipient_email": raw, "marker": marker})
         summary = mailer_action_queue_summary()
         text = str(summary)

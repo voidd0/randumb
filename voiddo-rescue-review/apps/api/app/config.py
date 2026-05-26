@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     outreach_dry_run: bool = True
     outreach_paused: bool = True
     auto_replies_paused: bool = True
+    customer_mail_sending_enabled: bool = False
     paddle_provisioning_paused: bool = True
     first_live_send_flag: bool = False
 

@@ -90,14 +90,15 @@ apps/api/tests/test_p1_launch_gate.py
 apps/api/tests/test_p20_post_window_runner.py
 apps/api/tests/test_p21_mailer_autonomy_ledger.py
 apps/api/tests/test_p22_mailer_action_queue.py
+apps/api/tests/test_p23_customer_mail_tasks.py
 apps/api/tests/test_p5_warmup_safety.py
 apps/api/tests/test_p6_self_operating.py
 apps/api/tests/test_p7_revenue_simulation.py
 apps/api/tests/test_p8_quality_language.py
 apps/api/tests/test_p9_campaign_mailer_control.py
 apps/api/tests/test_production_autonomy.py
-apps/web/.lighthouseci/lhr-1779818919777.html
-apps/web/.lighthouseci/lhr-1779818919777.json
+apps/web/.lighthouseci/lhr-1779819659129.html
+apps/web/.lighthouseci/lhr-1779819659129.json
 apps/web/Dockerfile
 apps/web/app/admin/page.tsx
 apps/web/app/api/health/route.ts
@@ -195,7 +196,9 @@ reports/p21_autonomous_mailer_ledger_report.md
 reports/p21_next_self_written_tz.md
 reports/p22_mailer_action_router_report.md
 reports/p22_next_self_written_tz.md
+reports/p23_customer_mail_tasks_report.md
 reports/p23_next_self_written_tz.md
+reports/p24_next_self_written_tz.md
 reports/p2_mail_checkout_warmup_report.md
 reports/p3_checkout_deliverability_warmup_report.md
 reports/p4_deliverability_warmup_day1_report.md

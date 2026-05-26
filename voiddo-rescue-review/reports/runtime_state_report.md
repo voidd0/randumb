@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 21:10 IDT
+Generated: 2026-05-26 21:23 IDT
 
 ## Canonical Latest State
 
@@ -49,10 +49,12 @@ Generated: 2026-05-26 21:10 IDT
 - raw recipient addresses included: `false`
 - send_mail: `false`
 - live_outreach_allowed: `false`
+- customer mail actions: onboarding, fix request, monitoring report
+- customer mail sending flag: `false`
 
 ## Verification
 
-- API tests: `177 passed`
+- API tests: `181 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including admin transition panel
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers

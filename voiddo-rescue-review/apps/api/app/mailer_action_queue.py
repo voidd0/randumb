@@ -13,7 +13,8 @@ from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary
 
 HIGH_RISK_ACTIONS = {"cold_outreach", "send_outreach", "start_warmup", "unpause_outreach", "execute_shell"}
 MEDIUM_RISK_ACTIONS = {"deliverability_diagnostic", "warmup_slot"}
-SAFE_ACTIONS = {"owner_report", "customer_onboarding", "safe_reply_draft", "outreach_preview"}
+CUSTOMER_MAIL_ACTIONS = {"customer_onboarding", "fix_request_created", "monitoring_report"}
+SAFE_ACTIONS = {"owner_report", "safe_reply_draft", "outreach_preview", *CUSTOMER_MAIL_ACTIONS}
 
 
 def _hash_recipient(value: str) -> str:
@@ -65,18 +66,20 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
             blockers.append("first_live_send_flag_false")
     if action_type in {"safe_reply_draft"} and settings.auto_replies_paused:
         blockers.append("auto_replies_paused_env")
-    if action_type in {"deliverability_diagnostic", "warmup_slot", "customer_onboarding", "owner_report", "safe_reply_draft"}:
+    if action_type in {"deliverability_diagnostic", "warmup_slot", "owner_report", "safe_reply_draft", *CUSTOMER_MAIL_ACTIONS}:
         if signals["bounce_or_dsn_count"] > 0:
             blockers.append("recent_bounce_or_dsn")
         if signals["rate_limit_count"] > 0:
             blockers.append("recent_rate_limit")
         if latest_mail_qa_decision() != "PASS":
             blockers.append("mail_qa_not_pass")
+    if action_type in CUSTOMER_MAIL_ACTIONS and not settings.customer_mail_sending_enabled:
+        blockers.append("customer_mail_sending_flag_false")
     if action_type == "warmup_slot":
         blockers.append("natural_warmup_timer_only")
 
     if blockers:
-        status = "prepared" if action_type == "owner_report" and "high_risk_action_requires_review" not in blockers else "blocked"
+        status = "prepared" if action_type in {"owner_report", *CUSTOMER_MAIL_ACTIONS} and "high_risk_action_requires_review" not in blockers else "blocked"
     else:
         status = "prepared"
     return {
