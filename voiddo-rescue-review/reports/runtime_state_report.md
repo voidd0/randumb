@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-27 00:47 IDT
+Generated: 2026-05-27 00:55 IDT
 
 ## Canonical Latest State
 
@@ -85,11 +85,14 @@ Generated: 2026-05-27 00:47 IDT
 - P42 digest retention autonomous agent: implemented
 - P43 digest retention ops evidence: implemented
 - P44 digest retention admin visibility: implemented and protected
+- P45 mailer ops retention agent evidence: implemented
 - latest retained mailer ops action: `digest_history_cleanup:completed:send=false`
+- mailer ops synthetic rows: `0`
+- mailer ops retention agent runs: `15`
 
 ## Verification
 
-- API tests: `266 passed`
+- API tests: `270 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including authenticated admin digest cleanup control
 - secondary QA plugins: Playwright/axe/pa11y PASS, 0 blockers
@@ -97,4 +100,4 @@ Generated: 2026-05-27 00:47 IDT
 
 ## Next Allowed Action
 
-Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P45 Mailer Ops Retention Agent Evidence`.
+Wait until `2026-05-27T11:19:56.313413+00:00`; the Rescue-only systemd timer will continue running no-send checks and transition only to warmup-ready evidence if all gates pass. Next build cycle: `P46 Mailer Ops Retention Admin Summary`.

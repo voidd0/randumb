@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-27 00:47 IDT
+Generated: 2026-05-27 00:55 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `266 passed`
+- API tests: `270 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -120,6 +120,10 @@ PASS
 - digest history cleanup ops endpoint is no-send and persisted: PASS
 - admin digest cleanup button source assertion: PASS
 - admin digest cleanup latest-list visual assertion: PASS
+- mailer ops retention agent exists and remains no-send: PASS
+- mailer ops retention agent deletes synthetic rows only: PASS
+- mailer ops retention helper reports counts without send: PASS
+- daily loop includes mailer ops retention agent: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 
@@ -136,5 +140,6 @@ PASS
 - recipient resolver audit after cleanup: `0`
 - ops action events after cleanup: retained no-send admin evidence only
 - mailer ops run rows retained: `1`
+- mailer ops synthetic rows retained: `0`
 - latest retained ops action: `digest_history_cleanup:completed:send=false`
 - digest report history rows retained: `2`

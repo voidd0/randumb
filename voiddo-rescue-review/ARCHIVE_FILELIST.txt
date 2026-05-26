@@ -114,6 +114,7 @@ apps/api/tests/test_p33_mailer_ops_retention_audit.py
 apps/api/tests/test_p34_mailer_ops_daily_digest.py
 apps/api/tests/test_p35_mailer_ops_digest_ui_surface.py
 apps/api/tests/test_p36_mailer_digest_scheduler_agent.py
+apps/api/tests/test_p45_mailer_ops_retention_agent.py
 apps/api/tests/test_p5_warmup_safety.py
 apps/api/tests/test_p6_self_operating.py
 apps/api/tests/test_p7_revenue_simulation.py
@@ -266,7 +267,9 @@ reports/p43_mailer_digest_retention_ops_evidence.md
 reports/p43_next_self_written_tz.md
 reports/p44_mailer_digest_retention_admin_visibility.md
 reports/p44_next_self_written_tz.md
+reports/p45_mailer_ops_retention_agent_evidence.md
 reports/p45_next_self_written_tz.md
+reports/p46_next_self_written_tz.md
 reports/p4_deliverability_warmup_day1_report.md
 reports/p5_review_package_hygiene_report.md
 reports/p5_warmup_safety_report.md

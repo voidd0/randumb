@@ -215,7 +215,27 @@ def mailer_ops_action_summary(limit: int = 8) -> dict[str, Any]:
 
 
 def cleanup_synthetic_mailer_ops_runs() -> dict[str, Any]:
-    row = execute("DELETE FROM mailer_ops_runs WHERE is_synthetic RETURNING 1")
-    _ = row
-    summary = mailer_ops_action_summary()
-    return json_safe({"cleaned": True, "summary": summary, "send_mail": False, "live_outreach_allowed": False})
+    return cleanup_mailer_ops_synthetic_history()
+
+
+def cleanup_mailer_ops_synthetic_history() -> dict[str, Any]:
+    before = mailer_ops_action_summary()
+    deleted_row = fetch_one("SELECT count(*) AS count FROM mailer_ops_runs WHERE is_synthetic")
+    deleted_count = int(deleted_row["count"]) if deleted_row else 0
+    execute("DELETE FROM mailer_ops_runs WHERE is_synthetic")
+    after = mailer_ops_action_summary()
+    return json_safe(
+        {
+            "cleaned": True,
+            "deleted_count": deleted_count,
+            "before_total_rows": before["count"],
+            "after_total_rows": after["count"],
+            "retained_real_count": after["real_count"],
+            "before": before,
+            "after": after,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+        }
+    )

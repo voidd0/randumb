@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 00:47 IDT
+Generated: 2026-05-27 00:55 IDT
 
 ## Decision
 
@@ -31,6 +31,7 @@ P41 added sanitized digest history retention summary and cleanup guard.
 P42 wired digest history retention cleanup into the autonomous daily agent loop.
 P43 added digest history cleanup to persisted mailer ops evidence.
 P44 exposed digest history cleanup as a protected admin Mailer Ops Control and verified that the latest ops list shows the retained no-send cleanup action.
+P45 added `mailer_ops_retention_agent` to the autonomous daily loop so synthetic ops rows are cleaned automatically while real no-send evidence is retained.
 
 ## Passed Gates
 
@@ -65,11 +66,12 @@ P44 exposed digest history cleanup as a protected admin Mailer Ops Control and v
 - mailer digest retention autonomous agent: implemented
 - mailer digest retention ops evidence: implemented
 - mailer digest retention admin visibility: implemented and protected
+- mailer ops retention agent evidence: implemented
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: Playwright/axe/pa11y PASS
-- API tests: `266 passed`
+- API tests: `270 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -90,6 +92,8 @@ P44 exposed digest history cleanup as a protected admin Mailer Ops Control and v
 - raw recipients in admin summaries: `false`
 - ops action system events after test cleanup: retained no-send admin evidence only
 - mailer ops run rows retained: `1`
+- mailer ops synthetic rows retained: `0`
+- mailer ops retention agent runs: `15`
 - latest retained ops action: `digest_history_cleanup:completed:send=false`
 - digest report history rows: `2`
 

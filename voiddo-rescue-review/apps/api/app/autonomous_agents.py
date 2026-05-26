@@ -15,6 +15,7 @@ from .mailer_control_room import cleanup_mailer_digest_history, write_mailer_dig
 from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mailer_closed_loop import run_mailer_closed_loop
+from .mailer_ops_actions import cleanup_mailer_ops_synthetic_history
 from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
@@ -96,6 +97,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "customer_mail_simulation_agent": lambda: run_customer_mail_simulation(True),
         "mailer_digest_agent": lambda: write_owner_status_report(send_if_safe=False),
         "mailer_digest_retention_agent": lambda: cleanup_mailer_digest_history(90),
+        "mailer_ops_retention_agent": lambda: cleanup_mailer_ops_synthetic_history(),
         "outbound_mailer_gate_agent": lambda: evaluate_outbound_message({"email": "sample@example.test", "template_key": "first_audit_notice"}),
         "reply_action_agent": lambda: plan_reply_action("Price", "How much does it cost?", "audit@voiddorescue.com"),
         "quality_plugin_agent": lambda: latest_quality_summary(),
@@ -136,6 +138,7 @@ def run_daily_loop() -> dict[str, Any]:
         "customer_mail_simulation_agent",
         "mailer_digest_agent",
         "mailer_digest_retention_agent",
+        "mailer_ops_retention_agent",
         "outbound_mailer_gate_agent",
         "reply_action_agent",
         "mail_clean_window_transition_agent",
