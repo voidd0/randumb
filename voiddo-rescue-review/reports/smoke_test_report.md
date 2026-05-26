@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 23:08 IDT
+Generated: 2026-05-26 23:14 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `230 passed`
+- API tests: `234 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -82,6 +82,10 @@ PASS
 - real ops runs remain sanitized: PASS
 - summary separates real and synthetic counts: PASS
 - unknown ops actions remain blocked in retention summary: PASS
+- daily report includes ops run summary: PASS
+- owner report draft includes ops state without raw recipients: PASS
+- owner report generation sends no email: PASS
+- daily digest keeps live outreach blocked: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

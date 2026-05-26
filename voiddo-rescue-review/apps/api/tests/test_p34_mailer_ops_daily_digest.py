@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from app.db import execute, fetch_one
+from app.mailer_control_room import write_owner_status_report
+from app.mailer_ops_actions import run_mailer_ops_action
+
+
+def test_daily_report_includes_mailer_ops_summary():
+    run_mailer_ops_action("customer_simulation", source="admin", is_synthetic=False)
+    report = write_owner_status_report(send_if_safe=False)
+    text = Path(report["path"]).read_text()
+    assert "mailer_ops_real_count" in text
+    assert "mailer_ops_blocked_unsafe_count" in text
+    assert report["mailer_ops"]["real_count"] >= 1
+    execute("DELETE FROM mailer_ops_runs")
+    execute("DELETE FROM mailer_action_queue WHERE payload_json::text LIKE %s", ("%daily_digest_hook%",))
+
+
+def test_owner_report_draft_uses_no_send_action_queue():
+    report = write_owner_status_report(send_if_safe=False)
+    action = report["owner_report_action"]
+    assert action["action_type"] == "owner_report"
+    assert action["status"] == "queued"
+    row = fetch_one("SELECT payload_json FROM mailer_action_queue WHERE id = %s", (action["id"],))
+    assert row is not None
+    assert row["payload_json"]["payload_json"]["source"] == "daily_digest_hook"
+    assert "@" not in str(row["payload_json"]["payload_json"]["mailer_ops"])
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (action["id"],))
+
+
+def test_owner_report_generation_sends_no_email():
+    report = write_owner_status_report(send_if_safe=True)
+    assert report["email_sent"] is False
+    assert report["owner_report_action"]["action_type"] == "owner_report"
+    assert report["state"]["live_outreach_sent_count"] == 0
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (report["owner_report_action"]["id"],))
+
+
+def test_daily_digest_keeps_live_outreach_blocked():
+    report = write_owner_status_report(send_if_safe=False)
+    assert report["mailer"]["live_outreach_allowed"] is False
+    assert report["owner_report_action"]["recipient_hash"] == ""
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (report["owner_report_action"]["id"],))

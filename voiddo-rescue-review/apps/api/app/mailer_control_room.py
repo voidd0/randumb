@@ -8,7 +8,9 @@ from psycopg.types.json import Jsonb
 
 from .config import get_settings
 from .db import execute, fetch_all, fetch_one
+from .mailer_action_queue import enqueue_mailer_action
 from .mailer_autonomy import mailer_status_snapshot
+from .mailer_ops_actions import mailer_ops_action_summary
 from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary, runtime_state_snapshot, warmup_calendar_health
 
 
@@ -133,6 +135,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     state = runtime_state_snapshot()
     mailer = mailer_control_room_summary(write_snapshot=True)
+    ops = mailer_ops_action_summary()
     monitoring = monitoring_control_room_summary()
     blocked = bool(mailer["warmup_blocked_reason"]) or state["latest_mail_qa_decision"] != "PASS"
     email_sent = False
@@ -157,6 +160,9 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                 f"- mailer_status: `{mailer['latest_snapshot'].get('status', 'unknown')}`",
                 f"- next_allowed_action: `{mailer['next_allowed_action']}`",
                 f"- monitoring_due_now: `{monitoring['due_now']}`",
+                f"- mailer_ops_real_count: `{ops['real_count']}`",
+                f"- mailer_ops_synthetic_count: `{ops['synthetic_count']}`",
+                f"- mailer_ops_blocked_unsafe_count: `{ops['blocked_unsafe_count']}`",
                 f"- email_sent: `{email_sent}`",
                 f"- send_decision: `{send_decision}`",
                 "",
@@ -166,6 +172,23 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         + "\n",
         encoding="utf-8",
     )
+    draft = enqueue_mailer_action(
+        {
+            "action_type": "owner_report",
+            "risk_level": "SAFE_AUTO",
+            "mailbox": "support@voiddorescue.com",
+            "template_key": "owner_status_report",
+            "payload_json": {
+                "source": "daily_digest_hook",
+                "mailer_ops": {
+                    "real_count": ops["real_count"],
+                    "synthetic_count": ops["synthetic_count"],
+                    "blocked_unsafe_count": ops["blocked_unsafe_count"],
+                },
+                "email_sent": False,
+            },
+        }
+    )
     execute(
         """
         INSERT INTO system_events(type, severity, message, payload_json)
@@ -173,4 +196,13 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         """,
         (Jsonb({"path": str(path), "email_sent": email_sent, "send_decision": send_decision, "safe": True}),),
     )
-    return {"path": str(path), "email_sent": email_sent, "send_decision": send_decision, "state": state, "mailer": mailer, "monitoring": monitoring}
+    return {
+        "path": str(path),
+        "email_sent": email_sent,
+        "send_decision": send_decision,
+        "state": state,
+        "mailer": mailer,
+        "monitoring": monitoring,
+        "mailer_ops": ops,
+        "owner_report_action": draft,
+    }
