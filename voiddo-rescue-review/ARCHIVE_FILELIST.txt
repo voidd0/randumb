@@ -36,6 +36,7 @@ apps/api/app/mailer_autonomy_ledger.py
 apps/api/app/mailer_closed_loop.py
 apps/api/app/mailer_control.py
 apps/api/app/mailer_control_room.py
+apps/api/app/mailer_ops_actions.py
 apps/api/app/mailer_readiness.py
 apps/api/app/mailer_throttle.py
 apps/api/app/main.py
@@ -104,6 +105,7 @@ apps/api/tests/test_p27_mailer_closed_loop.py
 apps/api/tests/test_p28_recipient_resolver_boundary.py
 apps/api/tests/test_p29_customer_mail_simulation.py
 apps/api/tests/test_p30_mailer_admin_visibility.py
+apps/api/tests/test_p31_mailer_ops_action_controls.py
 apps/api/tests/test_p5_warmup_safety.py
 apps/api/tests/test_p6_self_operating.py
 apps/api/tests/test_p7_revenue_simulation.py
@@ -226,7 +228,9 @@ reports/p29_next_self_written_tz.md
 reports/p2_mail_checkout_warmup_report.md
 reports/p30_mailer_admin_visibility_report.md
 reports/p30_next_self_written_tz.md
+reports/p31_mailer_ops_action_controls_report.md
 reports/p31_next_self_written_tz.md
+reports/p32_next_self_written_tz.md
 reports/p3_checkout_deliverability_warmup_report.md
 reports/p4_deliverability_warmup_day1_report.md
 reports/p5_review_package_hygiene_report.md

@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-26 22:38 IDT
+Generated: 2026-05-26 22:50 IDT
 
 ## Decision
 
@@ -17,6 +17,7 @@ P27 added the autonomous mailer closed-loop executor, idempotency keys, and send
 P28 added the private customer recipient resolver boundary. Raw addresses are resolved only inside transport and omitted from summaries/audits.
 P29 added customer mail simulation across all paid products, lifecycle actions, and gate scenarios without real SMTP.
 P30 added protected admin visibility for the customer-mail gate, resolver audit, send ledger, and simulation state. Raw recipients remain hidden.
+P31 added protected admin controls for safe no-send mailer operations. The controls can run simulation, closed-loop dry run, customer transport dry run, and owner-report preparation without enabling SMTP or outreach.
 
 ## Passed Gates
 
@@ -37,11 +38,12 @@ P30 added protected admin visibility for the customer-mail gate, resolver audit,
 - private customer recipient resolver boundary: implemented
 - customer mail simulation matrix: implemented
 - customer mailer admin visibility panel: implemented
+- mailer ops action controls: implemented
 - autonomous mailer control room: implemented
 - monitoring summary and due scheduler: implemented
 - Huanshu visual QA: PASS
 - extra visual/accessibility plugins: PASS or non-blocking warning
-- API tests: `218 passed`
+- API tests: `222 passed`
 - smoke: PASS
 - live outreach sent: `0`
 - warmup sent: `0`
@@ -60,7 +62,8 @@ P30 added protected admin visibility for the customer-mail gate, resolver audit,
 - recent recipient resolver audit rows after test cleanup: `0`
 - customer mail simulation blocking failures: `0`
 - raw recipients in admin summaries: `false`
+- ops action system events after test cleanup: `0`
 
 ## Next Exact Action
 
-Continue the self-written build cycle with `P31 Mailer Ops Action Controls`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.
+Continue the self-written build cycle with `P32 Mailer Ops Result Persistence`. Let the Rescue-only timer continue no-send post-window checks. If the clean window passes, the system may update warmup-ready evidence only; live outreach remains blocked.

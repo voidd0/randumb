@@ -13,6 +13,13 @@ const labels: Record<string, string> = {
 };
 
 export default async function AdminPage() {
+  async function runMailerOpsAction(formData: FormData) {
+    "use server";
+    const action = String(formData.get("action") || "");
+    const limit = Number(formData.get("limit") || 10);
+    await postJson("/admin/mailer/ops-actions", { action, limit });
+  }
+
   const requestHeaders = await headers();
   const authorization = requestHeaders.get("authorization") || "";
   const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
@@ -23,6 +30,7 @@ export default async function AdminPage() {
   const actionQueueData = await fetchJson("/admin/mailer/action-queue", authorization ? { Authorization: authorization } : {});
   const closedLoopData = await fetchJson("/admin/mailer/closed-loop", authorization ? { Authorization: authorization } : {});
   const simulationData = await postJson("/admin/mailer/customer-simulation", { write_report: false }, authorization ? { Authorization: authorization } : {});
+  const opsActionData = await fetchJson("/admin/mailer/ops-actions", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
@@ -32,6 +40,7 @@ export default async function AdminPage() {
   const actionQueue = actionQueueData?.queue || {};
   const closedLoop = closedLoopData?.closed_loop || {};
   const simulation = simulationData?.simulation || {};
+  const opsActions = opsActionData?.ops_actions || {};
   const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
@@ -187,6 +196,37 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">signals</span><span>recent bounce or rate-limit blockers</span><span className="score">{(closedLoopSignals.bounce_or_dsn_count ?? 0) + (closedLoopSignals.rate_limit_count ?? 0)}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in admin summaries</span><span className="score">{closedLoop.raw_recipient_addresses_included || simulation.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">send</span><span>real customer SMTP</span><span className="score">{simulation.real_smtp_called ? "called" : "off"}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Mailer Ops Controls</h2>
+            <div className="ops-grid">
+              <form action={runMailerOpsAction}>
+                <input type="hidden" name="action" value="customer_simulation" />
+                <input type="hidden" name="limit" value="10" />
+                <button className="button secondary" type="submit">Run simulation</button>
+              </form>
+              <form action={runMailerOpsAction}>
+                <input type="hidden" name="action" value="closed_loop_dry_run" />
+                <input type="hidden" name="limit" value="10" />
+                <button className="button secondary" type="submit">Closed-loop dry run</button>
+              </form>
+              <form action={runMailerOpsAction}>
+                <input type="hidden" name="action" value="customer_transport_dry_run" />
+                <input type="hidden" name="limit" value="10" />
+                <button className="button secondary" type="submit">Transport dry run</button>
+              </form>
+              <form action={runMailerOpsAction}>
+                <input type="hidden" name="action" value="owner_report_action" />
+                <input type="hidden" name="limit" value="1" />
+                <button className="button secondary" type="submit">Prepare owner report</button>
+              </form>
+            </div>
+            <div className="row"><span className="tag">latest</span><span>recorded ops actions</span><span className="score">{opsActions.count ?? 0}</span></div>
+            <div className="row"><span className="tag">send</span><span>ops action SMTP capability</span><span className="score">{opsActions.send_mail ? "armed" : "no-send"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in ops action summaries</span><span className="score">{opsActions.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            {Array.isArray(opsActions.latest) && opsActions.latest.length ? opsActions.latest.slice(0, 3).map((item: any) => (
+              <div className="row" key={item.id}><span className="tag">{item.severity}</span><span>{item.message}</span><span className="score">stored</span></div>
+            )) : <div className="row"><span className="tag">idle</span><span>no ops actions recorded yet</span><span className="score">0</span></div>}
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>

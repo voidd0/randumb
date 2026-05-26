@@ -1,6 +1,6 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-26 22:38 IDT
+Generated: 2026-05-26 22:50 IDT
 
 ## Canonical Gate
 
@@ -39,4 +39,19 @@ The authenticated admin panel now includes the customer-mail gate visibility pan
 - broken images: `0`
 - unresolved template variables: `false`
 - raw recipient exposure: `false`
+- blocking visual issues: `0`
+
+## P31 Notes
+
+The authenticated admin panel now includes the Mailer Ops Controls panel with four protected no-send actions.
+
+- Huanshu local adapter: PASS
+- Playwright screenshots: 2, both nonblank
+- `axe-core-playwright`: PASS, 0 violations
+- `pa11y`: PASS, 0 issues
+- horizontal overflow: `false`
+- broken images: `0`
+- unresolved template variables: `false`
+- raw recipient exposure: `false`
+- required controls visible: `Run simulation`, `Closed-loop dry run`, `Transport dry run`, `Prepare owner report`
 - blocking visual issues: `0`

@@ -27,4 +27,5 @@ backups/*
 !backups/.gitkeep
 
 reports/visual_qa_p30/
+reports/visual_qa_p31/
 *.png

@@ -1,19 +1,19 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 22:38 IDT
+Generated: 2026-05-26 22:50 IDT
 
 ## Branch
 
 - repository: `voidd0/randumb`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
 - review folder: `voiddo-rescue-review/`
-- current pass: `P30 Mailer Admin Visibility Panel`
+- current pass: `P31 Mailer Ops Action Controls`
 
 ## Package State
 
 - source path: `/opt/voiddo-rescue`
 - clean review path: `/tmp/randumb-rescue-review/voiddo-rescue-review`
-- tree file count: `270`
+- tree file count: `274`
 - tree manifest hash: see `ARCHIVE_SHA256.txt`
 - final commit SHA: see branch HEAD returned in the operator final output. The exact final SHA cannot be embedded into the same commit before Git computes that commit hash.
 
@@ -32,28 +32,26 @@ The review tree excludes:
 - runtime `storage/`
 - runtime `logs/`
 - `backups/`
-- screenshot artifacts, including P30 visual QA PNGs
+- screenshot artifacts, including P30/P31 visual QA PNGs
 - export archives
 
-## P30 Summary
+## P31 Summary
 
-P30 added protected admin visibility for the autonomous customer-mail safety state:
+P31 added protected admin action controls for safe no-send mailer operations:
 
-- customer mail simulation summary
-- paid product coverage
-- resolver audit counts
-- send ledger counts
-- customer transport blocked/failed counts
-- recent bounce and rate-limit blockers
-- real customer SMTP flag state
+- customer mail simulation
+- closed-loop dry run
+- customer transport dry run
+- owner report action preparation
 
-Raw recipient addresses are not included in the admin summary, reports, archive manifest, or review package.
+Each action remains admin-only, writes sanitized state, blocks unknown/unsafe commands, and keeps real SMTP, warmup, auto-replies, and live outreach disabled by default.
 
 ## Verification
 
-- focused P30/P29 tests: `11 passed`
-- full API suite: `218 passed`
+- focused P30/P31 tests: `8 passed`
+- full API suite: `222 passed`
 - smoke script: PASS, output `ok`
+- Next production build: PASS
 - Huanshu local adapter: PASS
 - Playwright desktop/mobile admin screenshots: nonblank
 - axe-core: PASS, 0 violations
