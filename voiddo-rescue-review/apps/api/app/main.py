@@ -42,14 +42,17 @@ from .lead_scoring import score_lead
 from .audit_strength import score_audit_strength
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
+from .campaign_control import campaign_readiness_snapshot
 from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
 from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
+from .mailer_control import evaluate_outbound_message
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
+from .reply_actions import plan_reply_action
 from .language_gate import check_no_ai_public_language
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
-from .scout_quality import run_scout_self_check
+from .scout_quality import run_scout_self_check, score_scout_provenance
 from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, process_scout_run
 from .self_operating import (
     create_self_fix_task,
@@ -473,6 +476,18 @@ async def autonomous_mailer_inbound(request: Request):
     return {"ok": True, "decision": decide_inbound_mail(payload.get("subject", ""), payload.get("body", ""), payload.get("mailbox", "support@voiddorescue.com"))}
 
 
+@app.post("/admin/mailer/outbound-decision", dependencies=[Depends(require_admin)])
+async def outbound_message_decision(request: Request):
+    payload = await request.json()
+    return {"ok": True, "decision": evaluate_outbound_message(payload)}
+
+
+@app.post("/admin/replies/action-plan", dependencies=[Depends(require_admin)])
+async def reply_action_plan_create(request: Request):
+    payload = await request.json()
+    return {"ok": True, "plan": plan_reply_action(payload.get("subject", ""), payload.get("body", ""), payload.get("mailbox", "support@voiddorescue.com"))}
+
+
 @app.get("/admin/quality/plugins", dependencies=[Depends(require_admin)])
 def quality_plugins_get():
     return {"ok": True, "manifest": quality_plugin_manifest(), "summary": latest_quality_summary()}
@@ -521,6 +536,11 @@ async def campaign_economics_run(campaign_id: str, request: Request):
     }
 
 
+@app.post("/admin/campaigns/{campaign_id}/readiness", dependencies=[Depends(require_admin)])
+def campaign_readiness_run(campaign_id: str):
+    return {"ok": True, "readiness": campaign_readiness_snapshot(campaign_id)}
+
+
 @app.post("/admin/mail/clean-window", dependencies=[Depends(require_admin)])
 async def mail_clean_window_run(request: Request):
     payload = await request.json()
@@ -558,6 +578,11 @@ async def source_adapter_directory(request: Request):
 @app.post("/admin/scouts/runs/{run_id}/self-check", dependencies=[Depends(require_admin)])
 def scout_self_check(run_id: str):
     return {"ok": True, "check": run_scout_self_check(run_id)}
+
+
+@app.post("/admin/scouts/runs/{run_id}/provenance", dependencies=[Depends(require_admin)])
+def scout_provenance_run(run_id: str):
+    return {"ok": True, "provenance": score_scout_provenance(run_id)}
 
 
 @app.post("/admin/audits/{audit_id}/strength", dependencies=[Depends(require_admin)])

@@ -1,19 +1,18 @@
-# Vøiddo Rescue P8 Review Notes
+# Vøiddo Rescue P9 Review Notes
 
-Generated: 2026-05-26 18:12 IDT
+Generated: 2026-05-26 18:24 IDT
 
-Original runtime tree: `/opt/voiddo-rescue`
-Export target: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p8-real-source-quality-2026-05-26.zip`
+Runtime tree: `/opt/voiddo-rescue`
+Export target: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p9-campaign-mailer-control-2026-05-26.zip`
 Review branch: `voiddo-rescue-mvp-review-20260526-files`
 Review folder: `voiddo-rescue-review/`
-Commit SHA: pending before commit
 
 ## Included
 
 - Docker Compose and `.env.example`
 - API, worker, web, WP plugin, packages, scripts, migrations
 - Redacted reports
-- P8 source adapters, scout self-checks, audit strength scoring, public-language gate
+- P9 campaign readiness, outbound mailer decision, reply action plan, and scout provenance code
 - Test suite and smoke scripts
 
 ## Excluded
@@ -27,11 +26,11 @@ Commit SHA: pending before commit
 
 ## Verification
 
-- Full pytest: `92 passed`
-- Smoke: `92 passed`, `ok`
+- Full pytest: `100 passed`
+- Smoke: `100 passed`, `ok`
 - Huanshu: PASS for landing, audit demo, customer, status, unsubscribe, authenticated admin screenshots
 - Extra visual/design plugins: axe PASS, pa11y PASS, pixelmatch PASS, Lighthouse CI PASS_WITH_WARNINGS
-- Public-language gate: PASS
+- Daily loop: 12 agents, no sends
 - Secret/artifact scan: no raw secrets, no private keys, no `.env`, no runtime visual artifacts detected in review tree
 - Live outreach sent: `0`
 - Warmup sent: `0`

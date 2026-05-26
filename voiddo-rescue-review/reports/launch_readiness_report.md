@@ -198,3 +198,28 @@ Still blocking:
 - SMTP rate-limit count, last 24h: `1`
 
 No cold outreach was sent. No manual warmup send was forced. Launch readiness is not overstated.
+
+## P9 Campaign + Mailer Control Update
+
+Updated: 2026-05-26 18:24 IDT
+
+Decision remains: `WARMUP_SCHEDULED_NO_OUTREACH`.
+
+New passes:
+
+- Campaign readiness snapshots combine lead count, audit strength, economics, mail safety, visual safety, and blockers.
+- Outbound mailer decisions persist action/refusal reason per message payload.
+- Reply action plans persist classification, confidence, safe action, and review requirement.
+- Scout provenance scoring persists source quality.
+- Admin dashboard exposes new counts.
+- Daily loop completed 12 agents with no sends.
+- Tests: `100 passed`.
+- Smoke: PASS.
+- Huanshu and extra quality plugin gates pass.
+
+Still blocking:
+
+- bounce/DSN count, last 24h: `2`
+- SMTP rate-limit count, last 24h: `1`
+
+No cold outreach was sent. No manual warmup send was forced.

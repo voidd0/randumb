@@ -117,3 +117,25 @@ Generated: 2026-05-26T18:12:00+03:00
 - bounce/DSN count, last 24h: `2`
 - SMTP rate-limit count, last 24h: `1`
 - launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH
+
+## P9 Campaign + Mailer Control Update
+
+Generated: 2026-05-26T18:24:00+03:00
+
+- campaign readiness snapshots: implemented
+- outbound mailer decisions: implemented with hashed recipients and refusal reasons
+- reply action plans: implemented
+- scout provenance scores: implemented
+- admin dashboard: now shows campaign readiness, outbound gates, reply plans, and scout provenance
+- autonomous agents: outbound mailer gate and reply action agents added
+- tests: `100 passed`
+- smoke: PASS
+- Huanshu: PASS for landing, audit demo, customer, status, unsubscribe, and authenticated admin screenshots
+- extra quality plugins: axe/pa11y/pixelmatch PASS; Lighthouse CI PASS_WITH_WARNINGS
+- daily loop: 12 agents completed
+- latest outbound decision: blocked, `do_not_send`
+- warmup sent: `0`
+- live outreach sent: `0`
+- bounce/DSN count, last 24h: `2`
+- SMTP rate-limit count, last 24h: `1`
+- launch readiness state: WARMUP_SCHEDULED_NO_OUTREACH

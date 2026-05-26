@@ -146,6 +146,34 @@ Updated: 2026-05-26 18:12 IDT
 - warmup sent: `0`
 - live outreach sent: `0`
 
+## P9 Campaign + Mailer Control Smoke
+
+Updated: 2026-05-26 18:24 IDT
+
+- `docker compose exec -T api python -m app.db`: PASS
+- `docker compose exec -T api python -m pytest -q`: PASS, `100 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS, `100 passed`, `ok`
+- campaign readiness snapshot tests: PASS
+- outbound mailer decision tests: PASS
+- reply action plan tests: PASS
+- scout provenance tests: PASS
+- protected admin endpoint tests: PASS
+- daily loop: PASS, 12 agents completed
+- Huanshu:
+  - landing: PASS
+  - audit demo: PASS
+  - customer: PASS
+  - status: PASS
+  - unsubscribe: PASS
+  - authenticated admin screenshots: PASS
+- extra quality plugins:
+  - axe-core/playwright: PASS
+  - pa11y: PASS
+  - pixelmatch: PASS
+  - Lighthouse CI: PASS_WITH_WARNINGS
+- warmup sent: `0`
+- live outreach sent: `0`
+
 ## P5 Cleanup Smoke
 
 Updated: 2026-05-26 14:52 IDT

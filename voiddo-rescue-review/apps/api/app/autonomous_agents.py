@@ -9,8 +9,10 @@ from .db import execute, fetch_one
 from .email_templates import render_all_samples
 from .economics import run_economics_audit
 from .autonomous_mailer import run_autonomous_mailer_cycle
+from .mailer_control import evaluate_outbound_message
 from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
+from .reply_actions import plan_reply_action
 from .p0 import (
     build_warmup_calendar,
     mail_signal_summary,
@@ -78,6 +80,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "self_learning_agent": lambda: self_operating_summary(),
         "self_building_agent": lambda: self_operating_summary(),
         "autonomous_mailer_agent": lambda: run_autonomous_mailer_cycle(),
+        "outbound_mailer_gate_agent": lambda: evaluate_outbound_message({"email": "sample@example.test", "template_key": "first_audit_notice"}),
+        "reply_action_agent": lambda: plan_reply_action("Price", "How much does it cost?", "audit@voiddorescue.com"),
         "quality_plugin_agent": lambda: latest_quality_summary(),
         "revenue_simulation_agent": lambda: run_synthetic_lead_simulation(int(payload.get("count", 25))),
         "mail_clean_window_agent": lambda: check_mail_clean_window(24),
@@ -99,6 +103,8 @@ def run_daily_loop() -> dict[str, Any]:
         "fix_task_agent",
         "economics_agent",
         "autonomous_mailer_agent",
+        "outbound_mailer_gate_agent",
+        "reply_action_agent",
         "self_audit_agent",
     ]
     runs = [run_agent(agent) for agent in selected]

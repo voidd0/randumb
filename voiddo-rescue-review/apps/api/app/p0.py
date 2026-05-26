@@ -333,6 +333,10 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "scout_self_checks": scalar("SELECT count(*) FROM scout_self_checks"),
         "audit_strength_scores": scalar("SELECT count(*) FROM audit_strength_scores"),
         "public_language_gate_runs": scalar("SELECT count(*) FROM public_language_gate_runs"),
+        "campaign_readiness_snapshots": scalar("SELECT count(*) FROM campaign_readiness_snapshots"),
+        "outbound_mailer_decisions": scalar("SELECT count(*) FROM outbound_mailer_decisions"),
+        "reply_action_plans": scalar("SELECT count(*) FROM reply_action_plans"),
+        "scout_provenance_scores": scalar("SELECT count(*) FROM scout_provenance_scores"),
         "workers": {"api": "ok", "worker": "configured"},
         "kill_switches": {
             "global": get_settings().global_kill_switch,
