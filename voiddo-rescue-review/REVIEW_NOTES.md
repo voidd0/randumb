@@ -1,13 +1,13 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 00:55 IDT
+Generated: 2026-05-27 01:06 IDT
 
 ## Source
 
 - Source tree: `/opt/voiddo-rescue`
 - Review folder: `voiddo-rescue-review/`
 - Branch: `voiddo-rescue-mvp-review-20260526-files`
-- Current completed pass: P45 Mailer Ops Retention Agent Evidence
+- Current completed pass: P46 Mailer Ops Retention Admin Summary
 
 ## Included
 
@@ -31,7 +31,7 @@ Generated: 2026-05-27 00:55 IDT
 
 ## Secret Scan
 
-Secret and artifact scans are required before every push. P45 scan result: clean.
+Secret and artifact scans are required before every push. P46 scan result: clean.
 
 ## Runtime Status
 
@@ -40,8 +40,9 @@ Secret and artifact scans are required before every push. P45 scan result: clean
 - retained real mailer ops rows: `1`
 - retained synthetic mailer ops rows: `0`
 - latest retained mailer ops evidence: `digest_history_cleanup:completed:send=false`
+- latest mailer ops retention agent: `completed:0:1:send=false`
 - launch state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
 ## Commit
 
-The exact branch commit SHA is returned by `git rev-parse HEAD` after the P45 commit and push.
+The exact branch commit SHA is returned by `git rev-parse HEAD` after the P46 commit and push.

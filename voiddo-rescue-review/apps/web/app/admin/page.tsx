@@ -47,6 +47,8 @@ export default async function AdminPage() {
   const digestReport = digest.digest_agent_report || {};
   const digestHistory = digest.digest_agent_history || {};
   const latestDigestHistory = digestHistory.latest || {};
+  const latestRealOpsAction = opsActions.latest_real || {};
+  const opsRetentionAgent = opsActions.latest_retention_agent || {};
   const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
@@ -235,9 +237,17 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">latest</span><span>recorded ops actions</span><span className="score">{opsActions.count ?? 0}</span></div>
             <div className="row"><span className="tag">real</span><span>real ops action history</span><span className="score">{opsActions.real_count ?? 0}</span></div>
             <div className="row"><span className="tag">test</span><span>synthetic ops action history</span><span className="score">{opsActions.synthetic_count ?? 0}</span></div>
+            <div className="row"><span className="tag">retained</span><span>synthetic ops rows retained</span><span className="score">{opsActions.synthetic_count ?? 0}</span></div>
+            <div className="row"><span className="tag">real</span><span>latest retained real ops action</span><span className="score">{latestRealOpsAction.action ? String(latestRealOpsAction.action).replaceAll("_", " ") : "none"}</span></div>
+            <div className="row"><span className="tag">agent</span><span>mailer ops retention agent status</span><span className="score">{opsRetentionAgent.status ?? "not run"}</span></div>
+            <div className="row"><span className="tag">agent</span><span>retention agent runs</span><span className="score">{opsActions.retention_agent_runs ?? 0}</span></div>
+            <div className="row"><span className="tag">deleted</span><span>latest synthetic ops cleanup count</span><span className="score">{opsRetentionAgent.deleted_count ?? 0}</span></div>
+            <div className="row"><span className="tag">kept</span><span>latest retained real ops count</span><span className="score">{opsRetentionAgent.retained_real_count ?? 0}</span></div>
             <div className="row"><span className="tag">blocked</span><span>unsafe ops actions blocked</span><span className="score">{opsActions.blocked_unsafe_count ?? 0}</span></div>
             <div className="row"><span className="tag">send</span><span>ops action SMTP capability</span><span className="score">{opsActions.send_mail ? "armed" : "no-send"}</span></div>
+            <div className="row"><span className="tag">agent send</span><span>retention agent SMTP capability</span><span className="score">{opsRetentionAgent.send_mail ? "armed" : "no-send"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in ops action summaries</span><span className="score">{opsActions.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in retention agent summary</span><span className="score">{opsRetentionAgent.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             {Array.isArray(opsActions.latest) && opsActions.latest.length ? opsActions.latest.slice(0, 3).map((item: any) => (
               <div className="row" key={item.id}><span className="tag">{item.is_synthetic ? "test" : item.status}</span><span>{String(item.action).replaceAll("_", " ")}</span><span className="score">{item.send_mail ? "send" : "no-send"}</span></div>
             )) : <div className="row"><span className="tag">idle</span><span>no ops actions recorded yet</span><span className="score">0</span></div>}

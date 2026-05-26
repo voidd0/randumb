@@ -198,6 +198,31 @@ def mailer_ops_action_summary(limit: int = 8) -> dict[str, Any]:
         LIMIT 1
         """
     )
+    latest_retention_agent = fetch_one(
+        """
+        SELECT id, status, result_json, started_at, completed_at
+        FROM agent_runs
+        WHERE agent = 'mailer_ops_retention_agent'
+        ORDER BY started_at DESC
+        LIMIT 1
+        """
+    )
+    retention_agent_count = fetch_one("SELECT count(*) AS count FROM agent_runs WHERE agent = 'mailer_ops_retention_agent'")
+    retention_agent = None
+    if latest_retention_agent:
+        result = latest_retention_agent["result_json"] or {}
+        retention_agent = {
+            "id": latest_retention_agent["id"],
+            "status": latest_retention_agent["status"],
+            "deleted_count": result.get("deleted_count", 0),
+            "retained_real_count": result.get("retained_real_count", 0),
+            "send_mail": bool(result.get("send_mail")),
+            "smtp_called": bool(result.get("smtp_called")),
+            "live_outreach_allowed": bool(result.get("live_outreach_allowed")),
+            "raw_recipient_addresses_included": bool(result.get("raw_recipient_addresses_included")),
+            "started_at": latest_retention_agent["started_at"],
+            "completed_at": latest_retention_agent["completed_at"],
+        }
     return json_safe(
         {
             "latest": latest,
@@ -207,6 +232,8 @@ def mailer_ops_action_summary(limit: int = 8) -> dict[str, Any]:
             "synthetic_count": int(synthetic_row["count"]) if synthetic_row else 0,
             "blocked_unsafe_count": int(blocked_row["count"]) if blocked_row else 0,
             "latest_real": dict(latest_real) if latest_real else None,
+            "retention_agent_runs": int(retention_agent_count["count"]) if retention_agent_count else 0,
+            "latest_retention_agent": retention_agent,
             "send_mail": False,
             "live_outreach_allowed": False,
             "raw_recipient_addresses_included": False,

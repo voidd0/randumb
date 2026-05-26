@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
-from app.mailer_ops_actions import cleanup_mailer_ops_synthetic_history, run_mailer_ops_action
+from app.mailer_ops_actions import cleanup_mailer_ops_synthetic_history, mailer_ops_action_summary, run_mailer_ops_action
 
 
 def _delete_run(run_id: str) -> None:
@@ -51,3 +51,18 @@ def test_daily_loop_includes_mailer_ops_retention_agent():
     assert retention_runs[0]["result_json"]["send_mail"] is False
     assert retention_runs[0]["result_json"]["live_outreach_allowed"] is False
     assert result["live_outreach"] is False
+
+
+def test_ops_summary_exposes_retention_agent_evidence_without_send():
+    real = run_mailer_ops_action("digest_history_cleanup", source="admin", is_synthetic=False)
+    run_agent("mailer_ops_retention_agent")
+    summary = mailer_ops_action_summary()
+    assert summary["synthetic_count"] == 0
+    assert summary["latest_real"]["action"] == "digest_history_cleanup"
+    assert summary["latest_retention_agent"]["status"] == "completed"
+    assert summary["latest_retention_agent"]["send_mail"] is False
+    assert summary["latest_retention_agent"]["smtp_called"] is False
+    assert summary["latest_retention_agent"]["live_outreach_allowed"] is False
+    assert summary["latest_retention_agent"]["raw_recipient_addresses_included"] is False
+    assert summary["retention_agent_runs"] >= 1
+    _delete_run(real["run"]["id"])

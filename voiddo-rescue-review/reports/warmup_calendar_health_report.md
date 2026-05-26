@@ -1,6 +1,6 @@
 # Warmup Calendar Health Report
 
-Generated: 2026-05-27 00:55 IDT
+Generated: 2026-05-27 01:06 IDT
 
 ## State
 
@@ -27,6 +27,7 @@ Generated: 2026-05-27 00:55 IDT
 - P43 mailer digest retention ops evidence: PASS, no send unlock
 - P44 mailer digest retention admin visibility: PASS, no send unlock
 - P45 mailer ops retention agent evidence: PASS, no send unlock
+- P46 mailer ops retention admin summary: PASS, no send unlock
 
 ## P12 Schedule Gate
 

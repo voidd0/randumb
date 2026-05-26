@@ -269,7 +269,9 @@ reports/p44_mailer_digest_retention_admin_visibility.md
 reports/p44_next_self_written_tz.md
 reports/p45_mailer_ops_retention_agent_evidence.md
 reports/p45_next_self_written_tz.md
+reports/p46_mailer_ops_retention_admin_summary.md
 reports/p46_next_self_written_tz.md
+reports/p47_next_self_written_tz.md
 reports/p4_deliverability_warmup_day1_report.md
 reports/p5_review_package_hygiene_report.md
 reports/p5_warmup_safety_report.md
