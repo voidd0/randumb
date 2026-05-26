@@ -435,9 +435,16 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         command = "PREPARE LEADS"
         for key, value in re.findall(r"(COUNTRY|NICHE|LIMIT)=([^\s]+)", first_line, flags=re.I):
             args[key.lower()] = value
+    elif normalized.startswith("START WARMUP"):
+        command = "START WARMUP"
+        for key, value in re.findall(r"(DAY)=([0-9]+)", first_line, flags=re.I):
+            args[key.lower()] = int(value)
 
-    safe = {"STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL", "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES"}
-    medium = {"RUN VISUAL QA", "RUN MAIL QA", "PREPARE WARMUP", "PREPARE LEADS"}
+    safe = {
+        "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",
+        "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
+    }
+    medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "START WARMUP"}
     high = {"SEND OUTREACH", "START WARMUP", "UNPAUSE OUTREACH", "RUN SHELL", "EXECUTE"}
     if command in safe:
         risk = "SAFE_AUTO"
@@ -536,13 +543,23 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
         result = {"ok": True, "action": "payments", "items": fetch_all("SELECT amount, currency, product_key, status, created_at FROM payments ORDER BY created_at DESC LIMIT 20")}
     elif command == "SHOW REPLIES":
         result = {"ok": True, "action": "replies", "items": fetch_all("SELECT mailbox, classification, last_message_preview, updated_at FROM inbox_threads ORDER BY updated_at DESC LIMIT 20")}
+    elif command == "SHOW MAIL QA":
+        result = {"ok": True, "action": "mail_qa_status", "items": fetch_all("SELECT decision, checks_json, issues_json, created_at FROM mail_qa_runs ORDER BY created_at DESC LIMIT 5")}
+    elif command == "SHOW DELIVERABILITY":
+        result = {"ok": True, "action": "deliverability_status", "items": fetch_all("SELECT email, provider, status, last_test_at, result_json FROM test_inboxes ORDER BY created_at DESC LIMIT 20")}
+    elif command == "SHOW WARMUP":
+        result = {"ok": True, "action": "warmup_status", "items": fetch_all("SELECT status, day_number, planned_daily_cap, recipient_pool_count, stop_conditions_json, created_at FROM warmup_runs ORDER BY created_at DESC LIMIT 10")}
     elif command == "RUN MAIL QA":
         result = {"ok": True, "action": "mail_qa", "run": run_mail_qa()}
+    elif command == "RUN DELIVERABILITY TEST":
+        result = {"ok": True, "action": "deliverability_test", "run": run_mail_qa()}
     elif command == "RUN VISUAL QA":
         result = {"ok": True, "action": "visual_qa", "run": record_visual_qa("app_visual_agent", get_settings().app_base_url, "")}
     elif command == "PREPARE WARMUP":
         pool_count = len(approved_warmup_recipient_emails())
         result = {"ok": True, "action": "warmup_prepare", "warmup": prepare_warmup(pool_count, 1)}
+    elif command == "START WARMUP":
+        result = start_warmup_gate(int(parsed.get("args_json", {}).get("day", 1)))
     elif command == "PREPARE LEADS":
         result = {"ok": True, "action": "lead_prepare_dry_run", "args": parsed.get("args_json", {}), "live_send": False}
     else:
@@ -552,6 +569,44 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
         ("owner_command.executed", "info" if result.get("ok") else "warning", command, Jsonb(json_safe({"risk_level": risk, "result": result}))),
     )
     return json_safe(result)
+
+
+def start_warmup_gate(day_number: int = 1) -> dict[str, Any]:
+    pool_count = len(approved_warmup_recipient_emails())
+    latest_mail = fetch_one("SELECT decision, issues_json FROM mail_qa_runs ORDER BY created_at DESC LIMIT 1")
+    latest_mail_decision = latest_mail["decision"] if latest_mail else "MISSING"
+    deliverability_blockers = []
+    if latest_mail and latest_mail.get("issues_json"):
+        deliverability_blockers = [
+            issue for issue in latest_mail["issues_json"]
+            if issue not in {"approved_test_inbox_pool_missing"}
+        ]
+    allowed = bool(pool_count > 0 and latest_mail_decision == "PASS" and not deliverability_blockers)
+    warmup = prepare_warmup(pool_count, day_number)
+    if allowed:
+        execute(
+            """
+            UPDATE warmup_runs
+            SET status = 'warmup_day_1_ready', updated_at = now()
+            WHERE id = %s
+            """,
+            (warmup["id"],),
+        )
+        warmup["status"] = "warmup_day_1_ready"
+    return {
+        "ok": allowed,
+        "action": "warmup_start_gate",
+        "allowed": allowed,
+        "reason": "ready_no_sending_started" if allowed else "warmup_start_blocked",
+        "checks": {
+            "pool_count": pool_count,
+            "mail_qa_decision": latest_mail_decision,
+            "deliverability_blockers": deliverability_blockers,
+            "cold_leads": False,
+            "sends_started": 0,
+        },
+        "warmup": warmup,
+    }
 
 
 def write_owner_daily_report() -> dict[str, Any]:

@@ -1,6 +1,6 @@
 # Owner Command Inbox Report
 
-Updated: 2026-05-26 12:05 IDT
+Updated: 2026-05-26 12:45 IDT
 
 ## Implemented
 
@@ -39,6 +39,11 @@ It records:
 - `SHOW PAYMENTS`
 - `SHOW REPLIES`
 - `PREPARE LEADS COUNTRY=... NICHE=... LIMIT=...`
+- `SHOW MAIL QA`
+- `SHOW DELIVERABILITY`
+- `SHOW WARMUP`
+- `RUN DELIVERABILITY TEST`
+- `START WARMUP DAY=1`
 
 ## Risk Gates
 
@@ -58,3 +63,5 @@ Arbitrary shell execution is not supported. Shell-like command text is classifie
 - Tests verify `RUN SHELL` is `HIGH_RISK` and blocked for review.
 - `REPORT TODAY` creates a private runtime report artifact.
 - `PAUSE ALL` writes persistent runtime pause controls for scanner, outreach, warmup, auto-replies, and workers.
+- `START WARMUP DAY=1` is blocked unless pool, mail QA, deliverability, and authenticated owner gates pass.
+- `SEND OUTREACH` remains `HIGH_RISK` and blocked.

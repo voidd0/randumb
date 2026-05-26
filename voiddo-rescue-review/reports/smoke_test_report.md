@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Updated: 2026-05-26 12:05 IDT
+Updated: 2026-05-26 12:45 IDT
 
 ## Commands
 
@@ -8,7 +8,7 @@ Updated: 2026-05-26 12:05 IDT
 - `docker compose exec -T api sh -lc 'python -m py_compile app/*.py'`: PASS
 - `docker compose exec -T worker sh -lc 'python -m py_compile worker/*.py'`: PASS
 - `docker compose exec -T api python -m app.db`: PASS
-- `docker compose exec -T api python -m pytest -q`: PASS, `30 passed`
+- `docker compose exec -T api python -m pytest -q`: PASS, `35 passed`
 - `bash scripts/run_smoke_tests.sh`: PASS
 
 ## Runtime Health
@@ -30,6 +30,8 @@ Updated: 2026-05-26 12:05 IDT
 - `https://app.rescue.voiddo.com/admin?token=...`: `401` expected
 - `https://app.rescue.voiddo.com/admin` with Bearer auth: `200`
 - `https://app.rescue.voiddo.com/admin` with Basic auth: `200`
+- `https://go.rescue.voiddo.com/checkout/{product_key}?audit=demo`: `302` for all six products
+- `https://app.rescue.voiddo.com/checkout/contact_form_repair?audit=demo`: `200`
 
 ## Functional Smoke
 
@@ -39,7 +41,7 @@ Updated: 2026-05-26 12:05 IDT
 - `/r/{slug}` rendered through web and public audit domain.
 - `/admin` is protected without token and works with token.
 - Paddle transaction/subscription handlers wrote records in tests.
-- Go checkout endpoint returns controlled `503 checkout_not_configured` instead of 404 when hosted checkout is not configured.
+- Go checkout endpoint redirects to Paddle.js checkout page when client checkout token is configured.
 - Inbox persistence/idempotency passed tests.
 - Owner command SAFE_AUTO/MEDIUM_RISK/HIGH_RISK gates passed tests.
 - Visual QA unresolved-template detection passed tests.

@@ -1,6 +1,6 @@
 # Visual QA Agent Report
 
-Updated: 2026-05-26 11:10 IDT
+Updated: 2026-05-26 12:45 IDT
 
 ## Agents
 
@@ -9,6 +9,7 @@ Updated: 2026-05-26 11:10 IDT
 - `audit_page_visual_agent`
 - `screenshot_evidence_agent`
 - `email_visual_agent`
+- `checkout_visual_agent`
 
 ## Checks Implemented
 
@@ -49,6 +50,7 @@ Latest worker visual run covered:
 - customer `/customer`
 - EN email preview
 - scanner screenshot evidence route
+- Paddle.js checkout page
 
 Latest decisions:
 
@@ -57,6 +59,9 @@ Latest decisions:
 - `app_visual_agent`: `PASS`, Huanshu `PASS`
 - `email_visual_agent`: `PASS`, Huanshu `PASS`
 - `screenshot_evidence_agent`: `PASS`, Huanshu `PASS`
+- `checkout_visual_agent`: `PASS`, Huanshu `PASS`
+
+P3 checkout visual smoke captured the public checkout page with no horizontal overflow and no console errors.
 
 ## Notes
 

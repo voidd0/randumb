@@ -1,6 +1,6 @@
 # Warmup Readiness Report
 
-Updated: 2026-05-26 12:05 IDT
+Updated: 2026-05-26 12:45 IDT
 
 ## Status
 
@@ -27,6 +27,7 @@ The implemented dry-run planner stores the conservative lower bound for each day
 - Suppression-list filtering.
 - Dry-run schedule preview.
 - Owner command `PREPARE WARMUP` uses real env+DB approved pool count.
+- Owner command `START WARMUP DAY=1` is implemented but remains blocked until all gates pass.
 
 ## Stop Conditions
 

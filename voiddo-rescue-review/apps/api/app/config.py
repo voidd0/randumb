@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     paddle_price_contact_form_repair: str = ""
     paddle_price_emergency_fix: str = ""
     paddle_hosted_checkout_base_url: str = ""
+    paddle_client_token: str = ""
 
     daily_send_limit: int = 20
     hourly_domain_send_limit: int = 5

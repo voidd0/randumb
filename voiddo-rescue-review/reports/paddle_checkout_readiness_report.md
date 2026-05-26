@@ -1,18 +1,19 @@
 # Paddle Checkout Readiness Report
 
-Updated: 2026-05-26 12:05 IDT
+Updated: 2026-05-26 12:45 IDT
 
 ## Status
 
-`FAIL_CLOSED`
+`READY_CLIENT_CHECKOUT`
 
-Paddle API key, webhook secret, and all six Rescue price IDs are configured, but no hosted checkout base URL or client checkout config is configured yet.
+Paddle API key, webhook secret, all six Rescue price IDs, and a Paddle client-side token are configured.
 
 Current public behavior:
 
 - `GET /billing/config`: reports all price keys present.
-- `GET /checkout/{product_key}`: redirects only if checkout base/config is present.
-- Without checkout base/config, it returns `503 checkout_not_configured`.
+- `GET /checkout/{product_key}`: redirects to hosted checkout if configured, otherwise to the Paddle.js checkout page.
+- `GET /checkout/config/{product_key}`: returns public client checkout config for Paddle.js.
+- Without hosted or client checkout config, it still returns `503 checkout_not_configured`.
 
 ## Product Price Coverage
 
@@ -25,20 +26,18 @@ Current public behavior:
 
 ## Required Next Config
 
-Preferred simple path:
+Current path:
 
-- Set `PADDLE_HOSTED_CHECKOUT_BASE_URL` to the approved Paddle hosted checkout link.
-
-Alternative:
-
-- Add Paddle.js client checkout configuration and a verified checkout page, then route `/checkout/{product_key}` to that page with price ID and audit metadata.
+- Paddle.js checkout page at `/checkout/[productKey]`.
+- Client-side token is used only for frontend Paddle.js.
+- Secret API key remains server-side only.
+- Audit slug is passed in checkout custom data.
 
 ## Notes
 
-Paddle documentation says hosted checkout links accept `price_id` and `user_email` query parameters, but live hosted checkout access may require Paddle approval. No fake hosted URL was inserted.
+Paddle documentation requires a client-side token for Paddle.js checkout and accepts price IDs in `Paddle.Checkout.open()`. No fake hosted URL was inserted.
 
 ## Safety
 
 - No real customer charge was created in this pass.
 - Live outreach remains blocked.
-

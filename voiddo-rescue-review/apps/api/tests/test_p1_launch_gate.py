@@ -169,6 +169,29 @@ def test_paddle_checkout_endpoint_configured_and_unconfigured(monkeypatch):
     assert configured.headers["location"].startswith("https://checkout.example.test/pay")
 
 
+def test_paddle_client_checkout_config_route(monkeypatch):
+    import app.main as main
+
+    monkeypatch.setattr(
+        main,
+        "product_checkout_config",
+        lambda settings, product_key, audit_slug="", email="": {
+            "ready": True,
+            "environment": "production",
+            "client_token": "live_123456789012345678901234567",
+            "product_key": product_key,
+            "price_id": "pri_test",
+            "product": {"name": "Contact Form Repair", "amount": 99, "currency": "USD", "mode": "one_time"},
+            "audit_slug": audit_slug,
+            "email": email,
+            "custom_data": {"product_key": product_key, "audit_slug": audit_slug},
+        },
+    )
+    response = client.get("/checkout/config/contact_form_repair?audit=demo")
+    assert response.status_code == 200
+    assert response.json()["price_id"] == "pri_test"
+
+
 def test_deliverability_pool_missing_blocks(monkeypatch):
     import app.p0 as p0
 
@@ -178,12 +201,115 @@ def test_deliverability_pool_missing_blocks(monkeypatch):
     assert "approved_test_inbox_pool_missing" in result["issues_json"]
 
 
+def test_deliverability_diagnostic_sends_max_one(monkeypatch):
+    import app.p0 as p0
+
+    sent: list[str] = []
+
+    class FakeSMTP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def ehlo(self): pass
+        def starttls(self, context=None): pass
+        def login(self, user, password): pass
+        def send_message(self, message): sent.append(message["To"])
+
+    settings = SimpleNamespace(
+        smtp_host="mail.example.test",
+        smtp_port=587,
+        smtp_username="audit@example.test",
+        smtp_password="pw",
+        smtp_from_default="audit@voiddorescue.com",
+    )
+    email = f"deliverability-{uuid.uuid4().hex[:8]}@example.test"
+    monkeypatch.setattr(p0.smtplib, "SMTP", FakeSMTP)
+    try:
+        first = p0.run_deliverability_diagnostics(settings, [email], smtp_ready=True)
+        second = p0.run_deliverability_diagnostics(settings, [email], smtp_ready=True)
+        assert first["sent"] == 1
+        assert second["sent"] == 0
+        assert sent.count(email) == 1
+    finally:
+        execute("DELETE FROM test_inboxes WHERE lower(email) = lower(%s)", (email,))
+
+
 def test_warmup_pool_missing_blocks(monkeypatch):
     import app.p0 as p0
 
     monkeypatch.setattr(p0, "approved_warmup_recipient_emails", lambda settings=None: [])
     result = prepare_warmup(recipient_pool_count=0, day_number=1)
     assert result["status"] == "blocked_no_recipient_pool"
+
+
+def test_owner_start_warmup_blocked_without_pool_or_mail_pass():
+    result = store_owner_command(
+        {
+            "mailbox": "owner",
+            "uid": uuid.uuid4().hex,
+            "message_id": uuid.uuid4().hex,
+            "sender": owner_email(),
+            "reply_to": owner_email(),
+            "subject": "START WARMUP DAY=1",
+            "body": "START WARMUP DAY=1",
+            "authentication_results": "dkim=pass",
+        }
+    )
+    assert result["status"] == "prepared"
+    assert result["result_json"]["action"] == "warmup_start_gate"
+    assert result["result_json"]["allowed"] is False
+
+
+def test_send_outreach_high_risk_blocked():
+    result = store_owner_command(
+        {
+            "mailbox": "owner",
+            "uid": uuid.uuid4().hex,
+            "message_id": uuid.uuid4().hex,
+            "sender": owner_email(),
+            "reply_to": owner_email(),
+            "subject": "SEND OUTREACH",
+            "body": "SEND OUTREACH",
+            "authentication_results": "dkim=pass",
+        }
+    )
+    assert result["status"] == "review_required"
+    assert result["result_json"]["reason"] == "high_risk_command_blocked"
+
+
+def test_mail_qa_can_pass_with_tls_and_approved_pool(monkeypatch):
+    import app.p0 as p0
+
+    class FakeSMTP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def ehlo(self): pass
+        def starttls(self, context=None): pass
+        def login(self, user, password): pass
+
+    class FakeIMAP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def login(self, user, password): pass
+        def select(self, *args, **kwargs): pass
+        def logout(self): pass
+
+    def fake_dig(record_type: str, name: str) -> str:
+        if name.startswith("dkim."):
+            return "v=DKIM1; p=test"
+        if name.startswith("_dmarc."):
+            return "v=DMARC1; p=none"
+        return "ok"
+
+    monkeypatch.setattr(p0, "_dig", fake_dig)
+    monkeypatch.setattr(p0.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setattr(p0.imaplib, "IMAP4_SSL", FakeIMAP)
+    monkeypatch.setattr(p0, "approved_test_inbox_emails", lambda settings=None: ["qa@example.test"])
+    monkeypatch.setattr(p0, "run_deliverability_diagnostics", lambda settings, recipients, smtp_ready: {"sent": 0, "skipped": "mocked"})
+    result = run_mail_qa()
+    assert result["decision"] == "PASS"
 
 
 def test_transport_refuses_without_flags_and_when_suppressed_or_missing_unsubscribe(monkeypatch):

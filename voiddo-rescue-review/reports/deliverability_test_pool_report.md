@@ -1,6 +1,6 @@
 # Deliverability Test Pool Report
 
-Updated: 2026-05-26 12:05 IDT
+Updated: 2026-05-26 12:45 IDT
 
 ## Status
 
@@ -26,6 +26,11 @@ Reason:
 - no approved test inboxes in env or DB
 
 Strict SMTP/IMAP TLS now passes.
+
+P3 command support:
+
+- `SHOW DELIVERABILITY`
+- `RUN DELIVERABILITY TEST`
 
 ## Live Sends
 

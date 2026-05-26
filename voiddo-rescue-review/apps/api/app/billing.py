@@ -28,14 +28,37 @@ def price_id_for(settings, product_key: str) -> str:
 def checkout_config_status(settings) -> dict[str, object]:
     missing = [key for key in PRODUCTS if not price_id_for(settings, key)]
     checkout_base_configured = bool(settings.paddle_hosted_checkout_base_url)
+    client_token_configured = bool(settings.paddle_client_token)
     return {
         "environment": settings.paddle_environment,
         "api_key_configured": bool(settings.paddle_api_key),
         "webhook_secret_configured": bool(settings.paddle_webhook_secret),
         "hosted_checkout_base_url_configured": checkout_base_configured,
+        "client_checkout_configured": client_token_configured,
         "missing_price_keys": missing,
         "products": {key: {"price_id_configured": bool(price_id_for(settings, key)), **value} for key, value in PRODUCTS.items()},
-        "ready": bool(settings.paddle_api_key and settings.paddle_webhook_secret and checkout_base_configured and not missing),
+        "ready": bool(settings.paddle_api_key and settings.paddle_webhook_secret and (checkout_base_configured or client_token_configured) and not missing),
+    }
+
+
+def product_checkout_config(settings, product_key: str, audit_slug: str = "", email: str = "") -> dict[str, object]:
+    product = PRODUCTS.get(product_key)
+    price_id = price_id_for(settings, product_key)
+    ready = bool(product and price_id and settings.paddle_client_token)
+    return {
+        "ready": ready,
+        "environment": settings.paddle_environment,
+        "client_token": settings.paddle_client_token if ready else "",
+        "product_key": product_key,
+        "price_id": price_id,
+        "product": product or {},
+        "audit_slug": audit_slug,
+        "email": email,
+        "custom_data": {
+            "product_key": product_key,
+            "audit_slug": audit_slug,
+            "source": "voiddo_rescue_checkout",
+        },
     }
 
 

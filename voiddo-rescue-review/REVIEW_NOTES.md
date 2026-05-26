@@ -1,12 +1,12 @@
-# Vøiddo Rescue P2 Mail Trust, Checkout, Warmup Review Notes
+# Vøiddo Rescue P3 Checkout, Deliverability, Warmup Review Notes
 
-Original ZIP path on VPS: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p2-mail-checkout-warmup-2026-05-26.zip`
+Original ZIP path on VPS: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-mvp-p3-checkout-deliverability-warmup-2026-05-26.zip`
 
-SHA256: `00fd411c363236bb7ebd1bdd6a3ef692289ceb1a89071ebab1c1d2995bb52cff`
+SHA256: `b3cdb5c063438082791a487dfebf5aa8a6b5168a241c25b8beb3b980c39e8b66`
 
 ## Scope
 
-This branch exposes the Vøiddo Rescue MVP/P2 source tree as normal repository files for review under:
+This branch exposes the Vøiddo Rescue MVP/P3 source tree as normal repository files for review under:
 
 `voiddo-rescue-review/`
 
@@ -14,14 +14,13 @@ This branch exposes the Vøiddo Rescue MVP/P2 source tree as normal repository f
 
 - `docker-compose.yml`
 - `.env.example`
-- API, web, worker, admin/customer surfaces
+- API, web, worker, admin/customer/checkout surfaces
 - migrations and tests
 - WP plugin skeleton
 - scripts
 - deploy/nginx Rescue route configs
 - redacted reports
 - Huanshu local adapter scripts
-- P2 Mailcow TLS plan/report, without cert backups
 - filelist and SHA report
 
 ## Excluded
@@ -32,13 +31,13 @@ This branch exposes the Vøiddo Rescue MVP/P2 source tree as normal repository f
 - `node_modules`
 - `.next`
 - Python cache files
-- runtime screenshot/audit/export/report storage
+- runtime screenshot/audit/export/report/visual QA storage
 - PNG visual QA artifacts
 - logs
 
 ## Secret Scan Result
 
-PASS. No raw secrets, mailbox passwords, private owner address, env files, GitHub token, or Mailcow certificate private key backups are included.
+PASS. No raw secrets, mailbox passwords, private owner address, env files, GitHub token, Paddle API key, or Mailcow certificate private key backups are included.
 
 ## Safety Result
 
@@ -48,11 +47,14 @@ PASS. No raw secrets, mailbox passwords, private owner address, env files, GitHu
 - Existing non-Rescue app projects were not modified by this source export.
 - Owner command source uses runtime `OWNER_COMMAND_EMAIL`; no private owner address is included in this review artifact.
 
-## Current Launch Blockers
+## Current Launch State
+
+`CHECKOUT_READY_NOT_WARMED`
+
+Remaining blockers:
 
 - Approved deliverability test inbox pool is missing.
 - Approved warmup recipient pool is missing.
-- Paddle hosted checkout base URL/client checkout configuration is missing.
 
 ## Commit SHA
 

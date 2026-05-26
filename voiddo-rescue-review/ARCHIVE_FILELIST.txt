@@ -33,6 +33,8 @@ apps/api/tests/test_p1_launch_gate.py
 apps/web/Dockerfile
 apps/web/app/admin/page.tsx
 apps/web/app/api/health/route.ts
+apps/web/app/checkout/[productKey]/CheckoutClient.tsx
+apps/web/app/checkout/[productKey]/page.tsx
 apps/web/app/customer/page.tsx
 apps/web/app/layout.tsx
 apps/web/app/lib/api.ts
@@ -85,6 +87,7 @@ reports/owner_command_inbox_report.md
 reports/p0_integration_fix_report.md
 reports/p1_launch_gate_fix_report.md
 reports/p2_mail_checkout_warmup_report.md
+reports/p3_checkout_deliverability_warmup_report.md
 reports/paddle_checkout_readiness_report.md
 reports/paddle_products_state.json
 reports/paddle_setup_report.md

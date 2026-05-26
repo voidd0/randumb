@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from .billing import checkout_config_status, hosted_checkout_url, PRODUCTS
+from .billing import checkout_config_status, hosted_checkout_url, product_checkout_config, PRODUCTS
 from .codex_tasks import create_task
 from .auth import require_admin
 from .config import get_settings
@@ -176,6 +176,22 @@ def billing_config():
     return {"ok": True, **checkout_config_status(settings)}
 
 
+@app.get("/checkout/config/{product_key}")
+def checkout_product_config(product_key: str, request: Request):
+    if product_key not in PRODUCTS:
+        return Response(status_code=404, content="unknown product")
+    audit_slug = request.query_params.get("audit", "")
+    email = request.query_params.get("email", "")
+    config = product_checkout_config(settings, product_key, audit_slug, email)
+    if not config["ready"]:
+        return Response(
+            status_code=503,
+            content="checkout_not_configured",
+            headers={"X-Voiddo-Rescue-Gate": "paddle_client_checkout_missing"},
+        )
+    return {"ok": True, **config}
+
+
 @app.get("/checkout/{product_key}")
 def checkout_redirect(product_key: str, request: Request):
     audit_slug = request.query_params.get("audit", "")
@@ -184,11 +200,16 @@ def checkout_redirect(product_key: str, request: Request):
         return Response(status_code=404, content="unknown product")
     target = hosted_checkout_url(settings, product_key, audit_slug, email)
     if not target:
-        return Response(
-            status_code=503,
-            content="checkout_not_configured",
-            headers={"X-Voiddo-Rescue-Gate": "paddle_hosted_checkout_missing"},
-        )
+        config = product_checkout_config(settings, product_key, audit_slug, email)
+        if config["ready"]:
+            params = []
+            if audit_slug:
+                params.append(f"audit={audit_slug}")
+            if email:
+                params.append(f"email={email}")
+            suffix = f"?{'&'.join(params)}" if params else ""
+            return RedirectResponse(f"{settings.app_base_url}/checkout/{product_key}{suffix}", status_code=302)
+        return Response(status_code=503, content="checkout_not_configured", headers={"X-Voiddo-Rescue-Gate": "paddle_checkout_missing"})
     return RedirectResponse(target, status_code=302)
 
 
