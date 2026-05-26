@@ -11,7 +11,7 @@ from .config import get_settings
 from .db import execute, fetch_all, fetch_one
 from .mailer_action_queue import enqueue_mailer_action
 from .mailer_autonomy import mailer_status_snapshot
-from .mailer_ops_actions import mailer_ops_action_summary
+from .mailer_ops_actions import mailer_ops_action_summary, mailer_ops_retention_report_history
 from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary, runtime_state_snapshot, warmup_calendar_health
 
 
@@ -146,6 +146,7 @@ def monitoring_control_room_summary() -> dict[str, Any]:
 
 def mailer_digest_summary() -> dict[str, Any]:
     ops = mailer_ops_action_summary()
+    ops_retention_history = mailer_ops_retention_report_history()
     settings = get_settings()
     digest_report_path = Path(settings.storage_root) / "reports" / "mailer_digest_agent_report.md"
     digest_report_exists = digest_report_path.exists()
@@ -189,6 +190,7 @@ def mailer_digest_summary() -> dict[str, Any]:
     return json_safe(
         {
             "mailer_ops": ops,
+            "mailer_ops_retention_history": ops_retention_history,
             "latest_owner_report": dict(latest_report) if latest_report else None,
             "latest_owner_report_action": dict(latest_action) if latest_action else None,
             "owner_report_action_status": latest_action["status"] if latest_action else "none",
@@ -220,6 +222,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     state = runtime_state_snapshot()
     mailer = mailer_control_room_summary(write_snapshot=True)
     ops = mailer_ops_action_summary()
+    ops_retention_history = mailer_ops_retention_report_history()
     monitoring = monitoring_control_room_summary()
     blocked = bool(mailer["warmup_blocked_reason"]) or state["latest_mail_qa_decision"] != "PASS"
     email_sent = False
@@ -247,6 +250,10 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                 f"- mailer_ops_real_count: `{ops['real_count']}`",
                 f"- mailer_ops_synthetic_count: `{ops['synthetic_count']}`",
                 f"- mailer_ops_blocked_unsafe_count: `{ops['blocked_unsafe_count']}`",
+                f"- mailer_ops_retention_history_rows: `{ops_retention_history['count']}`",
+                f"- mailer_ops_retention_latest_send_mail: `{str(bool((ops_retention_history.get('latest') or {}).get('send_mail'))).lower()}`",
+                f"- mailer_ops_retention_raw_recipients: `{str(bool(ops_retention_history.get('raw_recipient_addresses_included'))).lower()}`",
+                f"- mailer_ops_retention_secrets: `{str(bool(ops_retention_history.get('secrets_included'))).lower()}`",
                 f"- email_sent: `{email_sent}`",
                 f"- send_decision: `{send_decision}`",
                 "",
@@ -269,6 +276,12 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                     "synthetic_count": ops["synthetic_count"],
                     "blocked_unsafe_count": ops["blocked_unsafe_count"],
                 },
+                "mailer_ops_retention_history": {
+                    "count": ops_retention_history["count"],
+                    "latest_send_mail": bool((ops_retention_history.get("latest") or {}).get("send_mail")),
+                    "raw_recipient_addresses_included": bool(ops_retention_history.get("raw_recipient_addresses_included")),
+                    "secrets_included": bool(ops_retention_history.get("secrets_included")),
+                },
                 "email_sent": False,
             },
         }
@@ -288,6 +301,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         "mailer": mailer,
         "monitoring": monitoring,
         "mailer_ops": ops,
+        "mailer_ops_retention_history": ops_retention_history,
         "owner_report_action": draft,
     }
 
@@ -297,6 +311,7 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
     state = owner_report.get("state") or runtime_state_snapshot()
     mailer = owner_report.get("mailer") or mailer_control_room_summary(write_snapshot=False)
     action = owner_report.get("owner_report_action") or {}
+    ops_retention_history = owner_report.get("mailer_ops_retention_history") or mailer_ops_retention_report_history()
     blockers = mailer.get("warmup_blocked_reason") or []
     email_sent = bool(owner_report.get("email_sent", False))
     path = Path(settings.storage_root) / "reports" / "mailer_digest_agent_report.md"
@@ -316,6 +331,10 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
                 f"- bounce_or_dsn_count_24h: `{state.get('bounce_count', 0)}`",
                 f"- rate_limit_signal_count_24h: `{state.get('rate_limit_signal_count', 0)}`",
                 f"- current_mail_blockers: `{', '.join(blockers) if blockers else 'none'}`",
+                f"- mailer_ops_retention_history_rows: `{ops_retention_history.get('count', 0)}`",
+                f"- mailer_ops_retention_latest_send_mail: `{str(bool((ops_retention_history.get('latest') or {}).get('send_mail'))).lower()}`",
+                f"- mailer_ops_retention_raw_recipients: `{str(bool(ops_retention_history.get('raw_recipient_addresses_included'))).lower()}`",
+                f"- mailer_ops_retention_secrets: `{str(bool(ops_retention_history.get('secrets_included'))).lower()}`",
                 f"- send_decision: `{owner_report.get('send_decision', '')}`",
                 "",
                 "Raw recipient addresses, message bodies, mailbox passwords, and secrets are intentionally omitted.",
@@ -333,6 +352,12 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
         "warmup_sent_count": int(state.get("warmup_sent_count", 0) or 0),
         "live_outreach_sent_count": int(state.get("live_outreach_sent_count", 0) or 0),
         "current_mail_blockers": blockers,
+        "mailer_ops_retention_history": {
+            "count": int(ops_retention_history.get("count", 0) or 0),
+            "latest_send_mail": bool((ops_retention_history.get("latest") or {}).get("send_mail")),
+            "raw_recipient_addresses_included": bool(ops_retention_history.get("raw_recipient_addresses_included")),
+            "secrets_included": bool(ops_retention_history.get("secrets_included")),
+        },
     }
     row = execute(
         """

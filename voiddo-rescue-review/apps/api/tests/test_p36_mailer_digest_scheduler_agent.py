@@ -37,8 +37,11 @@ def test_daily_loop_includes_mailer_digest_agent():
     result = run_daily_loop()
     agents = [item["agent"] for item in result["runs"]]
     assert "mailer_digest_agent" in agents
+    assert agents.index("mailer_ops_retention_agent") < agents.index("mailer_digest_agent")
     digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
     assert digest_runs[0]["result_json"]["email_sent"] is False
+    assert digest_runs[0]["result_json"]["mailer_ops_retention_history"]["count"] >= 1
+    assert digest_runs[0]["result_json"]["digest_agent_report"]["mailer_ops_retention_history"]["latest_send_mail"] is False
     assert result["live_outreach"] is False
     _cleanup(digest_runs[0]["result_json"]["owner_report_action"]["id"])
 
@@ -65,6 +68,9 @@ def test_mailer_digest_agent_writes_runtime_report_file():
     report = run["result_json"]["digest_agent_report"]
     assert report["agent_run_id"] == str(run["id"])
     assert report["email_sent"] is False
+    assert report["mailer_ops_retention_history"]["latest_send_mail"] is False
+    assert report["mailer_ops_retention_history"]["raw_recipient_addresses_included"] is False
+    assert report["mailer_ops_retention_history"]["secrets_included"] is False
     assert Path(report["path"]).exists()
     _cleanup(run["result_json"]["owner_report_action"]["id"])
 
@@ -85,6 +91,11 @@ def test_mailer_digest_agent_runtime_report_confirms_no_send_counts():
     assert report["warmup_sent_count"] == 0
     assert report["live_outreach_sent_count"] == 0
     assert report["email_sent"] is False
+    text = Path(report["path"]).read_text(encoding="utf-8")
+    assert "mailer_ops_retention_history_rows" in text
+    assert "mailer_ops_retention_latest_send_mail: `false`" in text
+    assert "mailer_ops_retention_raw_recipients: `false`" in text
+    assert "mailer_ops_retention_secrets: `false`" in text
     _cleanup(run["result_json"]["owner_report_action"]["id"])
 
 

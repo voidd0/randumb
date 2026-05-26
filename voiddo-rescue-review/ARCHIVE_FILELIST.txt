@@ -279,7 +279,9 @@ reports/p49_next_self_written_tz.md
 reports/p4_deliverability_warmup_day1_report.md
 reports/p50_mailer_ops_retention_history_admin_surface.md
 reports/p50_next_self_written_tz.md
+reports/p51_mailer_retention_history_daily_loop_evidence.md
 reports/p51_next_self_written_tz.md
+reports/p52_next_self_written_tz.md
 reports/p5_review_package_hygiene_report.md
 reports/p5_warmup_safety_report.md
 reports/p6_autonomous_mailer_report.md

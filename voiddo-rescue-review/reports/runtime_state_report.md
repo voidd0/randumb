@@ -1,11 +1,11 @@
 # Runtime State Report
 
-Generated: 2026-05-27 02:04 IDT
+Generated: 2026-05-27 02:16 IDT
 
 ## Canonical Latest State
 
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- current branch head before P50 commit: `12b080b82a415caf0be3461d101bd72b606c6b15`
+- current branch head before P51 commit: `5ecdc8254d2addf5c488db392ae32dc33ad6ca69`
 - checkout status: `READY`
 - mail auth status: `PASS`
 - latest mail QA decision: `PASS`
@@ -16,12 +16,14 @@ Generated: 2026-05-27 02:04 IDT
 - live outreach sent count: `0`
 - launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-## Mailer Ops Retention
+## Mailer Daily Evidence
 
-- retention history rows: `1`
+- mailer ops retention history rows: `1`
 - latest retention history: `0:1:0:send=false`
-- protected history endpoint: `implemented`
-- admin history surface: `implemented and visual QA passed`
+- mailer digest history rows: `1`
+- latest digest history: `0:0:email=false`
+- daily loop surfaces retention history evidence: `true`
+- owner report includes retention history evidence: `true`
 - raw recipient addresses included: `false`
 - secrets included: `false`
 
@@ -35,9 +37,8 @@ Generated: 2026-05-27 02:04 IDT
 
 ## Verification
 
-- API tests: `280 passed`
-- smoke test: `280 passed, ok`
-- visual QA: `PASS`
+- API tests: `282 passed`
+- smoke test: `282 passed, ok`
 - API/web/worker/postgres/redis: healthy
 
 ## Next Allowed Action

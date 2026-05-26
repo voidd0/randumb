@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
-from app.mailer_control_room import write_owner_status_report
+from app.mailer_control_room import mailer_digest_summary, write_owner_status_report
 from app.mailer_ops_actions import run_mailer_ops_action
 
 
@@ -43,3 +44,32 @@ def test_daily_digest_keeps_live_outreach_blocked():
     assert report["mailer"]["live_outreach_allowed"] is False
     assert report["owner_report_action"]["recipient_hash"] == ""
     execute("DELETE FROM mailer_action_queue WHERE id = %s", (report["owner_report_action"]["id"],))
+
+
+def test_owner_report_includes_mailer_ops_retention_history_without_send_or_secrets():
+    run_agent("mailer_ops_retention_agent")
+    report = write_owner_status_report(send_if_safe=False)
+    text = Path(report["path"]).read_text()
+    assert "mailer_ops_retention_history_rows" in text
+    assert "mailer_ops_retention_latest_send_mail: `false`" in text
+    assert "mailer_ops_retention_raw_recipients: `false`" in text
+    assert "mailer_ops_retention_secrets: `false`" in text
+    assert report["mailer_ops_retention_history"]["count"] >= 1
+    assert report["mailer_ops_retention_history"]["raw_recipient_addresses_included"] is False
+    assert report["mailer_ops_retention_history"]["secrets_included"] is False
+    assert report["email_sent"] is False
+    assert "owner-private@" not in text
+    assert "SMTP_PASSWORD" not in text
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (report["owner_report_action"]["id"],))
+
+
+def test_mailer_digest_summary_exposes_retention_history_without_send():
+    run_agent("mailer_ops_retention_agent")
+    summary = mailer_digest_summary()
+    history = summary["mailer_ops_retention_history"]
+    assert history["count"] >= 1
+    assert history["latest"]["send_mail"] is False
+    assert history["raw_recipient_addresses_included"] is False
+    assert history["secrets_included"] is False
+    assert summary["send_mail"] is False
+    assert summary["live_outreach_allowed"] is False
