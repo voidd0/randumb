@@ -1,70 +1,51 @@
 # Mail QA Agent Report
 
-Updated: 2026-05-26 12:45 IDT
+Updated: 2026-05-26 13:00 IDT
 
 ## Host Decision
 
 - SMTP host: `mail.voiddo.com`
 - IMAP host: `mail.voiddo.com`
 - TLS verification: `true`
-- Sending identities remain on `voiddorescue.com`, e.g. `audit@voiddorescue.com`
+- Rescue sending identity remains `audit@voiddorescue.com`.
 
-## TLS Fix
-
-Strict TLS previously failed because Mailcow presented a self-signed certificate. P2 fixed this by copying the existing trusted Let’s Encrypt certificate for `mail.voiddo.com` into Mailcow `data/assets/ssl/` and restarting only:
-
-- `postfix-mailcow`
-- `dovecot-mailcow`
-- `nginx-mailcow`
-
-Mailcow config discovery:
-
-- `MAILCOW_HOSTNAME=mail.voiddo.com`
-- `SKIP_LETS_ENCRYPT=y`
-- `ADDITIONAL_SAN=`
-
-Current served certificate:
-
-- Subject/CN: `mail.voiddo.com`
-- Issuer: Let’s Encrypt E7
-- OpenSSL verify return code: `0 (ok)`
-
-## Agent Results
+## Current Agent Results
 
 - `dns_mail_auth_agent`: PASS
 - `smtp_agent`: PASS
 - `imap_agent`: PASS
-- `deliverability_agent`: FAIL_BLOCK_LAUNCH
 - `reply_classifier_agent`: PASS
 - `outreach_safety_agent`: PASS
+- `deliverability_agent`: FAIL_BLOCK_LAUNCH
 
 ## DNS Checks
 
 - A/MX/SPF/DKIM/DMARC/autoconfig/autodiscover records are present.
-- DKIM TXT has propagated. The public key is not repeated in this report.
-- DMARC does not contain literal `TTL: Automatic`.
+- DKIM TXT has propagated. The public key is intentionally not repeated here.
+- DMARC no longer contains literal `TTL: Automatic`.
 
-## Strict Login Checks
+## Strict TLS Checks
 
 - SMTP strict TLS login: PASS.
 - IMAP strict TLS login: PASS.
 
-## Mailbox Checks
+## P4 Preflight
 
-- Rescue `audit@voiddorescue.com`: strict SMTP/IMAP login PASS via app mail QA.
-- All `voiddorescue.com` MVP mailboxes: strict IMAP login PASS.
-- Existing `em@voiddo.com`: strict SMTP/IMAP login PASS.
+Latest real mail QA run:
 
-## Remaining Blocker
+- Decision: `FAIL_BLOCK_LAUNCH`
+- Issues: `approved_test_inbox_pool_missing`
+- Approved test inboxes: `0`
+- Deliverability diagnostic sends: `0`
 
-Approved deliverability test inbox pool is missing.
+## Safety State
+
+- Live outreach sent: `0`
+- Warmup sent: `0`
+- Customer-facing auto-replies remain paused.
 
 ## Decision
 
 `FAIL_BLOCK_LAUNCH`
 
-Latest agent run: `FAIL_BLOCK_LAUNCH` with only `approved_test_inbox_pool_missing`.
-
-P3 checkout is ready, but mail launch gate remains blocked until an approved deliverability test inbox pool exists.
-
-Live outreach remains blocked until the approved test inbox pool exists and deliverability diagnostics are run.
+Exact blocker: owner-approved deliverability test inbox pool is missing.

@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Updated: 2026-05-26 12:45 IDT
+Updated: 2026-05-26 13:00 IDT
 
 ## Decision
 
@@ -10,38 +10,29 @@ This is not live outreach ready.
 
 ## Passed
 
-- Existing non-Rescue projects not modified.
-- Rescue Docker services healthy.
-- DB migrations applied.
-- Public Rescue routes work:
-  - `rescue.voiddo.com`
-  - `app.rescue.voiddo.com` with admin auth gate
-  - `api.rescue.voiddo.com`
-  - `audit.rescue.voiddo.com`
-  - `go.rescue.voiddo.com`
-  - `status.rescue.voiddo.com`
-- Real scanner job writes audits/issues/screenshots.
-- Dynamic audit page reads API audit data.
-- Dynamic admin dashboard reads DB metrics.
-- Paddle webhook provisioning writes records.
-- Go checkout endpoint redirects to Paddle.js client checkout page.
-- Paddle client checkout page works for all six product keys.
-- Inbox persistence and idempotency implemented.
-- Owner command parser, executor, and risk gates implemented.
-- Huanshu local adapter is installed and visual agents pass on public/container routes.
-- Mail DNS auth records are present, including DKIM.
-- DMARC typo `TTL: Automatic` is not present.
-- Strict SMTP TLS login now passes.
-- Strict IMAP TLS login now passes.
-- Web admin query-token auth removed; `/admin?token=...` returns 401.
-- Warmup planner exists and is dry-run only.
-- Lead batch importer exists and is dry-run only.
-- Smoke/P3 tests pass: `35 passed` on 2026-05-26 12:45 IDT.
+- Existing non-Rescue projects were not modified.
+- Rescue Docker services are healthy.
+- DB migrations are applied, including P4 deliverability/warmup columns.
+- Public Rescue routes work.
+- Admin route is protected; query-token auth remains rejected.
+- API health remains public.
+- Scanner job pipeline writes audits/issues/screenshots.
+- Dynamic audit pages read real API audit data.
+- Admin metrics read DB state.
+- Paddle checkout is ready through Paddle.js.
+- Strict SMTP TLS login passes.
+- Strict IMAP TLS login passes.
+- Mail DNS auth records are present, including DKIM and DMARC.
+- Huanshu/visual QA is available and passes from prior P3 gate.
+- Warmup day-1 executor exists and enforces cap `5`.
+- Deliverability diagnostic executor exists and enforces max one diagnostic per approved test inbox.
+- Owner command gates are implemented for P4 commands.
+- Smoke tests pass: `36 passed`.
 
 ## Blocking Gates
 
-- Deliverability test inbox pool is missing.
-- Warmup recipient pool is missing.
+- `TEST_INBOX_POOL` / approved deliverability test inboxes missing.
+- `WARMUP_RECIPIENT_POOL` / approved warmup recipients missing.
 
 ## Safety Flags
 
@@ -53,8 +44,10 @@ This is not live outreach ready.
 
 ## Live Activity
 
-- Live outreach sent: `0`
-- Warmup sent: `0`
-- Customer-facing auto-replies: paused
+- Deliverability diagnostic sends: `0`
+- Warmup sends: `0`
+- Live outreach sends: `0`
+- Bounce count: `0`
+- Spam signal count: `0` observed; inbox placement cannot be measured without approved test inboxes.
 
-Launch must remain blocked until deliverability test pool and warmup recipient pool are resolved and warmup has been explicitly approved.
+Launch remains blocked until approved test and warmup pools exist and warmup day 1 is explicitly approved through the gated owner command.

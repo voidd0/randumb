@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.message import EmailMessage
-from email.utils import parseaddr
+from email.utils import make_msgid, parseaddr
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -84,7 +84,7 @@ def effective_pause_state(area: str, configured: bool = False) -> bool:
 def approved_test_inbox_emails(settings: Settings | None = None) -> list[str]:
     settings = settings or get_settings()
     emails = _split_config_emails(settings.test_inboxes) + _split_config_emails(settings.test_inbox_pool)
-    db_rows = fetch_all("SELECT email FROM test_inboxes WHERE status = 'approved'")
+    db_rows = fetch_all("SELECT email FROM test_inboxes WHERE status = 'approved' AND approved")
     emails.extend(str(row["email"]).lower() for row in db_rows)
     return sorted(set(email for email in emails if "@" in email))
 
@@ -92,7 +92,7 @@ def approved_test_inbox_emails(settings: Settings | None = None) -> list[str]:
 def approved_warmup_recipient_emails(settings: Settings | None = None) -> list[str]:
     settings = settings or get_settings()
     emails = _split_config_emails(settings.warmup_recipient_pool)
-    db_rows = fetch_all("SELECT email FROM warmup_recipients WHERE status = 'approved_test_pool'")
+    db_rows = fetch_all("SELECT email FROM warmup_recipients WHERE status = 'approved_test_pool' AND approved")
     emails.extend(str(row["email"]).lower() for row in db_rows)
     suppressed = {
         str(row["email"]).lower()
@@ -581,31 +581,28 @@ def start_warmup_gate(day_number: int = 1) -> dict[str, Any]:
             issue for issue in latest_mail["issues_json"]
             if issue not in {"approved_test_inbox_pool_missing"}
         ]
-    allowed = bool(pool_count > 0 and latest_mail_decision == "PASS" and not deliverability_blockers)
+    warmup_paused = effective_pause_state("warmup", False)
+    allowed = bool(pool_count > 0 and latest_mail_decision == "PASS" and not deliverability_blockers and not warmup_paused)
     warmup = prepare_warmup(pool_count, day_number)
+    send_result = {"sent": 0, "attempted": 0, "errors": [], "skipped": "gate_not_allowed"}
     if allowed:
-        execute(
-            """
-            UPDATE warmup_runs
-            SET status = 'warmup_day_1_ready', updated_at = now()
-            WHERE id = %s
-            """,
-            (warmup["id"],),
-        )
-        warmup["status"] = "warmup_day_1_ready"
+        send_result = run_warmup_day(day_number, warmup["id"])
+        warmup["status"] = "warmup_active_no_outreach" if send_result["sent"] > 0 else "warmup_day_1_blocked"
     return {
-        "ok": allowed,
+        "ok": bool(allowed and send_result["sent"] > 0),
         "action": "warmup_start_gate",
         "allowed": allowed,
-        "reason": "ready_no_sending_started" if allowed else "warmup_start_blocked",
+        "reason": "warmup_day_1_sent" if send_result["sent"] > 0 else "warmup_start_blocked",
         "checks": {
             "pool_count": pool_count,
             "mail_qa_decision": latest_mail_decision,
             "deliverability_blockers": deliverability_blockers,
+            "warmup_paused": warmup_paused,
             "cold_leads": False,
-            "sends_started": 0,
+            "sends_started": send_result["sent"],
         },
         "warmup": warmup,
+        "send_result": send_result,
     }
 
 
@@ -781,7 +778,8 @@ def run_deliverability_diagnostics(settings: Settings, recipients: list[str], sm
                             msg["Subject"] = "Vøiddo Rescue mail diagnostic"
                             msg["From"] = settings.smtp_from_default
                             msg["To"] = email
-                            msg.set_content("Neutral mail setup diagnostic for voiddorescue.com. No action is required.")
+                            msg["Message-ID"] = make_msgid(domain="voiddorescue.com")
+                            msg.set_content("This is a requested mail delivery diagnostic for Vøiddo Rescue. No action is required.")
                             smtp.send_message(msg)
                             sent += 1
                             cur.execute(
@@ -826,6 +824,104 @@ def prepare_warmup(recipient_pool_count: int = 0, day_number: int = 1) -> dict[s
     return dict(row)
 
 
+def warmup_day_cap(day_number: int) -> int:
+    caps = {1: 5, 2: 10, 3: 15}
+    return caps.get(day_number, 25 if day_number <= 7 else 40)
+
+
+def warmup_message_for(index: int) -> str:
+    messages = [
+        "This is a requested Vøiddo Rescue mail warmup check. No action is required.",
+        "Requested Vøiddo Rescue warmup message. No action is required.",
+        "Vøiddo Rescue warmup note requested by the mailbox owner. No action is required.",
+        "Mail warmup check for Vøiddo Rescue. No action is required.",
+        "Vøiddo Rescue delivery warmup check. No action is required.",
+    ]
+    return messages[index % len(messages)]
+
+
+def run_warmup_day(day_number: int = 1, warmup_run_id: str | None = None) -> dict[str, Any]:
+    settings = get_settings()
+    cap = warmup_day_cap(day_number)
+    recipients = approved_warmup_recipient_emails(settings)[:cap]
+    if not recipients:
+        return {"sent": 0, "attempted": 0, "errors": [], "skipped": "no_approved_warmup_recipients", "daily_cap": cap}
+
+    sent = 0
+    attempted = 0
+    errors: list[str] = []
+    ctx = ssl.create_default_context()
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
+            smtp.ehlo()
+            smtp.starttls(context=ctx)
+            smtp.ehlo()
+            smtp.login(settings.smtp_username, settings.smtp_password)
+            for index, email in enumerate(recipients):
+                attempted += 1
+                message_id = make_msgid(domain="voiddorescue.com")
+                msg = EmailMessage()
+                msg["Subject"] = "Vøiddo Rescue warmup check"
+                msg["From"] = settings.smtp_from_default
+                msg["To"] = email
+                msg["Message-ID"] = message_id
+                msg.set_content(warmup_message_for(index))
+                try:
+                    smtp.send_message(msg)
+                except Exception as exc:
+                    errors.append(f"{email}:{type(exc).__name__}")
+                    break
+                sent += 1
+                execute(
+                    """
+                    INSERT INTO email_events(event_type, payload_json, mailbox, message_id)
+                    VALUES ('warmup_sent', %s, %s, %s)
+                    """,
+                    (
+                        Jsonb(
+                            {
+                                "recipient": email,
+                                "day_number": day_number,
+                                "daily_cap": cap,
+                                "warmup_run_id": str(warmup_run_id or ""),
+                                "policy": "neutral_owner_approved_warmup_no_sales_no_tracking",
+                            }
+                        ),
+                        settings.smtp_from_default,
+                        message_id,
+                    ),
+                )
+    except Exception as exc:
+        errors.append(type(exc).__name__)
+
+    status = "warmup_active_no_outreach" if sent > 0 and not errors else "warmup_day_1_blocked"
+    if warmup_run_id:
+        execute(
+            """
+            UPDATE warmup_runs
+            SET status = %s,
+                plan_json = jsonb_set(plan_json, '{actual_send}', %s::jsonb, true),
+                updated_at = now()
+            WHERE id = %s
+            """,
+            (
+                status,
+                json.dumps({"sent": sent, "attempted": attempted, "errors": errors, "daily_cap": cap}),
+                warmup_run_id,
+            ),
+        )
+    execute(
+        "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
+        (
+            "warmup.day_sent" if sent > 0 else "warmup.day_blocked",
+            "info" if sent > 0 and not errors else "warning",
+            f"Warmup day {day_number} send gate executed",
+            Jsonb({"sent": sent, "attempted": attempted, "errors": errors, "daily_cap": cap}),
+        ),
+    )
+    return {"sent": sent, "attempted": attempted, "errors": errors, "daily_cap": cap}
+
+
 def import_warmup_recipients(csv_text: str, mailbox: str = "audit@voiddorescue.com") -> dict[str, Any]:
     reader = csv.DictReader(io.StringIO(csv_text))
     accepted = 0
@@ -850,7 +946,7 @@ def import_warmup_recipients(csv_text: str, mailbox: str = "audit@voiddorescue.c
                 cur.execute(
                     """
                     INSERT INTO warmup_recipients(email, mailbox, source, status, notes)
-                    VALUES (%s, %s, 'owner_pool', 'approved_test_pool', %s)
+                    VALUES (%s, %s, 'owner_provided', 'approved_test_pool', %s)
                     """,
                     (email, mailbox, row.get("notes", "")),
                 )
@@ -870,11 +966,19 @@ def import_test_inboxes(csv_text: str) -> dict[str, Any]:
                 if not email or "@" not in email:
                     rejected += 1
                     continue
+                suppressed = cur.execute("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,)).fetchone()
+                if suppressed:
+                    rejected += 1
+                    continue
                 cur.execute(
                     """
-                    INSERT INTO test_inboxes(email, provider, status)
-                    VALUES (%s, %s, 'approved')
-                    ON CONFLICT (email) DO UPDATE SET provider = EXCLUDED.provider, status = 'approved'
+                    INSERT INTO test_inboxes(email, provider, status, source, approved)
+                    VALUES (%s, %s, 'approved', 'owner_provided', true)
+                    ON CONFLICT (email) DO UPDATE
+                      SET provider = EXCLUDED.provider,
+                          status = 'approved',
+                          source = 'owner_provided',
+                          approved = true
                     """,
                     (email, row.get("provider", "")),
                 )

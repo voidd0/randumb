@@ -66,22 +66,25 @@ def test_owner_status_executes_metrics_result():
 
 
 def test_owner_pause_all_records_safe_pause_result():
-    result = store_owner_command(
-        {
-            "mailbox": "owner",
-            "uid": uuid.uuid4().hex,
-            "message_id": uuid.uuid4().hex,
-            "sender": owner_email(),
-            "reply_to": owner_email(),
-            "subject": "PAUSE ALL",
-            "body": "PAUSE ALL",
-            "authentication_results": "dkim=pass",
-        }
-    )
-    assert result["status"] == "executed"
-    assert result["result_json"]["action"] == "pause_recorded"
-    control = fetch_one("SELECT value FROM runtime_controls WHERE key = 'pause_outreach'")
-    assert control and control["value"] is True
+    try:
+        result = store_owner_command(
+            {
+                "mailbox": "owner",
+                "uid": uuid.uuid4().hex,
+                "message_id": uuid.uuid4().hex,
+                "sender": owner_email(),
+                "reply_to": owner_email(),
+                "subject": "PAUSE ALL",
+                "body": "PAUSE ALL",
+                "authentication_results": "dkim=pass",
+            }
+        )
+        assert result["status"] == "executed"
+        assert result["result_json"]["action"] == "pause_recorded"
+        control = fetch_one("SELECT value FROM runtime_controls WHERE key = 'pause_outreach'")
+        assert control and control["value"] is True
+    finally:
+        execute("DELETE FROM runtime_controls WHERE source = 'owner_command' AND reason = 'PAUSE ALL'")
 
 
 def test_owner_report_today_creates_report_file():
@@ -258,6 +261,68 @@ def test_owner_start_warmup_blocked_without_pool_or_mail_pass():
     assert result["status"] == "prepared"
     assert result["result_json"]["action"] == "warmup_start_gate"
     assert result["result_json"]["allowed"] is False
+
+
+def test_owner_start_warmup_day1_sends_max_five_when_all_gates_pass(monkeypatch):
+    import app.p0 as p0
+
+    sent: list[str] = []
+
+    class FakeSMTP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def ehlo(self): pass
+        def starttls(self, context=None): pass
+        def login(self, user, password): pass
+        def send_message(self, message): sent.append(message["To"])
+
+    recipients = [f"warmup-{uuid.uuid4().hex[:6]}-{index}@example.test" for index in range(7)]
+    monkeypatch.setattr(p0, "approved_warmup_recipient_emails", lambda settings=None: recipients)
+    monkeypatch.setattr(p0, "effective_pause_state", lambda area, configured=False: False)
+    monkeypatch.setattr(p0.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setattr(
+        p0,
+        "get_settings",
+        lambda: SimpleNamespace(
+            smtp_host="mail.example.test",
+            smtp_port=587,
+            smtp_username="audit@example.test",
+            smtp_password="pw",
+            smtp_from_default="audit@voiddorescue.com",
+            owner_command_email=owner_email(),
+        ),
+    )
+    mail_run = execute(
+        """
+        INSERT INTO mail_qa_runs(agent, status, decision, checks_json, issues_json)
+        VALUES ('test', 'completed', 'PASS', '{}', '[]')
+        RETURNING id
+        """
+    )
+    result = store_owner_command(
+        {
+            "mailbox": "owner",
+            "uid": uuid.uuid4().hex,
+            "message_id": uuid.uuid4().hex,
+            "sender": owner_email(),
+            "reply_to": owner_email(),
+            "subject": "START WARMUP DAY=1",
+            "body": "START WARMUP DAY=1",
+            "authentication_results": "dkim=pass",
+        }
+    )
+    warmup_id = result["result_json"]["warmup"]["id"]
+    try:
+        assert result["status"] == "prepared"
+        assert result["result_json"]["action"] == "warmup_start_gate"
+        assert result["result_json"]["send_result"]["sent"] == 5
+        assert len(sent) == 5
+        assert all(recipient in recipients for recipient in sent)
+    finally:
+        execute("DELETE FROM email_events WHERE payload_json->>'warmup_run_id' = %s", (warmup_id,))
+        execute("DELETE FROM warmup_runs WHERE id = %s", (warmup_id,))
+        execute("DELETE FROM mail_qa_runs WHERE id = %s", (mail_run["id"],))
 
 
 def test_send_outreach_high_risk_blocked():

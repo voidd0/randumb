@@ -1,67 +1,41 @@
 # Owner Command Inbox Report
 
-Updated: 2026-05-26 12:45 IDT
+Updated: 2026-05-26 13:00 IDT
 
 ## Implemented
 
-Owner command processor accepts commands only from the private runtime value:
+Owner command processor accepts commands only from the private runtime value `OWNER_COMMAND_EMAIL`.
 
-- `OWNER_COMMAND_EMAIL`
+It records mailbox, uid, message-id, sender, reply-to, subject/body, parsed command, arguments, risk level, status, authentication summary, result JSON, and system events.
 
-It records:
-
-- mailbox
-- uid
-- message-id
-- sender
-- reply-to
-- subject/body
-- parsed command
-- arguments
-- risk level
-- status
-- authentication summary
-- result JSON
-
-## Supported Commands
+## Supported P4 Commands
 
 - `STATUS`
 - `REPORT TODAY`
-- `PAUSE OUTREACH`
-- `PAUSE WARMUP`
-- `PAUSE SCANNER`
-- `PAUSE AUTO REPLIES`
-- `PAUSE ALL`
-- `RUN VISUAL QA`
-- `RUN MAIL QA`
-- `PREPARE WARMUP`
-- `SHOW HUMAN REVIEW`
-- `SHOW PAYMENTS`
-- `SHOW REPLIES`
-- `PREPARE LEADS COUNTRY=... NICHE=... LIMIT=...`
 - `SHOW MAIL QA`
 - `SHOW DELIVERABILITY`
 - `SHOW WARMUP`
+- `PAUSE ALL`
 - `RUN DELIVERABILITY TEST`
+- `PREPARE WARMUP`
 - `START WARMUP DAY=1`
+
+`SEND OUTREACH` remains `HIGH_RISK` and blocked.
 
 ## Risk Gates
 
-- `SAFE_AUTO`: may execute automatically.
-- `MEDIUM_RISK`: may prepare a draft/action only.
+- `SAFE_AUTO`: may execute controlled read/report/pause actions.
+- `MEDIUM_RISK`: may run controlled QA or warmup prep/start gates with no cold outreach.
 - `HIGH_RISK`: creates review-required state only.
 
 Arbitrary shell execution is not supported. Shell-like command text is classified as `HIGH_RISK`.
 
-## Verification
+## P4 Verification
 
-- Sample `STATUS` command from `OWNER_COMMAND_EMAIL` with passing auth summary was stored as `SAFE_AUTO` / `executed`.
-- Sample `RUN MAIL QA` command was stored as `MEDIUM_RISK` / `prepared` and created a mail QA action.
-- Sample `RUN VISUAL QA` command was stored as `MEDIUM_RISK` / `prepared` and created a visual QA action.
-- Sample `RUN SHELL rm -rf /` command was stored as `HIGH_RISK` / `review_required`.
-- API command intake now generates a unique uid/message id when an owner command arrives without IMAP ids, avoiding collisions between ad-hoc command submissions.
-- Tests verify `RUN SHELL` is `HIGH_RISK` and blocked for review.
-- `REPORT TODAY` creates a private runtime report artifact.
-- `PAUSE ALL` writes persistent runtime pause controls for scanner, outreach, warmup, auto-replies, and workers.
-- `START WARMUP DAY=1` is blocked unless pool, mail QA, deliverability, and authenticated owner gates pass.
-- `SEND OUTREACH` remains `HIGH_RISK` and blocked.
+- `STATUS` returns metrics.
+- `REPORT TODAY` creates a private runtime report.
+- `PAUSE ALL` writes runtime controls and test cleanup prevents hidden pause state from leaking into the working DB.
+- `RUN DELIVERABILITY TEST` runs mail QA/deliverability preflight.
+- `START WARMUP DAY=1` has a real send executor, but real runtime is blocked because approved pools are missing.
+- Test coverage verifies day-1 warmup sends max five messages only when all gates are mocked PASS.
+- `RUN SHELL` remains review-required.

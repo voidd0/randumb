@@ -1,39 +1,36 @@
 # Deliverability Test Pool Report
 
-Updated: 2026-05-26 12:45 IDT
+Updated: 2026-05-26 13:00 IDT
 
 ## Status
 
-No deliverability test pool has been provided by the owner.
+No owner-approved deliverability test inbox pool is configured.
 
 ## Implemented
 
-- `TEST_INBOXES` config support.
-- `TEST_INBOX_POOL` config support.
-- `test_inboxes` DB table.
+- `TEST_INBOXES` and `TEST_INBOX_POOL` runtime config support.
+- `test_inboxes` DB table with `approved=true` and `source=owner_provided` tracking.
 - Protected API endpoint: `POST /deliverability/test-inboxes/import`.
-- `deliverability_agent` uses approved test inboxes only.
-- Policy: max one diagnostic message per mailbox after explicit approval.
-- No cold outreach is allowed through this flow.
+- Import validation rejects invalid and suppressed addresses.
+- `deliverability_agent` sends only to approved test inboxes.
+- Policy: max one neutral diagnostic message per approved mailbox.
+- Diagnostic content contains no sales copy, no audit link, and no tracking pixel.
 
-## Current Decision
+## Current Preflight
+
+- Approved test inboxes: `0`
+- SMTP strict TLS: `PASS`
+- IMAP strict TLS: `PASS`
+- SPF/DKIM/DMARC: `PASS`
+- Deliverability diagnostic sends: `0`
+- Cold outreach sends: `0`
+
+## Decision
 
 `FAIL_BLOCK_LAUNCH`
 
-Reason:
+Blocking reason:
 
-- approved test recipient pool missing
-- no approved test inboxes in env or DB
+- `approved_test_inbox_pool_missing`
 
-Strict SMTP/IMAP TLS now passes.
-
-P3 command support:
-
-- `SHOW DELIVERABILITY`
-- `RUN DELIVERABILITY TEST`
-
-## Live Sends
-
-Deliverability diagnostic sends: `0`
-
-Cold outreach sends: `0`
+No diagnostic email was sent in P4 because the approved test inbox pool is absent.

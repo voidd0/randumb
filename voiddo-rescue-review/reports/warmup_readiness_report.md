@@ -1,39 +1,55 @@
 # Warmup Readiness Report
 
-Updated: 2026-05-26 12:45 IDT
+Updated: 2026-05-26 13:00 IDT
 
 ## Status
 
-Warmup is prepared in dry-run only and has not started.
+Warmup is implemented but blocked. It has not started.
 
-Current blocker:
+Current blockers:
 
-- Owner has not provided an approved warmup recipient pool.
-- Deliverability test pool is missing.
-
-## Daily Cap Model
-
-- Day 1: 5-10
-- Day 2: 10-15
-- Day 3: 15-25
-- Day 4-7: 25-40
-
-The implemented dry-run planner stores the conservative lower bound for each day.
+- Owner-approved warmup recipient pool is missing.
+- Owner-approved deliverability test inbox pool is missing.
+- Latest mail QA decision is `FAIL_BLOCK_LAUNCH` because the test inbox pool is missing.
 
 ## Implemented
 
-- `WARMUP_RECIPIENT_POOL` env/config support.
+- `WARMUP_RECIPIENT_POOL` runtime config support.
 - Protected import endpoint: `POST /warmup/recipients/import`.
-- Suppression-list filtering.
-- Dry-run schedule preview.
-- Owner command `PREPARE WARMUP` uses real env+DB approved pool count.
-- Owner command `START WARMUP DAY=1` is implemented but remains blocked until all gates pass.
+- Import validation rejects invalid, duplicate, and suppressed addresses.
+- Approved recipients are stored with `source=owner_provided`.
+- Dry-run warmup schedule preview.
+- Owner command `PREPARE WARMUP` uses the real approved env+DB pool count.
+- Owner command `START WARMUP DAY=1` now has a real send executor, but only after all gates pass.
+
+## Day Caps
+
+- Day 1: `5`
+- Day 2: `10`
+- Day 3: `15`
+- Day 4-7: `25`
+
+## Day 1 Send Gate
+
+Required before any warmup send:
+
+- approved warmup recipient pool exists
+- mail QA decision is `PASS`
+- deliverability diagnostics have no blocking failure
+- authenticated owner command approves `START WARMUP DAY=1`
+- daily cap enforced at `5`
+
+Current result:
+
+- Warmup recipient pool count: `0`
+- Warmup day 1 sent: `0`
+- Warmup status: `blocked_no_recipient_pool`
 
 ## Stop Conditions
 
-- Bounce signal
-- Spam signal
-- Auth failure
+- bounce
+- spam signal
+- auth failure
 - TLS failure
 - DKIM failure
 - DMARC failure
@@ -41,5 +57,3 @@ The implemented dry-run planner stores the conservative lower bound for each day
 ## Decision
 
 `BLOCKED_NO_RECIPIENT_POOL`
-
-No warmup messages were sent.

@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Updated: 2026-05-26 12:45 IDT
+Updated: 2026-05-26 13:00 IDT
 
 ## Commands
 
@@ -8,8 +8,8 @@ Updated: 2026-05-26 12:45 IDT
 - `docker compose exec -T api sh -lc 'python -m py_compile app/*.py'`: PASS
 - `docker compose exec -T worker sh -lc 'python -m py_compile worker/*.py'`: PASS
 - `docker compose exec -T api python -m app.db`: PASS
-- `docker compose exec -T api python -m pytest -q`: PASS, `35 passed`
-- `bash scripts/run_smoke_tests.sh`: PASS
+- `docker compose exec -T api python -m pytest -q`: PASS, `36 passed`
+- `bash scripts/run_smoke_tests.sh`: PASS, `36 passed`
 
 ## Runtime Health
 
@@ -19,39 +19,18 @@ Updated: 2026-05-26 12:45 IDT
 - `voiddo_rescue_worker`: healthy
 - `voiddo_rescue_web`: healthy
 
-## Public Route Smoke
+## P4 Functional Smoke
 
-- `https://rescue.voiddo.com/`: `200`
-- `https://app.rescue.voiddo.com/admin`: `401` expected
-- `https://api.rescue.voiddo.com/health`: `200`
-- `https://audit.rescue.voiddo.com/r/demo`: `200`
-- `https://go.rescue.voiddo.com/unsubscribe/test`: `200`
-- `https://status.rescue.voiddo.com/`: `200`
-- `https://app.rescue.voiddo.com/admin?token=...`: `401` expected
-- `https://app.rescue.voiddo.com/admin` with Bearer auth: `200`
-- `https://app.rescue.voiddo.com/admin` with Basic auth: `200`
-- `https://go.rescue.voiddo.com/checkout/{product_key}?audit=demo`: `302` for all six products
-- `https://app.rescue.voiddo.com/checkout/contact_form_repair?audit=demo`: `200`
+- Deliverability diagnostic refuses empty approved test inbox pool.
+- Deliverability diagnostic sends max one neutral message per approved test inbox in tests.
+- Warmup refuses empty approved warmup pool.
+- Warmup day-1 executor sends max five neutral messages in tests when all gates are mocked PASS.
+- Owner command `START WARMUP DAY=1` remains blocked in real runtime because pools are missing.
+- `SEND OUTREACH` remains high risk and blocked.
+- Mail QA strict SMTP/IMAP remains PASS, but final decision is blocked by missing approved test inbox pool.
 
-## Functional Smoke
+## Live Counters
 
-- Real scanner job created and completed.
-- Worker wrote audit/issues/screenshots to DB.
-- `GET /audits/{slug}` returned real audit data.
-- `/r/{slug}` rendered through web and public audit domain.
-- `/admin` is protected without token and works with token.
-- Paddle transaction/subscription handlers wrote records in tests.
-- Go checkout endpoint redirects to Paddle.js checkout page when client checkout token is configured.
-- Inbox persistence/idempotency passed tests.
-- Owner command SAFE_AUTO/MEDIUM_RISK/HIGH_RISK gates passed tests.
-- Visual QA unresolved-template detection passed tests.
-- Huanshu visual QA passed public route coverage.
-- Mail QA missing-DKIM block path passed tests.
-- Warmup no-recipient-pool block passed tests.
-- Outreach send endpoint remains blocked while launch flag is false.
-
-## Blocked Gates
-
-- Deliverability test is blocked until approved test inbox pool exists.
-- Warmup is blocked until approved recipient pool exists.
-- Live outreach is not launch-ready.
+- Deliverability diagnostic sends: `0`
+- Warmup sends: `0`
+- Live outreach sends: `0`
