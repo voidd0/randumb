@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from psycopg.types.json import Jsonb
 
-from .clean_window_recheck import clean_window_recheck
+from .clean_window_recheck import clean_window_recheck, post_window_recheck_scheduler
 from .db import execute, fetch_one
 from .email_templates import render_all_samples
 from .economics import run_economics_audit
@@ -96,6 +96,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "mail_signal_learning_agent": lambda: record_mail_signal_lessons(24),
         "clean_window_recovery_agent": lambda: run_clean_window_recovery(24),
         "clean_window_recheck_agent": lambda: clean_window_recheck(24, False),
+        "post_window_recheck_agent": lambda: post_window_recheck_scheduler(24, run_recovery_if_due=False),
         "customer_journey_agent": lambda: {"dry_run": True, "status": "customer_journeys_snapshot_on_payment_or_admin_request"},
         "monitoring_agent": lambda: {"dry_run": True, "status": "monitoring_targets_checked_by_protected_endpoint_or_scheduler"},
         "monitoring_scheduler_agent": lambda: process_due_monitoring_targets(5, True),
@@ -128,6 +129,7 @@ def run_daily_loop() -> dict[str, Any]:
         "mail_signal_learning_agent",
         "clean_window_recovery_agent",
         "clean_window_recheck_agent",
+        "post_window_recheck_agent",
         "sender_rotation_readiness_agent",
         "warmup_spacing_planner_agent",
         "warmup_spacing_apply_gate_agent",

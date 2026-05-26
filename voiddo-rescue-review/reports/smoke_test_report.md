@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 20:21 IDT
+Generated: 2026-05-26 20:34 IDT
 
 ## Result
 
@@ -8,19 +8,20 @@ PASS
 
 ## Test Results
 
-- API tests: `156 passed`
+- API tests: `162 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
 - Docker services: healthy
 
-## P18 Coverage
+## P19 Coverage
 
-- clean-window recheck blocks while recent signals exist: PASS
-- clean-window recheck ready state under mocked clean window: PASS
-- clean-window recheck endpoints require auth: PASS
-- clean-window recheck records no-send result: PASS
-- live outreach remains blocked: PASS
+- post-window scheduler not-due before safe timestamp: PASS
+- post-window scheduler due after safe timestamp: PASS
+- warmup-ready transition under mocked clean window: PASS
+- post-window endpoints require auth: PASS
+- no live outreach unlock: PASS
+- no forced warmup send: PASS
 
 ## Safety Counters
 

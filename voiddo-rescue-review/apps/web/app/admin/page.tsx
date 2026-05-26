@@ -18,10 +18,12 @@ export default async function AdminPage() {
   const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
   const mailerData = await fetchJson("/admin/mailer/control-room", authorization ? { Authorization: authorization } : {});
   const recheckData = await fetchJson("/admin/mailer/clean-window-recheck", authorization ? { Authorization: authorization } : {});
+  const postWindowData = await fetchJson("/admin/mailer/post-window-recheck", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
   const recheck = recheckData?.summary || {};
+  const postWindow = postWindowData?.summary || {};
   const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
@@ -63,6 +65,7 @@ export default async function AdminPage() {
     ["mail lessons", metrics.mail_signal_lessons ?? 0],
     ["clean recoveries", metrics.clean_window_recovery_runs ?? 0],
     ["clean rechecks", metrics.clean_window_recheck_runs ?? 0],
+    ["post-window checks", metrics.post_window_recheck_runs ?? 0],
     ["customer journeys", metrics.customer_journey_snapshots ?? 0],
     ["customer tokens", metrics.customer_access_tokens ?? 0],
     ["monitoring runs", metrics.monitoring_runs ?? 0],
@@ -134,6 +137,13 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">safe at</span><span>next possible recheck time</span><span className="score">{recheck.next_safe_at ? new Date(recheck.next_safe_at).toLocaleString("en-GB") : "now"}</span></div>
             <div className="row"><span className="tag">qa</span><span>mail QA before resume</span><span className="score">{recheck.mail_qa_decision ?? "unknown"}</span></div>
             <div className="row"><span className="tag">send</span><span>live outreach gate</span><span className="score">blocked</span></div>
+          </div>
+          <div className="panel">
+            <h2>Post-Window Transition</h2>
+            <div className="row"><span className="tag">{postWindow.recheck_due ? "due" : "wait"}</span><span>scheduled no-send recheck</span><span className="score">{postWindow.recheck_due ? "ready" : "not due"}</span></div>
+            <div className="row"><span className="tag">safe at</span><span>transition recheck time</span><span className="score">{postWindow.next_safe_at ? new Date(postWindow.next_safe_at).toLocaleString("en-GB") : "now"}</span></div>
+            <div className="row"><span className="tag">decision</span><span>warmup-ready transition</span><span className="score">{postWindow.transition_decision ?? "NOT_RUN"}</span></div>
+            <div className="row"><span className="tag">send</span><span>manual send forcing</span><span className="score">disabled</span></div>
           </div>
           <div className="panel">
             <h2>Mail Signal Lessons</h2>

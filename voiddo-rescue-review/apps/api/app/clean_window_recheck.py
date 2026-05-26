@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -114,6 +115,88 @@ def clean_window_recheck_summary() -> dict[str, Any]:
             "next_safe_at": next_safe_at,
             "mail_qa_decision": mail_qa_decision,
             "warmup_gate": warmup_gate,
+            "live_outreach_allowed": False,
+            "sends_started": False,
+        }
+    )
+
+
+def _parse_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _transition_decision(recheck_status: str) -> str:
+    if recheck_status == "ready_natural_warmup_only":
+        return "WARMUP_READY_PENDING_NATURAL_TIMER"
+    if recheck_status == "blocked_recent_signals":
+        return "WAIT_RECENT_SIGNALS"
+    if recheck_status == "blocked_mail_qa":
+        return "WAIT_MAIL_QA"
+    return "WAIT_WARMUP_GATE"
+
+
+def post_window_recheck_scheduler(window_hours: int = 24, now: datetime | None = None, run_recovery_if_due: bool = True) -> dict[str, Any]:
+    now = now or datetime.now(timezone.utc)
+    summary = clean_window_recheck_summary()
+    next_safe = _parse_dt(summary.get("next_safe_at"))
+    recheck_due = next_safe is None or now >= next_safe
+    recheck = None
+    executed_at = None
+    if recheck_due:
+        recheck = clean_window_recheck(window_hours, run_recovery_if_due)
+        executed_at = now
+        status = "recheck_executed"
+        transition = _transition_decision(recheck["status"])
+    else:
+        status = "not_due"
+        transition = "WAIT_UNTIL_NEXT_SAFE_AT"
+    result = {
+        "summary": summary,
+        "recheck": recheck,
+        "now": now.isoformat(),
+        "next_safe_at": next_safe.isoformat() if next_safe else None,
+        "recheck_due": recheck_due,
+        "transition_decision": transition,
+        "live_outreach_allowed": False,
+        "sends_started": False,
+    }
+    row = execute(
+        """
+        INSERT INTO post_window_recheck_runs(
+          status, window_hours, next_safe_at, recheck_due, recheck_executed_at,
+          transition_decision, sends_started, result_json
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, false, %s)
+        RETURNING *
+        """,
+        (status, window_hours, next_safe, recheck_due, executed_at, transition, Jsonb(json_safe(result))),
+    )
+    payload = dict(row)
+    payload["result_json"] = json_safe(result)
+    return payload
+
+
+def post_window_recheck_summary() -> dict[str, Any]:
+    latest = fetch_one(
+        """
+        SELECT *
+        FROM post_window_recheck_runs
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    clean_summary = clean_window_recheck_summary()
+    next_safe = _parse_dt(clean_summary.get("next_safe_at"))
+    now = datetime.now(timezone.utc)
+    return json_safe(
+        {
+            "latest": dict(latest) if latest else {},
+            "clean_window": clean_summary,
+            "next_safe_at": next_safe.isoformat() if next_safe else None,
+            "recheck_due": next_safe is None or now >= next_safe,
+            "transition_decision": dict(latest)["transition_decision"] if latest else "NOT_RUN",
             "live_outreach_allowed": False,
             "sends_started": False,
         }

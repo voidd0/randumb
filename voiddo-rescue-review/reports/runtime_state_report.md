@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 20:21 IDT
+Generated: 2026-05-26 20:34 IDT
 
 ## Canonical Latest State
 
@@ -18,22 +18,23 @@ Generated: 2026-05-26 20:21 IDT
 - SMTP rate-limit signal count, last 24h: `1`
 - launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
 
-## Clean-Window Recheck
+## Post-Window Recheck
 
-- latest recheck status: `blocked_recent_signals`
-- signal window clear: `false`
+- latest scheduler status: `not_due`
+- recheck due: `false`
+- transition decision: `WAIT_UNTIL_NEXT_SAFE_AT`
 - next safe timestamp: `2026-05-27T11:19:56.313413+00:00`
-- recheck sends started: `false`
+- sends started: `false`
 - live outreach allowed: `false`
 
 ## Verification
 
-- API tests: `156 passed`
+- API tests: `162 passed`
 - smoke test: PASS
-- Huanshu local adapter: PASS including admin control room
+- Huanshu local adapter: PASS including admin transition panel
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers
 - API/web/worker/postgres/redis: healthy
 
 ## Next Allowed Action
 
-At or after `2026-05-27T11:19:56.313413+00:00`, rerun clean-window recheck and no-send mail QA. Do not enable live outreach.
+Wait until `2026-05-27T11:19:56.313413+00:00`, then let the post-window recheck agent execute no-send checks and transition only to warmup-ready if all gates pass.

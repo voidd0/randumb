@@ -1,10 +1,10 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 20:21 IDT
+Generated: 2026-05-26 20:34 IDT
 
 ## Scope
 
-This review tree contains the Vøiddo Rescue source tree after P18 clean-window recheck automation and safe resume timestamp work.
+This review tree contains the Vøiddo Rescue source tree after P19 post-window no-send recheck scheduler and warmup-ready transition evidence work.
 
 ## Included
 
@@ -24,24 +24,25 @@ This review tree contains the Vøiddo Rescue source tree after P18 clean-window 
 
 ## Verification
 
-- API tests: `156 passed`
+- API tests: `162 passed`
 - smoke: PASS
-- Huanshu: PASS, including updated authenticated admin clean-window panel
+- Huanshu: PASS, including updated authenticated admin post-window panel
 - extra design/QA plugins: PASS or non-blocking warning; blockers `0`
-- clean-window recheck status: `blocked_recent_signals`
+- post-window scheduler status: `not_due`
+- transition decision: `WAIT_UNTIL_NEXT_SAFE_AT`
 - live outreach sent: `0`
 - warmup sent: `0`
 
 ## Launch State
 
-`WARMUP_SCHEDULED_NO_OUTREACH`. Recent bounce/DSN and SMTP rate-limit signals still block sending; next safe recheck timestamp is recorded in reports.
+`WARMUP_SCHEDULED_NO_OUTREACH`. Recent bounce/DSN and SMTP rate-limit signals still block sending; post-window no-send recheck is scheduled by evidence but not yet due.
 
 ## Secrets
 
 No raw secrets are intentionally included. `.env.example` is included as a template only.
 
-## P18 Export
+## P19 Export
 
-- zip path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p18-clean-window-recheck-2026-05-26.zip
-- initial zip SHA256 before metadata refresh: abb6795a76d44e0c6a4b71b6b9be25e87e727ea3c6cf28e63f56af6bff184730
-- branch before commit: 73232586bdd03feaf2a81e57c0e210b7f09e2cdb
+- zip path: /opt/voiddo-rescue/storage/exports/voiddo-rescue-p19-post-window-recheck-2026-05-26.zip
+- initial zip SHA256 before metadata refresh: 46789ac74d7e33d352a5c4c67cb59847d264be369e22a4e8b1620579cdb614c3
+- branch before commit: cb0601a7dc8bf45318315262bef3b95b75915cfd
