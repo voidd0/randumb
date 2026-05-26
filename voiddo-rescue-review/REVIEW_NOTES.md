@@ -1,20 +1,20 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-26 21:00 IDT
+Generated: 2026-05-26 21:11 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - target folder: `voiddo-rescue-review/`
-- file count: `236`
+- file count: `241`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## P21 Summary
+## P22 Summary
 
-- Added protected autonomous mailer ledger endpoint.
-- Added admin mailer ledger panel.
-- Ledger aggregates owner commands, inbound threads, email events, outbound decisions, mail signals, throttle state, suppression, warmup state, and runtime gates.
-- Ledger omits raw recipient addresses, owner address, raw subjects, and message bodies.
+- Added `mailer_action_queue` migration.
+- Added protected mailer action queue and no-send router endpoints.
+- Added admin action queue panel.
+- Router prepares or blocks actions with gate evidence and keeps send_mail=false.
 - Live outreach sent: `0`.
 - Warmup sent: `0`.
 
@@ -24,7 +24,7 @@ Excluded from review/export: `.env`, `*.env`, mailbox passwords, private keys, `
 
 ## Verification
 
-- API tests: `172 passed`.
+- API tests: `177 passed`.
 - Smoke script: PASS.
 - Huanshu: PASS on money-facing/public/admin/customer routes.
 - Extra design/accessibility/regression plugins: PASS with `0` blockers.

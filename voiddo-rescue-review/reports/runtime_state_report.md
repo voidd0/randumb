@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-26 20:59 IDT
+Generated: 2026-05-26 21:10 IDT
 
 ## Canonical Latest State
 
@@ -40,9 +40,19 @@ Generated: 2026-05-26 20:59 IDT
 - raw addresses included: `false`
 - active blockers: `outreach_paused_env`, `first_live_send_flag_false`, `auto_replies_paused_env`, `recent_bounce_or_dsn`, `recent_rate_limit`
 
+## Mailer Action Queue
+
+- queued: `0`
+- prepared: `0`
+- blocked: `0`
+- sent: `0`
+- raw recipient addresses included: `false`
+- send_mail: `false`
+- live_outreach_allowed: `false`
+
 ## Verification
 
-- API tests: `172 passed`
+- API tests: `177 passed`
 - smoke test: PASS
 - Huanshu local adapter: PASS including admin transition panel
 - secondary QA plugins: PASS or non-blocking warning, 0 blockers

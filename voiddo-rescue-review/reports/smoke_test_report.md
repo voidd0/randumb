@@ -1,6 +1,6 @@
 # Smoke Test Report
 
-Generated: 2026-05-26 20:59 IDT
+Generated: 2026-05-26 21:10 IDT
 
 ## Result
 
@@ -8,7 +8,7 @@ PASS
 
 ## Test Results
 
-- API tests: `172 passed`
+- API tests: `177 passed`
 - smoke script: PASS, output `ok`
 - API health: PASS
 - web health: PASS
@@ -27,6 +27,11 @@ PASS
 - mailer autonomy ledger endpoint requires auth: PASS
 - mailer autonomy ledger omits raw addresses: PASS
 - mailer autonomy ledger keeps live outreach blocked: PASS
+- mailer action queue auth enforced: PASS
+- mailer action router blocks cold outreach: PASS
+- mailer action router prepares owner report without sending: PASS
+- mailer action router blocks warmup outside natural timer: PASS
+- mailer action summary omits raw addresses: PASS
 - no live outreach unlock: PASS
 - no forced warmup send: PASS
 

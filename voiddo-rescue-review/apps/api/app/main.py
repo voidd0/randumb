@@ -51,6 +51,7 @@ from .mailer_readiness import mailbox_health_score, run_clean_window_transition,
 from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mailer_control_room import mailer_control_room_summary, monitoring_control_room_summary, write_owner_status_report
 from .mailer_autonomy_ledger import mailer_autonomy_ledger
+from .mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, process_mailer_action_queue
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
@@ -572,6 +573,23 @@ def mailer_control_room_get():
 @app.get("/admin/mailer/autonomy-ledger", dependencies=[Depends(require_admin)])
 def mailer_autonomy_ledger_get():
     return {"ok": True, "ledger": mailer_autonomy_ledger()}
+
+
+@app.get("/admin/mailer/action-queue", dependencies=[Depends(require_admin)])
+def mailer_action_queue_get():
+    return {"ok": True, "queue": mailer_action_queue_summary()}
+
+
+@app.post("/admin/mailer/action-queue", dependencies=[Depends(require_admin)])
+async def mailer_action_queue_create(request: Request):
+    payload = await request.json()
+    return {"ok": True, "action": enqueue_mailer_action(payload)}
+
+
+@app.post("/admin/mailer/action-queue/process", dependencies=[Depends(require_admin)])
+async def mailer_action_queue_process(request: Request):
+    payload = await request.json()
+    return {"ok": True, "result": process_mailer_action_queue(int(payload.get("limit", 10)))}
 
 
 @app.post("/admin/mailer/owner-status-report", dependencies=[Depends(require_admin)])

@@ -20,12 +20,14 @@ export default async function AdminPage() {
   const recheckData = await fetchJson("/admin/mailer/clean-window-recheck", authorization ? { Authorization: authorization } : {});
   const postWindowData = await fetchJson("/admin/mailer/post-window-recheck", authorization ? { Authorization: authorization } : {});
   const ledgerData = await fetchJson("/admin/mailer/autonomy-ledger", authorization ? { Authorization: authorization } : {});
+  const actionQueueData = await fetchJson("/admin/mailer/action-queue", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
   const recheck = recheckData?.summary || {};
   const postWindow = postWindowData?.summary || {};
   const ledger = ledgerData?.ledger || {};
+  const actionQueue = actionQueueData?.queue || {};
   const monitoring = monitoringData?.summary || {};
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
@@ -150,6 +152,16 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">privacy</span><span>raw addresses in admin payload</span><span className="score">{ledger.privacy?.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">blockers</span><span>current mailer gate blockers</span><span className="score">{Array.isArray(ledgerGates.blockers) ? ledgerGates.blockers.length : 0}</span></div>
             <div className="row"><span className="tag">outbound</span><span>outbound status groups</span><span className="score">{Array.isArray(ledgerOutbound.messages_by_status) ? ledgerOutbound.messages_by_status.length : 0}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Mailer Action Queue</h2>
+            <div className="row"><span className="tag">queued</span><span>prepared mail actions waiting for gates</span><span className="score">{actionQueue.queued ?? 0}</span></div>
+            <div className="row"><span className="tag">prepared</span><span>safe actions prepared without sending</span><span className="score">{actionQueue.prepared ?? 0}</span></div>
+            <div className="row"><span className="tag">blocked</span><span>actions blocked by safety gates</span><span className="score">{actionQueue.blocked ?? 0}</span></div>
+            <div className="row"><span className="tag">sent</span><span>actions sent by this router</span><span className="score">{actionQueue.sent ?? 0}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw addresses in queue payload</span><span className="score">{actionQueue.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">send</span><span>router send capability</span><span className="score">{actionQueue.send_mail ? "armed" : "evidence only"}</span></div>
+            <div className="row"><span className="tag">blockers</span><span>current ledger blockers</span><span className="score">{Array.isArray(actionQueue.ledger_blockers) ? actionQueue.ledger_blockers.length : 0}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>
