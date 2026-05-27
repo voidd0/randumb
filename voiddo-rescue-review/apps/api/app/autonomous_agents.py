@@ -33,6 +33,7 @@ from .p0 import (
     write_daily_business_report,
 )
 from .quality_plugins import latest_quality_summary
+from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .language_gate import check_no_ai_public_language
@@ -123,6 +124,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "deliverability_agent": lambda: {"dry_run": True, "signals": mail_signal_summary()},
         "warmup_agent": lambda: run_warmup_calendar_due(limit=2),
         "campaign_agent": lambda: prepare_outreach_preview(int(payload.get("limit", 20))),
+        "campaign_control_room_agent": lambda: campaign_control_room_snapshot(int(payload.get("limit", 100))),
+        "campaign_control_room_prepare_agent": lambda: prepare_campaign_control_room(int(payload.get("limit", 100)), dry_run=True),
         "inbox_agent": lambda: {"dry_run": True, "status": "worker_polls_when_enabled"},
         "owner_command_agent": lambda: {"dry_run": True, "status": "owner_commands_are_gated"},
         "checkout_agent": lambda: {"dry_run": True, "status": "paddle_webhook_handlers_ready"},
@@ -182,6 +185,8 @@ def run_daily_loop() -> dict[str, Any]:
         "visual_qa_agent",
         "deliverability_agent",
         "campaign_agent",
+        "campaign_control_room_agent",
+        "campaign_control_room_prepare_agent",
         "reporting_agent",
         "fix_task_agent",
         "monitoring_scheduler_agent",

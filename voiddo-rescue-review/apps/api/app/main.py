@@ -43,6 +43,7 @@ from .audit_strength import score_audit_strength
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
 from .campaign_control import campaign_readiness_snapshot
+from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .clean_window_recheck import clean_window_recheck, clean_window_recheck_summary, post_window_recheck_scheduler, post_window_recheck_summary
 from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
 from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
@@ -924,6 +925,26 @@ async def campaign_economics_run(campaign_id: str, request: Request):
 @app.post("/admin/campaigns/{campaign_id}/readiness", dependencies=[Depends(require_admin)])
 def campaign_readiness_run(campaign_id: str):
     return {"ok": True, "readiness": campaign_readiness_snapshot(campaign_id)}
+
+
+@app.get("/admin/campaign-control-room", dependencies=[Depends(require_admin)])
+def campaign_control_room_get(limit: int = 100, threshold: int = 70):
+    return {"ok": True, "control_room": campaign_control_room_snapshot(limit, threshold)}
+
+
+@app.post("/admin/campaign-control-room/prepare", dependencies=[Depends(require_admin)])
+async def campaign_control_room_prepare(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "control_room": prepare_campaign_control_room(
+            int(payload.get("limit", 100)),
+            int(payload.get("threshold", 70)),
+            bool(payload.get("dry_run", True)),
+            payload.get("offer_key", "contact_form_repair"),
+            int(payload.get("max_segments", 3)),
+        ),
+    }
 
 
 @app.post("/admin/mail/clean-window", dependencies=[Depends(require_admin)])
