@@ -1,0 +1,12 @@
+[Unit]
+Description=Vøiddo Rescue no-send autonomous operating loop
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/voiddo-rescue
+ExecStart=/usr/bin/python3 /opt/voiddo-rescue/scripts/rescue_autonomous_loop.py --timeout 1500
+TimeoutStartSec=1800
+Nice=7
