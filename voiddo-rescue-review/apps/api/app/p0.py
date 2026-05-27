@@ -359,6 +359,7 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "campaign_economics_checks": scalar("SELECT count(*) FROM campaign_economics_checks"),
         "campaign_action_runs": scalar("SELECT count(*) FROM campaign_action_runs"),
         "post_scan_campaign_cycles": scalar("SELECT count(*) FROM post_scan_campaign_cycles"),
+        "campaign_preview_refresh_runs": scalar("SELECT count(*) FROM campaign_preview_refresh_runs"),
         "mail_clean_window_checks": scalar("SELECT count(*) FROM mail_clean_window_checks"),
         "mailer_drafts": scalar("SELECT count(*) FROM mailer_drafts"),
         "scout_self_checks": scalar("SELECT count(*) FROM scout_self_checks"),

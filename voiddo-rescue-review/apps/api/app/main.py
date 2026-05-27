@@ -51,6 +51,7 @@ from .campaign_control import campaign_readiness_snapshot
 from .campaign_actions import campaign_actions_summary, run_campaign_action
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
+from .campaign_preview_refresh import campaign_preview_refresh_snapshot, latest_campaign_preview_refresh_runs, refresh_campaign_previews_if_needed
 from .post_scan_campaign_cycle import latest_post_scan_campaign_cycles, post_scan_campaign_cycle
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
@@ -1163,6 +1164,29 @@ def campaign_pipeline_gaps_get(limit: int = 100):
 async def campaign_pipeline_repair_run(request: Request):
     payload = await request.json()
     return {"ok": True, "pipeline": repair_campaign_pipeline(int(payload.get("limit", 100)), bool(payload.get("dry_run", True)))}
+
+
+@app.get("/admin/campaign-preview/refresh-snapshot", dependencies=[Depends(require_admin)])
+def campaign_preview_refresh_snapshot_get(limit: int = 100, stale_hours: int = 24):
+    return {"ok": True, "snapshot": campaign_preview_refresh_snapshot(limit, stale_hours)}
+
+
+@app.get("/admin/campaign-preview/refresh-runs", dependencies=[Depends(require_admin)])
+def campaign_preview_refresh_runs_get(limit: int = 10):
+    return {"ok": True, "runs": latest_campaign_preview_refresh_runs(limit)}
+
+
+@app.post("/admin/campaign-preview/refresh", dependencies=[Depends(require_admin)])
+async def campaign_preview_refresh_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "refresh": refresh_campaign_previews_if_needed(
+            int(payload.get("limit", 100)),
+            int(payload.get("stale_hours", 24)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
 
 
 @app.get("/admin/post-scan-campaign-cycles", dependencies=[Depends(require_admin)])
