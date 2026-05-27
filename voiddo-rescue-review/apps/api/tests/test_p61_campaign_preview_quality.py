@@ -36,7 +36,7 @@ def _cleanup(token: str) -> None:
 
 
 def _campaign(token: str, weak: bool = False) -> str:
-    domain = f"p61-{token}.example.test"
+    domain = f"p61-{token}.clinic"
     business = execute(
         """
         INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)

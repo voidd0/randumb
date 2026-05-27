@@ -35,7 +35,7 @@ def _cleanup(token: str) -> None:
 
 def _qualified_lead(token: str) -> tuple[str, str]:
     country = f"P59{token[:3].upper()}"
-    domain = f"p59-{token}.example.test"
+    domain = f"p59-{token}.clinic"
     business = execute(
         """
         INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
@@ -93,7 +93,7 @@ def test_campaign_control_room_finds_candidates_without_raw_email():
         text = str(result)
         assert f"owner-{token}@" not in text
         assert result["raw_recipient_addresses_included"] is False
-        assert any(item["domain"] == f"p59-{token}.example.test" for item in result["candidates"])
+        assert any(item["domain"] == f"p59-{token}.clinic" for item in result["candidates"])
     finally:
         _cleanup(token)
 

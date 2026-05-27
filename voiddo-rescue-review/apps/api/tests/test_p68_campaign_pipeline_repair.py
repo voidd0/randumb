@@ -31,7 +31,7 @@ def _cleanup(token: str) -> None:
 
 
 def _orphan_pipeline_case(token: str) -> tuple[str, str, str]:
-    domain = f"p68-{token}.example.test"
+    domain = f"p68-{token}.clinic"
     business = execute(
         """
         INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)

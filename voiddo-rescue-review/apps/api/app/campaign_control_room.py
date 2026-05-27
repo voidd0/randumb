@@ -46,6 +46,13 @@ def qualified_campaign_lead_candidates(limit: int = 100, threshold: int = 70) ->
         WHERE COALESCE(ls.final_score, l.score, 0) >= %s
           AND a.status = 'completed'
           AND l.email IS NOT NULL
+          AND COALESCE(l.country, '') <> ''
+          AND COALESCE(l.niche, '') <> ''
+          AND lower(COALESCE(l.email, '')) NOT LIKE '%%.example.test'
+          AND lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
+          AND lower(COALESCE(a.domain, '')) NOT LIKE '%%.example.test'
+          AND lower(COALESCE(b.domain, '')) NOT IN ('example.com', 'localhost')
+          AND lower(COALESCE(a.domain, '')) NOT IN ('example.com', 'localhost')
           AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(s.email) = lower(l.email))
         ORDER BY COALESCE(ls.final_score, l.score, 0) DESC, a.created_at DESC
         LIMIT %s
