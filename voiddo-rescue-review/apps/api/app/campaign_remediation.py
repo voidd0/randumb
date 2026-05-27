@@ -4,7 +4,11 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from .campaign_actions import run_campaign_action
+from .campaign_preflight import campaign_preflight
+from .campaign_preview_quality import campaign_preview_quality_pack
 from .db import execute, fetch_all, fetch_one
+from .mailer_control_room import mailer_policy_score
 from .p0 import json_safe
 
 
@@ -185,6 +189,137 @@ def latest_campaign_remediation_plans(limit: int = 10) -> dict[str, Any]:
                     "status": row["status"],
                     "blocker_count": int(row["blocker_count"] or 0),
                     "task_count": int(row["task_count"] or 0),
+                    "send_mail": bool(row["send_mail"]),
+                    "smtp_called": bool(row["smtp_called"]),
+                    "live_outreach_allowed": bool(row["live_outreach_allowed"]),
+                    "raw_recipient_addresses_included": bool(row["raw_recipient_addresses_included"]),
+                    "secrets_included": bool(row["secrets_included"]),
+                    "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+                }
+                for row in rows
+            ],
+            **SAFE_FLAGS,
+        }
+    )
+
+
+def _latest_plan_rows(limit: int) -> list[dict[str, Any]]:
+    return [
+        dict(row)
+        for row in fetch_all(
+            """
+            SELECT DISTINCT ON (campaign_id)
+                   id, campaign_id, status, blocker_count, task_count, plan_json, created_at
+            FROM campaign_remediation_plans
+            WHERE campaign_id IS NOT NULL
+            ORDER BY campaign_id, created_at DESC
+            LIMIT %s
+            """,
+            (max(1, min(int(limit or 10), 100)),),
+        )
+    ]
+
+
+def _execute_safe_action(campaign_id: str, action: dict[str, Any]) -> dict[str, Any]:
+    action_name = action["action"]
+    if action.get("risk") != "SAFE_AUTO":
+        return {"status": "skipped_review_required", "action": action_name, "risk": action.get("risk"), **SAFE_FLAGS}
+    if action_name == "refresh_campaign_previews":
+        result = run_campaign_action("refresh_previews", campaign_id, limit=100, dry_run=False)
+    elif action_name == "refresh_campaign_preview_quality":
+        result = campaign_preview_quality_pack(campaign_id, 20)
+    elif action_name == "repair_mailer_policy_blockers":
+        result = mailer_policy_score()
+    else:
+        return {"status": "skipped_no_safe_executor", "action": action_name, "risk": action.get("risk"), **SAFE_FLAGS}
+    return {
+        "status": "executed",
+        "action": action_name,
+        "risk": action.get("risk"),
+        "result_status": result.get("status") or result.get("decision"),
+        "send_mail": bool(result.get("send_mail", False)),
+        "smtp_called": bool(result.get("smtp_called", False)),
+        "live_outreach_allowed": bool(result.get("live_outreach_allowed", False)),
+        "raw_recipient_addresses_included": bool(result.get("raw_recipient_addresses_included", False)),
+        "secrets_included": bool(result.get("secrets_included", False)),
+    }
+
+
+def execute_campaign_remediation(limit: int = 10, rerun_preflight: bool = True) -> dict[str, Any]:
+    rows = _latest_plan_rows(limit)
+    executions: list[dict[str, Any]] = []
+    for row in rows:
+        campaign_id = str(row["campaign_id"])
+        plan = row.get("plan_json") or {}
+        action_results = [_execute_safe_action(campaign_id, action) for action in plan.get("actions", [])]
+        preflight_result = campaign_preflight(campaign_id, 20) if rerun_preflight else {"status": "skipped"}
+        executed = len([item for item in action_results if item["status"] == "executed"])
+        skipped = len(action_results) - executed
+        result = json_safe(
+            {
+                "campaign_id": campaign_id,
+                "plan_id": str(row["id"]),
+                "status": "executed" if executed else "skipped_no_safe_actions",
+                "actions": action_results,
+                "preflight": {
+                    "decision": preflight_result.get("decision"),
+                    "status": preflight_result.get("status"),
+                    "blockers": preflight_result.get("blockers", []),
+                },
+                "executed_count": executed,
+                "skipped_count": skipped,
+                **SAFE_FLAGS,
+            }
+        )
+        saved = execute(
+            """
+            INSERT INTO campaign_remediation_executions(
+              campaign_id, status, executed_count, skipped_count, result_json,
+              send_mail, smtp_called, live_outreach_allowed,
+              raw_recipient_addresses_included, secrets_included
+            )
+            VALUES (%s, %s, %s, %s, %s, false, false, false, false, false)
+            RETURNING id, created_at
+            """,
+            (campaign_id, result["status"], executed, skipped, Jsonb(result)),
+        )
+        result["execution_id"] = str(saved["id"])
+        result["created_at"] = saved["created_at"].isoformat()
+        executions.append(result)
+    return json_safe(
+        {
+            "status": "executed" if executions else "idle_no_remediation_plans",
+            "campaign_count": len(executions),
+            "executed_count": sum(item["executed_count"] for item in executions),
+            "skipped_count": sum(item["skipped_count"] for item in executions),
+            "executions": executions,
+            **SAFE_FLAGS,
+        }
+    )
+
+
+def latest_campaign_remediation_executions(limit: int = 10) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT id, campaign_id, status, executed_count, skipped_count,
+               send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM campaign_remediation_executions
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (max(1, min(int(limit or 10), 100)),),
+    )
+    return json_safe(
+        {
+            "count": len(rows),
+            "history": [
+                {
+                    "id": str(row["id"]),
+                    "campaign_id": str(row["campaign_id"]) if row.get("campaign_id") else None,
+                    "status": row["status"],
+                    "executed_count": int(row["executed_count"] or 0),
+                    "skipped_count": int(row["skipped_count"] or 0),
                     "send_mail": bool(row["send_mail"]),
                     "smtp_called": bool(row["smtp_called"]),
                     "live_outreach_allowed": bool(row["live_outreach_allowed"]),
