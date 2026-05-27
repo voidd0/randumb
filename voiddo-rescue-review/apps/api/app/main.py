@@ -45,6 +45,7 @@ from .campaign_economics import run_campaign_economics_check
 from .campaign_control import campaign_readiness_snapshot
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_preview_quality import campaign_preview_quality_pack
+from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
 from .clean_window_recheck import clean_window_recheck, clean_window_recheck_summary, post_window_recheck_scheduler, post_window_recheck_summary
 from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
 from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
@@ -887,6 +888,17 @@ async def revenue_simulate(request: Request):
             payload.get("product_key", "contact_form_repair"),
         ),
     }
+
+
+@app.get("/admin/scenarios/buyer-journey", dependencies=[Depends(require_admin)])
+def buyer_journey_scoreboard_get():
+    return {"ok": True, "scoreboard": buyer_journey_readiness_scoreboard()}
+
+
+@app.post("/admin/scenarios/buyer-journey/run", dependencies=[Depends(require_admin)])
+async def buyer_journey_scenario_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "scenario": run_buyer_journey_scenario(bool(payload.get("cleanup", True)))}
 
 
 @app.get("/admin/revenue-loop", dependencies=[Depends(require_admin)])

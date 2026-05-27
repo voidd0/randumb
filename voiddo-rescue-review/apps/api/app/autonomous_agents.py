@@ -35,6 +35,7 @@ from .p0 import (
 from .quality_plugins import latest_quality_summary
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_preview_quality import campaign_preview_quality_pack
+from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
@@ -138,6 +139,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "campaign_control_room_agent": lambda: campaign_control_room_snapshot(int(payload.get("limit", 100))),
         "campaign_control_room_prepare_agent": lambda: prepare_campaign_control_room(int(payload.get("limit", 100)), dry_run=True),
         "campaign_preview_quality_agent": campaign_preview_quality_agent,
+        "buyer_journey_scoreboard_agent": lambda: buyer_journey_readiness_scoreboard(),
+        "buyer_journey_scenario_agent": lambda: run_buyer_journey_scenario(cleanup=True),
         "source_campaign_operator_agent": lambda: source_campaign_operator_snapshot(int(payload.get("limit", 25)), payload.get("source_id")),
         "source_campaign_operator_advance_agent": lambda: advance_source_to_campaign(payload.get("source_id"), int(payload.get("limit", 25)), dry_run=True),
         "inbox_agent": lambda: {"dry_run": True, "status": "worker_polls_when_enabled"},
@@ -202,6 +205,7 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_control_room_agent",
         "campaign_control_room_prepare_agent",
         "campaign_preview_quality_agent",
+        "buyer_journey_scoreboard_agent",
         "source_campaign_operator_agent",
         "source_campaign_operator_advance_agent",
         "reporting_agent",
