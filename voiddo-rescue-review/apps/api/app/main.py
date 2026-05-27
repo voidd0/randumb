@@ -50,6 +50,7 @@ from .audit_evidence_remediation import audit_evidence_candidates, audit_evidenc
 from .audit_refresh_completion import audit_refresh_completion_watch, latest_audit_refresh_completion_watches
 from .audit_refresh_drain import audit_refresh_drain_snapshot, latest_audit_refresh_drain_runs, prioritize_audit_refresh_jobs
 from .audit_refresh_failures import audit_refresh_failure_snapshot, latest_audit_refresh_failure_runs, retry_failed_audit_refresh_jobs
+from .audit_refresh_repair import audit_refresh_attachment_repair_snapshot, repair_audit_refresh_attachments
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
 from .campaign_control import campaign_readiness_snapshot
@@ -1344,6 +1345,23 @@ def audit_refresh_failures_get(limit: int = 25):
 @app.get("/admin/audit-refresh/failure-runs", dependencies=[Depends(require_admin)])
 def audit_refresh_failure_runs_get(limit: int = 10):
     return {"ok": True, "runs": latest_audit_refresh_failure_runs(limit)}
+
+
+@app.get("/admin/audit-refresh/attachment-repair", dependencies=[Depends(require_admin)])
+def audit_refresh_attachment_repair_get(limit: int = 25):
+    return {"ok": True, "repair": audit_refresh_attachment_repair_snapshot(limit)}
+
+
+@app.post("/admin/audit-refresh/attachment-repair", dependencies=[Depends(require_admin)])
+async def audit_refresh_attachment_repair_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "repair": repair_audit_refresh_attachments(
+            int(payload.get("limit", 25)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
 
 
 @app.post("/admin/audit-refresh/retry-failures", dependencies=[Depends(require_admin)])

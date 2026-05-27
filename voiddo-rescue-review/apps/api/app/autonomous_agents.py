@@ -13,6 +13,7 @@ from .audit_evidence_remediation import audit_evidence_candidates, audit_evidenc
 from .audit_refresh_completion import audit_refresh_completion_watch
 from .audit_refresh_drain import audit_refresh_drain_snapshot, prioritize_audit_refresh_jobs
 from .audit_refresh_failures import audit_refresh_failure_snapshot, retry_failed_audit_refresh_jobs
+from .audit_refresh_repair import audit_refresh_attachment_repair_snapshot, repair_audit_refresh_attachments
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
 from .mailer_control_room import cleanup_mailer_digest_history, cleanup_mailer_policy_score_history, mailer_business_kpi_snapshot, mailer_digest_trend_guard, mailer_policy_score, mailer_policy_score_regression_guard, mailer_self_audit_matrix_snapshot, record_mailer_business_kpi_history, record_mailer_policy_score_history, record_mailer_self_audit_matrix_history, write_mailer_digest_agent_report, write_owner_status_report
@@ -216,6 +217,13 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             priority=int(payload.get("priority", 260)),
             allow_scanner_fix_retry=bool(payload.get("allow_scanner_fix_retry", False)),
         ),
+        "audit_refresh_attachment_repair_agent": lambda: repair_audit_refresh_attachments(
+            int(payload.get("limit", 25)),
+            dry_run=bool(payload.get("dry_run", True)),
+        ),
+        "audit_refresh_attachment_repair_snapshot_agent": lambda: audit_refresh_attachment_repair_snapshot(
+            int(payload.get("limit", 25)),
+        ),
         "studio_mail_monitor_agent": lambda: latest_studio_mail_messages(int(payload.get("limit", 20))),
         "visual_qa_agent": lambda: {"dry_run": True, "status": "huanshu_required", "routes": ["/", "/r/demo", "/admin", "/customer", "/status"]},
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
@@ -351,6 +359,7 @@ def run_daily_loop() -> dict[str, Any]:
         "audit_refresh_completion_watch_agent",
         "audit_refresh_failure_agent",
         "audit_refresh_retry_failures_agent",
+        "audit_refresh_attachment_repair_snapshot_agent",
         "studio_mail_monitor_agent",
         "post_scan_campaign_cycle_agent",
         "campaign_preview_quality_agent",

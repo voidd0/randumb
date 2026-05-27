@@ -56,6 +56,15 @@ def persist_scan_result(job: dict[str, Any], result: dict[str, Any]) -> str:
                     job_meta = json.loads(job_meta)
                 except Exception:
                     job_meta = {}
+            target_audit_id = job.get("audit_id")
+            if target_audit_id:
+                cur.execute("SELECT id, business_id, lead_id FROM audits WHERE id = %s", (target_audit_id,))
+                target_audit = cur.fetchone()
+                if target_audit:
+                    business_id = target_audit.get("business_id")
+                    lead_id = target_audit.get("lead_id")
+                else:
+                    target_audit_id = None
             if job_meta.get("lead_id"):
                 cur.execute("SELECT id, business_id FROM leads WHERE id = %s", (job_meta["lead_id"],))
                 lead = cur.fetchone()
@@ -81,21 +90,39 @@ def persist_scan_result(job: dict[str, Any], result: dict[str, Any]) -> str:
                     (job["business_name"], result["url"], result["domain"]),
                 )
                 business_id = cur.fetchone()["id"]
-            cur.execute(
-                """
-                INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
-                VALUES (%s, %s, %s, %s, 'completed', %s, %s, %s, now())
-                ON CONFLICT (public_slug) DO UPDATE
-                  SET status = 'completed',
-                      business_id = COALESCE(EXCLUDED.business_id, audits.business_id),
-                      lead_id = COALESCE(EXCLUDED.lead_id, audits.lead_id),
-                      score = EXCLUDED.score,
-                      summary = EXCLUDED.summary,
-                      checked_at = now()
-                RETURNING id
-                """,
-                (business_id, lead_id, result["domain"], result["url"], result["score"], _summary(result), result["public_slug"]),
-            )
+            if target_audit_id:
+                cur.execute(
+                    """
+                    UPDATE audits
+                    SET status = 'completed',
+                        business_id = COALESCE(%s, business_id),
+                        lead_id = COALESCE(%s, lead_id),
+                        domain = %s,
+                        url = %s,
+                        score = %s,
+                        summary = %s,
+                        checked_at = now()
+                    WHERE id = %s
+                    RETURNING id
+                    """,
+                    (business_id, lead_id, result["domain"], result["url"], result["score"], _summary(result), target_audit_id),
+                )
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+                    VALUES (%s, %s, %s, %s, 'completed', %s, %s, %s, now())
+                    ON CONFLICT (public_slug) DO UPDATE
+                      SET status = 'completed',
+                          business_id = COALESCE(EXCLUDED.business_id, audits.business_id),
+                          lead_id = COALESCE(EXCLUDED.lead_id, audits.lead_id),
+                          score = EXCLUDED.score,
+                          summary = EXCLUDED.summary,
+                          checked_at = now()
+                    RETURNING id
+                    """,
+                    (business_id, lead_id, result["domain"], result["url"], result["score"], _summary(result), result["public_slug"]),
+                )
             audit_id = cur.fetchone()["id"]
             if discovered_email and lead_id:
                 cur.execute("UPDATE leads SET email = COALESCE(email, %s), updated_at = now() WHERE id = %s", (discovered_email, lead_id))
