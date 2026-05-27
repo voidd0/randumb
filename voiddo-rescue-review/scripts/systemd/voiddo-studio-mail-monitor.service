@@ -1,0 +1,11 @@
+[Unit]
+Description=Vøiddo studio mailbox monitor
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/voiddo-rescue
+ExecStart=/usr/bin/python3 /opt/voiddo-rescue/scripts/studio_mail_monitor.py --limit 25 --imap-host mail.voiddo.com
+Nice=5
+

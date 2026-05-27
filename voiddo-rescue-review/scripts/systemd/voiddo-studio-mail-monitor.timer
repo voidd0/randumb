@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Vøiddo studio mailbox monitor
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+AccuracySec=20s
+Persistent=true
+Unit=voiddo-studio-mail-monitor.service
+
+[Install]
+WantedBy=timers.target
