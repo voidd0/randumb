@@ -61,6 +61,7 @@ from .campaign_preflight import campaign_preflight_batch, latest_campaign_prefli
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation, latest_campaign_remediation_executions, latest_campaign_remediation_plans
 from .campaign_remediation_feedback import campaign_remediation_feedback, latest_campaign_remediation_feedback
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, latest_campaign_preview_refresh_runs, refresh_campaign_previews_if_needed
+from .campaign_preview_hygiene import archive_campaign_preview_artifacts, campaign_preview_hygiene_snapshot
 from .post_scan_campaign_cycle import latest_post_scan_campaign_cycles, post_scan_campaign_cycle
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .studio_mail_monitor import ingest_studio_mail_messages, latest_studio_mail_messages, latest_studio_mail_runs
@@ -1185,6 +1186,23 @@ async def campaign_actions_run(request: Request):
             payload.get("campaign_id"),
             int(payload.get("limit", 100)),
             bool(payload.get("dry_run", False)),
+        ),
+    }
+
+
+@app.get("/admin/campaign-preview/hygiene", dependencies=[Depends(require_admin)])
+def campaign_preview_hygiene_get(limit: int = 500):
+    return {"ok": True, "hygiene": campaign_preview_hygiene_snapshot(limit)}
+
+
+@app.post("/admin/campaign-preview/archive-artifacts", dependencies=[Depends(require_admin)])
+async def campaign_preview_archive_artifacts(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "hygiene": archive_campaign_preview_artifacts(
+            int(payload.get("limit", 500)),
+            bool(payload.get("apply", False)),
         ),
     }
 

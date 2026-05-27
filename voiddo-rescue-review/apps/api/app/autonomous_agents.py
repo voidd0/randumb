@@ -47,6 +47,7 @@ from .campaign_preflight import campaign_preflight_batch
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation
 from .campaign_remediation_feedback import campaign_remediation_feedback
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, refresh_campaign_previews_if_needed
+from .campaign_preview_hygiene import archive_campaign_preview_artifacts, campaign_preview_hygiene_snapshot
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .studio_mail_monitor import latest_studio_mail_messages
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
@@ -251,6 +252,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("stale_hours", 24)),
             dry_run=bool(payload.get("dry_run", False)),
         ),
+        "campaign_preview_hygiene_agent": lambda: archive_campaign_preview_artifacts(
+            int(payload.get("limit", 500)),
+            apply=bool(payload.get("apply", True)),
+        ),
+        "campaign_preview_hygiene_snapshot_agent": lambda: campaign_preview_hygiene_snapshot(int(payload.get("limit", 500))),
         "campaign_preflight_agent": lambda: campaign_preflight_batch(int(payload.get("limit", 20)), payload.get("campaign_id")),
         "campaign_remediation_agent": lambda: campaign_remediation_plan(
             int(payload.get("limit", 25)),
@@ -353,6 +359,7 @@ def run_daily_loop() -> dict[str, Any]:
             "mailer_self_audit_matrix_agent",
             "quality_plugin_agent",
             "warmup_block_recovery_snapshot_agent",
+            "campaign_preview_hygiene_snapshot_agent",
             "self_audit_agent",
             "self_fix_agent",
             "self_learning_agent",
@@ -381,6 +388,8 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_pipeline_gap_agent",
         "campaign_preview_refresh_snapshot_agent",
         "campaign_preview_refresh_agent",
+        "campaign_preview_hygiene_agent",
+        "campaign_preview_hygiene_snapshot_agent",
         "campaign_preflight_agent",
         "campaign_remediation_agent",
         "campaign_remediation_executor_agent",
