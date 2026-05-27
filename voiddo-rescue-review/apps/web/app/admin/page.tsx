@@ -20,6 +20,15 @@ export default async function AdminPage() {
     await postJson("/admin/mailer/ops-actions", { action, limit });
   }
 
+  async function runCampaignAction(formData: FormData) {
+    "use server";
+    const action = String(formData.get("action") || "");
+    const campaign_id = String(formData.get("campaign_id") || "") || undefined;
+    const limit = Number(formData.get("limit") || 25);
+    const dry_run = String(formData.get("dry_run") || "false") === "true";
+    await postJson("/admin/campaign-actions/run", { action, campaign_id, limit, dry_run });
+  }
+
   const requestHeaders = await headers();
   const authorization = requestHeaders.get("authorization") || "";
   const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
@@ -43,6 +52,7 @@ export default async function AdminPage() {
   const scoutSourceReadinessData = await fetchJson("/admin/scouts/source-readiness-summary", authorization ? { Authorization: authorization } : {});
   const scoutSourceReadinessGuardData = await fetchJson("/admin/scouts/source-readiness-regression-guard/latest", authorization ? { Authorization: authorization } : {});
   const campaignControlRoomData = await fetchJson("/admin/campaign-control-room?limit=25&threshold=70", authorization ? { Authorization: authorization } : {});
+  const campaignActionsData = await fetchJson("/admin/campaign-actions?limit=8", authorization ? { Authorization: authorization } : {});
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
@@ -82,6 +92,9 @@ export default async function AdminPage() {
   const scoutSourceReadinessLatest = Array.isArray(scoutSourceReadiness.latest) ? scoutSourceReadiness.latest[0] || {} : {};
   const scoutSourceReadinessGuard = scoutSourceReadinessGuardData?.guard || scoutSourceReadiness.regression_guard || {};
   const campaignControlRoom = campaignControlRoomData?.control_room || {};
+  const campaignActions = campaignActionsData?.actions || {};
+  const campaignActionRuns = Array.isArray(campaignActions.latest_runs) ? campaignActions.latest_runs : [];
+  const campaignActionCampaigns = Array.isArray(campaignActions.campaigns) ? campaignActions.campaigns : [];
   const campaignSegments = Array.isArray(campaignControlRoom.top_segments) ? campaignControlRoom.top_segments : [];
   const launchReadiness = launchReadinessData?.scoreboard || {};
   const launchEvidence = launchReadiness.evidence || {};
@@ -151,6 +164,7 @@ export default async function AdminPage() {
     ["scout quality history", metrics.scout_campaign_quality_history ?? 0],
     ["audit strength", metrics.audit_strength_scores ?? 0],
     ["language gates", metrics.public_language_gate_runs ?? 0],
+    ["campaign actions", metrics.campaign_action_runs ?? 0],
   ];
 
   return (
@@ -212,6 +226,71 @@ export default async function AdminPage() {
                   <span>audit {segment.average_audit_strength ?? 0}</span>
                 </div>
               ))}
+            </div>
+          </div>
+          <div className="panel campaign-actions-panel">
+            <div>
+              <div className="eyebrow">Campaign operator</div>
+              <h2>No-send campaign controls</h2>
+              <p className="muted">These actions refresh proof-backed previews, run preview QA, and create internal owner evidence. They cannot call SMTP or unlock live outreach.</p>
+            </div>
+            <div className="ops-grid campaign-action-grid">
+              <form action={runCampaignAction}>
+                <input type="hidden" name="action" value="refresh_previews" />
+                <input type="hidden" name="limit" value="25" />
+                <input type="hidden" name="dry_run" value="false" />
+                <button className="button secondary" type="submit">Refresh previews</button>
+              </form>
+              <form action={runCampaignAction}>
+                <input type="hidden" name="action" value="run_quality" />
+                <input type="hidden" name="limit" value="20" />
+                <button className="button secondary" type="submit">Run campaign QA</button>
+              </form>
+              <form action={runCampaignAction}>
+                <input type="hidden" name="action" value="owner_preview_report" />
+                <input type="hidden" name="limit" value="25" />
+                <input type="hidden" name="dry_run" value="false" />
+                <button className="button secondary" type="submit">Owner preview</button>
+              </form>
+              <form action={runCampaignAction}>
+                <input type="hidden" name="action" value="safety_lock" />
+                <input type="hidden" name="campaign_id" value={campaignActionCampaigns[0]?.campaign_id || ""} />
+                <input type="hidden" name="dry_run" value="true" />
+                <button className="button secondary" type="submit">Dry-run safety lock</button>
+              </form>
+            </div>
+            <div className="segment-grid">
+              <div className="segment-card">
+                <span className="tag">actions</span>
+                <strong>{campaignActionRuns.length}</strong>
+                <span>latest recorded runs</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">previews</span>
+                <strong>{campaignActions.control_room?.ready_candidate_count ?? 0}/{campaignActions.control_room?.candidate_count ?? 0}</strong>
+                <span>ready campaign candidates</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">smtp</span>
+                <strong>{campaignActions.smtp_called ? "called" : "off"}</strong>
+                <span>transport cannot run here</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">live</span>
+                <strong>{campaignActions.live_outreach_allowed ? "armed" : "blocked"}</strong>
+                <span>cold outreach remains disabled</span>
+              </div>
+            </div>
+            <div className="segments-list">
+              {campaignActionRuns.length ? campaignActionRuns.slice(0, 5).map((item: any) => (
+                <div className="segment-row campaign-action-row" key={item.id}>
+                  <span className="readiness-chip">{item.status ?? "recorded"}</span>
+                  <strong>{String(item.action || "action").replaceAll("_", " ")}</strong>
+                  <span>{item.result?.send_mail ? "send" : "no-send"}</span>
+                  <span>{item.result?.smtp_called ? "smtp" : "no smtp"}</span>
+                  <span>{item.result?.live_outreach_allowed ? "live" : "locked"}</span>
+                </div>
+              )) : <div className="row"><span className="tag">idle</span><span>no campaign actions recorded yet</span><span className="score">0</span></div>}
             </div>
           </div>
           <div className="panel">

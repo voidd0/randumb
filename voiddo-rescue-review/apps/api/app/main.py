@@ -43,6 +43,7 @@ from .audit_strength import score_audit_strength
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
 from .campaign_control import campaign_readiness_snapshot
+from .campaign_actions import campaign_actions_summary, run_campaign_action
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .campaign_preview_quality import campaign_preview_quality_pack
@@ -969,6 +970,25 @@ async def campaign_control_room_prepare(request: Request):
             bool(payload.get("dry_run", True)),
             payload.get("offer_key", "contact_form_repair"),
             int(payload.get("max_segments", 3)),
+        ),
+    }
+
+
+@app.get("/admin/campaign-actions", dependencies=[Depends(require_admin)])
+def campaign_actions_get(limit: int = 20):
+    return {"ok": True, "actions": campaign_actions_summary(limit)}
+
+
+@app.post("/admin/campaign-actions/run", dependencies=[Depends(require_admin)])
+async def campaign_actions_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "action": run_campaign_action(
+            str(payload.get("action", "")),
+            payload.get("campaign_id"),
+            int(payload.get("limit", 100)),
+            bool(payload.get("dry_run", False)),
         ),
     }
 
