@@ -4,13 +4,14 @@ import os
 import uuid
 
 from fastapi.testclient import TestClient
+from psycopg.types.json import Jsonb
 
 from app.campaign_control import campaign_readiness_snapshot
 from app.db import execute, fetch_one
 from app.mailer_control import evaluate_outbound_message
 from app.main import app
 from app.reply_actions import plan_reply_action
-from app.scout_quality import score_scout_provenance
+from app.scout_quality import run_scout_quality_gate, score_scout_provenance
 from app.scouts import create_campaign, create_scout_run, create_scout_source, prepare_campaign, process_scout_run
 
 
@@ -53,6 +54,43 @@ def test_campaign_readiness_records_blockers_and_counts():
     assert snapshot["qualified_count"] >= 1
     assert snapshot["min_audit_strength"] >= 70
     assert snapshot["status"] in {"blocked", "ready_for_preview_only"}
+
+
+def test_campaign_readiness_blocks_stale_scout_lead_without_quality_pass():
+    token = uuid.uuid4().hex[:8]
+    csv_text = (
+        "business_name,website_url,email,country,niche\n"
+        f"Weak,https://p9-weak-{token}.example.test,weak@p9-weak-{token}.example.test,P9Q,dentists\n"
+    )
+    source = create_scout_source({"name": f"p9-weak-quality-{token}", "source_type": "manual_csv_scout", "country": "P9Q", "language": "en", "niche": "dentists", "config_json": {"csv": csv_text}})
+    run = create_scout_run(str(source["id"]))
+    processed = process_scout_run(str(run["id"]))
+    assert run_scout_quality_gate(str(run["id"]))["allowed_for_campaign_preview"] is False
+    lead_id = processed["previews"][0]["lead_id"]
+    business = fetch_one("SELECT business_id FROM leads WHERE id = %s", (lead_id,))
+    audit = execute(
+        """
+        INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+        VALUES (%s, %s, %s, %s, 'completed', 85, 'Contact path issue', %s, now())
+        RETURNING id
+        """,
+        (business["business_id"], lead_id, f"p9-weak-{token}.example.test", f"https://p9-weak-{token}.example.test", f"p9-weak-{token}"),
+    )
+    for _ in range(3):
+        execute("INSERT INTO audit_issues(audit_id, issue_type, severity, title, public_text) VALUES (%s, 'contact', 'high', 'Issue', 'Issue text')", (audit["id"],))
+    execute("INSERT INTO screenshots(audit_id, type, file_path, public_url, viewport) VALUES (%s, 'desktop', '/tmp/p9-weak.png', '/media/p9-weak.png', 'desktop')", (audit["id"],))
+    campaign = create_campaign({"name": f"p9-weak-quality-{token}", "country": "P9Q", "language": "en", "niche": "dentists", "offer_key": "contact_form_repair"})
+    execute(
+        """
+        INSERT INTO campaign_leads(campaign_id, lead_id, audit_id, status, score, preview_json)
+        VALUES (%s, %s, %s, 'preview', 88, %s)
+        """,
+        (campaign["id"], lead_id, audit["id"], Jsonb({"dry_run": True, "legacy_stale_preview": True})),
+    )
+    snapshot = campaign_readiness_snapshot(str(campaign["id"]))
+    assert snapshot["status"] == "blocked"
+    assert snapshot["summary_json"]["scout_quality"]["failed_count"] == 1
+    assert any(blocker["code"] == "scout_quality_not_pass" for blocker in snapshot["blockers_json"])
 
 
 def test_outbound_message_decision_blocks_and_hashes_recipient():
