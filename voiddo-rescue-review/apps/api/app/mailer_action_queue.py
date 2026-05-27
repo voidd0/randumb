@@ -10,6 +10,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from .campaign_preflight_status import latest_campaign_preflight_status
 from .config import get_settings
 from .db import execute, fetch_all, fetch_one
 from .email_templates import qa_email_template, render_email_template
@@ -167,6 +168,12 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
             blockers.append("outreach_paused_env")
         if not settings.first_live_send_flag and action_type != "outreach_preview":
             blockers.append("first_live_send_flag_false")
+    campaign_preflight = None
+    if action_type in {"cold_outreach", "send_outreach"}:
+        payload = action.get("payload_json") or {}
+        campaign_preflight = latest_campaign_preflight_status(str(payload.get("campaign_id") or ""))
+        if not campaign_preflight["allowed"]:
+            blockers.append(campaign_preflight["reason"])
     if action_type in {"safe_reply_draft"} and settings.auto_replies_paused:
         blockers.append("auto_replies_paused_env")
     if action_type in {"deliverability_diagnostic", "warmup_slot", "owner_report", "safe_reply_draft", *CUSTOMER_MAIL_ACTIONS}:
@@ -205,6 +212,7 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
         "customer_mail": action_type in CUSTOMER_MAIL_ACTIONS,
         "throttle": throttle,
         "template_qa": rendered["qa"] if rendered else None,
+        "campaign_preflight": campaign_preflight,
         "reason": "prepared_no_send" if status == "prepared" else "blocked_by_gate",
     }
 

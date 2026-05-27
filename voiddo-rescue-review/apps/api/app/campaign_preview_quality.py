@@ -99,6 +99,7 @@ def campaign_preview_quality_pack(campaign_id: str, limit: int = 20) -> dict[str
                 "template_key": "first_audit_notice",
                 "language": language,
                 "template_data": template_data,
+                "skip_campaign_preflight": True,
             }
         )
         outbound_reason = str(outbound.get("reason") or "")

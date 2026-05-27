@@ -5,6 +5,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .campaign_preview_quality import campaign_preview_quality_pack
+from .campaign_preflight_status import PREFLIGHT_FRESH_MINUTES, latest_campaign_preflight_status
 from .db import execute, fetch_all, fetch_one
 from .mailer_control_room import mailer_policy_score
 from .p0 import json_safe, transport_gate_status
@@ -113,7 +114,6 @@ def campaign_preflight_batch(limit: int = 20, campaign_id: str | None = None) ->
         "runs": runs,
         **SAFE_FLAGS,
     }
-
 
 def latest_campaign_preflight_runs(limit: int = 10) -> dict[str, Any]:
     rows = fetch_all(

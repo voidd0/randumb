@@ -4,6 +4,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from .campaign_preflight_status import latest_campaign_preflight_status
 from .db import execute, fetch_one
 from .email_templates import qa_email_template, render_email_template
 from .mailer_throttle import throttle_decision
@@ -26,11 +27,17 @@ def evaluate_outbound_message(payload: dict[str, Any]) -> dict[str, Any]:
         qa = {"passed": False, "issues": [f"template_error:{type(exc).__name__}"], "score": 0}
     suppressed = bool(fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,))) if email else False
     transport = transport_gate_status({"email": email, "body": body})
+    campaign_preflight = (
+        latest_campaign_preflight_status(str(payload.get("campaign_id") or ""))
+        if payload.get("campaign_id") and not payload.get("skip_campaign_preflight")
+        else None
+    )
     throttle = throttle_decision("mailbox", mailbox, 1800)
     has_unsubscribe = "unsubscribe" in body.lower() or "הסרה" in body or "loobu" in body.lower()
     checks = {
         "template_qa": qa,
         "transport": transport,
+        "campaign_preflight": campaign_preflight,
         "throttle": throttle,
         "suppressed": suppressed,
         "has_unsubscribe": has_unsubscribe,
@@ -49,6 +56,8 @@ def evaluate_outbound_message(payload: dict[str, Any]) -> dict[str, Any]:
         blockers.append(throttle["reason"])
     if not transport["allowed"]:
         blockers.append(transport["reason"])
+    if campaign_preflight and not campaign_preflight["allowed"]:
+        blockers.append(campaign_preflight["reason"])
     status = "ready" if not blockers else "blocked"
     action = "send_allowed_by_gates" if status == "ready" else "do_not_send"
     reason = "all_gates_passed" if status == "ready" else ",".join(sorted(set(blockers)))

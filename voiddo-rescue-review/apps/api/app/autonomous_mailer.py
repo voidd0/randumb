@@ -4,6 +4,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from .campaign_preflight_status import latest_campaign_preflight_status
 from .config import get_settings
 from .db import execute
 from .inbox import classify_reply
@@ -32,6 +33,7 @@ def decide_outbound_mail(payload: dict[str, Any] | None = None) -> dict[str, Any
     settings = get_settings()
     throttle = throttle_decision("global", "outreach", 1800)
     transport = transport_gate_status(payload)
+    campaign_preflight = latest_campaign_preflight_status(str(payload.get("campaign_id") or "")) if payload.get("campaign_id") else None
     signals = mail_signal_summary(24)
     checks = {
         "outreach_paused": settings.outreach_paused,
@@ -39,6 +41,7 @@ def decide_outbound_mail(payload: dict[str, Any] | None = None) -> dict[str, Any
         "auto_replies_paused": settings.auto_replies_paused,
         "throttle": throttle,
         "transport": transport,
+        "campaign_preflight": campaign_preflight,
         "signals": signals,
     }
     if settings.outreach_paused:
@@ -49,6 +52,8 @@ def decide_outbound_mail(payload: dict[str, Any] | None = None) -> dict[str, Any
         return record_mailer_decision("outbound", settings.smtp_from_default, "campaign", "blocked", "do_not_send", throttle["reason"], checks)
     if not transport["allowed"]:
         return record_mailer_decision("outbound", settings.smtp_from_default, "campaign", "blocked", "do_not_send", transport["reason"], checks)
+    if campaign_preflight and not campaign_preflight["allowed"]:
+        return record_mailer_decision("outbound", settings.smtp_from_default, "campaign", "blocked", "do_not_send", campaign_preflight["reason"], checks)
     return record_mailer_decision("outbound", settings.smtp_from_default, "campaign", "ready", "send_allowed_by_gates", "all_gates_passed", checks)
 
 
