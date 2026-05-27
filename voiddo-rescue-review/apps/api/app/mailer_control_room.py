@@ -148,6 +148,7 @@ def mailer_digest_summary() -> dict[str, Any]:
     ops = mailer_ops_action_summary()
     ops_retention_history = mailer_ops_retention_report_history()
     policy_score_history = latest_mailer_policy_score_history()
+    business_kpi_history = latest_mailer_business_kpi_history()
     settings = get_settings()
     digest_report_path = Path(settings.storage_root) / "reports" / "mailer_digest_agent_report.md"
     digest_report_exists = digest_report_path.exists()
@@ -193,6 +194,7 @@ def mailer_digest_summary() -> dict[str, Any]:
             "mailer_ops": ops,
             "mailer_ops_retention_history": ops_retention_history,
             "mailer_policy_score_history": policy_score_history,
+            "mailer_business_kpi_history": business_kpi_history,
             "latest_owner_report": dict(latest_report) if latest_report else None,
             "latest_owner_report_action": dict(latest_action) if latest_action else None,
             "owner_report_action_status": latest_action["status"] if latest_action else "none",
@@ -808,6 +810,137 @@ def latest_mailer_policy_score_regression_guard_summary() -> dict[str, Any]:
     )
 
 
+def mailer_business_kpi_snapshot() -> dict[str, Any]:
+    runtime = runtime_state_snapshot()
+    policy = runtime.get("mailer_policy_trend", {})
+    action_rows = fetch_all(
+        """
+        SELECT risk_level, status, count(*) AS count
+        FROM mailer_action_queue
+        GROUP BY risk_level, status
+        """
+    )
+    safe_actions_queued = sum(
+        int(row["count"])
+        for row in action_rows
+        if row["risk_level"] == "SAFE_AUTO" and row["status"] in {"queued", "prepared"}
+    )
+    blocked_actions = sum(
+        int(row["count"])
+        for row in action_rows
+        if row["status"] in {"blocked", "gate_blocked", "transport_blocked", "review_required"} or row["risk_level"] == "HIGH_RISK"
+    )
+    replies = fetch_one("SELECT count(*) AS count FROM inbox_threads")
+    queue_rows = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
+    ledger_rows = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
+    resolver_rows = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
+    return json_safe(
+        {
+            "replies_count": int(replies["count"]) if replies else 0,
+            "safe_actions_queued": safe_actions_queued,
+            "blocked_actions": blocked_actions,
+            "action_queue_rows": int(queue_rows["count"]) if queue_rows else 0,
+            "send_ledger_rows": int(ledger_rows["count"]) if ledger_rows else 0,
+            "resolver_audit_rows": int(resolver_rows["count"]) if resolver_rows else 0,
+            "policy_score": policy.get("latest_policy_score"),
+            "policy_decision": policy.get("latest_policy_decision", "MISSING"),
+            "policy_trend_direction": policy.get("policy_score_trend_direction", "insufficient_history"),
+            "warmup_scheduled_count": runtime["scheduled_warmup_count"],
+            "warmup_sent_count": runtime["warmup_sent_count"],
+            "live_outreach_sent_count": runtime["live_outreach_sent_count"],
+            "mail_qa_decision": runtime["latest_mail_qa_decision"],
+            "launch_readiness_state": runtime["launch_readiness_state"],
+            "next_safe_action": "keep_live_outreach_blocked_and_continue_autonomous_monitoring",
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )
+
+
+def record_mailer_business_kpi_history(agent_run_id: str | None, snapshot: dict[str, Any]) -> dict[str, Any]:
+    row = execute(
+        """
+        INSERT INTO mailer_business_kpi_history(
+            agent_run_id, replies_count, safe_actions_queued, blocked_actions,
+            action_queue_rows, send_ledger_rows, resolver_audit_rows,
+            policy_score, policy_decision, policy_trend_direction,
+            warmup_scheduled_count, warmup_sent_count, live_outreach_sent_count,
+            mail_qa_decision, launch_readiness_state, summary_json,
+            send_mail, smtp_called, live_outreach_allowed,
+            raw_recipient_addresses_included, secrets_included
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, false, false, false, false, false)
+        RETURNING id, replies_count, safe_actions_queued, blocked_actions,
+                  action_queue_rows, policy_score, policy_decision,
+                  policy_trend_direction, send_mail, live_outreach_allowed,
+                  raw_recipient_addresses_included, secrets_included, created_at
+        """,
+        (
+            agent_run_id,
+            int(snapshot.get("replies_count", 0)),
+            int(snapshot.get("safe_actions_queued", 0)),
+            int(snapshot.get("blocked_actions", 0)),
+            int(snapshot.get("action_queue_rows", 0)),
+            int(snapshot.get("send_ledger_rows", 0)),
+            int(snapshot.get("resolver_audit_rows", 0)),
+            snapshot.get("policy_score"),
+            snapshot.get("policy_decision", "MISSING"),
+            snapshot.get("policy_trend_direction", "insufficient_history"),
+            int(snapshot.get("warmup_scheduled_count", 0)),
+            int(snapshot.get("warmup_sent_count", 0)),
+            int(snapshot.get("live_outreach_sent_count", 0)),
+            snapshot.get("mail_qa_decision", "unknown"),
+            snapshot.get("launch_readiness_state", "unknown"),
+            Jsonb(snapshot),
+        ),
+    )
+    return json_safe(dict(row))
+
+
+def latest_mailer_business_kpi_history(limit: int = 5) -> dict[str, Any]:
+    capped = max(1, min(int(limit or 5), 25))
+    total = fetch_one("SELECT count(*) AS count FROM mailer_business_kpi_history")
+    rows = _rows(
+        """
+        SELECT id, replies_count, safe_actions_queued, blocked_actions,
+               action_queue_rows, send_ledger_rows, resolver_audit_rows,
+               policy_score, policy_decision, policy_trend_direction,
+               warmup_scheduled_count, warmup_sent_count, live_outreach_sent_count,
+               mail_qa_decision, launch_readiness_state, send_mail, smtp_called,
+               live_outreach_allowed, raw_recipient_addresses_included, secrets_included,
+               created_at
+        FROM mailer_business_kpi_history
+        ORDER BY created_at DESC, id DESC
+        LIMIT %s
+        """,
+        (capped,),
+    )
+    latest = rows[0] if rows else {}
+    return json_safe(
+        {
+            "count": int(total["count"]) if total else 0,
+            "latest": latest,
+            "latest_policy_score": latest.get("policy_score"),
+            "latest_policy_decision": latest.get("policy_decision", "MISSING"),
+            "latest_policy_trend_direction": latest.get("policy_trend_direction", "insufficient_history"),
+            "latest_action_queue_rows": latest.get("action_queue_rows", 0),
+            "latest_safe_actions_queued": latest.get("safe_actions_queued", 0),
+            "latest_blocked_actions": latest.get("blocked_actions", 0),
+            "latest_live_outreach_sent_count": latest.get("live_outreach_sent_count", 0),
+            "latest_warmup_sent_count": latest.get("warmup_sent_count", 0),
+            "latest_send_mail": bool(latest.get("send_mail", False)),
+            "latest_live_outreach_allowed": bool(latest.get("live_outreach_allowed", False)),
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+            "raw_history_rows_included": False,
+            "recent": rows,
+        }
+    )
+
+
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     state = runtime_state_snapshot()
@@ -815,6 +948,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     ops = mailer_ops_action_summary()
     ops_retention_history = mailer_ops_retention_report_history()
     policy_score_history = latest_mailer_policy_score_history()
+    business_kpi_history = latest_mailer_business_kpi_history()
     monitoring = monitoring_control_room_summary()
     blocked = bool(mailer["warmup_blocked_reason"]) or state["latest_mail_qa_decision"] != "PASS"
     email_sent = False
@@ -852,6 +986,14 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                 f"- mailer_policy_latest_blockers: `{policy_score_history['latest_blocker_count']}`",
                 f"- mailer_policy_history_raw_recipients: `{str(bool(policy_score_history.get('raw_recipient_addresses_included'))).lower()}`",
                 f"- mailer_policy_history_secrets: `{str(bool(policy_score_history.get('secrets_included'))).lower()}`",
+                f"- mailer_business_kpi_history_rows: `{business_kpi_history['count']}`",
+                f"- mailer_business_kpi_latest_policy_score: `{business_kpi_history['latest_policy_score']}`",
+                f"- mailer_business_kpi_latest_queue_rows: `{business_kpi_history['latest_action_queue_rows']}`",
+                f"- mailer_business_kpi_latest_safe_actions: `{business_kpi_history['latest_safe_actions_queued']}`",
+                f"- mailer_business_kpi_latest_blocked_actions: `{business_kpi_history['latest_blocked_actions']}`",
+                f"- mailer_business_kpi_latest_send_mail: `{str(bool(business_kpi_history.get('latest_send_mail'))).lower()}`",
+                f"- mailer_business_kpi_raw_recipients: `{str(bool(business_kpi_history.get('raw_recipient_addresses_included'))).lower()}`",
+                f"- mailer_business_kpi_secrets: `{str(bool(business_kpi_history.get('secrets_included'))).lower()}`",
                 f"- email_sent: `{email_sent}`",
                 f"- send_decision: `{send_decision}`",
                 "",
@@ -889,6 +1031,16 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                     "raw_recipient_addresses_included": bool(policy_score_history.get("raw_recipient_addresses_included")),
                     "secrets_included": bool(policy_score_history.get("secrets_included")),
                 },
+                "mailer_business_kpi_history": {
+                    "count": business_kpi_history["count"],
+                    "latest_policy_score": business_kpi_history["latest_policy_score"],
+                    "latest_action_queue_rows": business_kpi_history["latest_action_queue_rows"],
+                    "latest_safe_actions_queued": business_kpi_history["latest_safe_actions_queued"],
+                    "latest_blocked_actions": business_kpi_history["latest_blocked_actions"],
+                    "latest_send_mail": business_kpi_history["latest_send_mail"],
+                    "raw_recipient_addresses_included": bool(business_kpi_history.get("raw_recipient_addresses_included")),
+                    "secrets_included": bool(business_kpi_history.get("secrets_included")),
+                },
                 "email_sent": False,
             },
         }
@@ -910,6 +1062,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         "mailer_ops": ops,
         "mailer_ops_retention_history": ops_retention_history,
         "mailer_policy_score_history": policy_score_history,
+        "mailer_business_kpi_history": business_kpi_history,
         "owner_report_action": draft,
     }
 
@@ -921,6 +1074,7 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
     action = owner_report.get("owner_report_action") or {}
     ops_retention_history = owner_report.get("mailer_ops_retention_history") or mailer_ops_retention_report_history()
     policy_score_history = owner_report.get("mailer_policy_score_history") or latest_mailer_policy_score_history()
+    business_kpi_history = owner_report.get("mailer_business_kpi_history") or latest_mailer_business_kpi_history()
     blockers = mailer.get("warmup_blocked_reason") or []
     email_sent = bool(owner_report.get("email_sent", False))
     path = Path(settings.storage_root) / "reports" / "mailer_digest_agent_report.md"
@@ -950,6 +1104,14 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
                 f"- mailer_policy_latest_blockers: `{policy_score_history.get('latest_blocker_count', 0)}`",
                 f"- mailer_policy_history_raw_recipients: `{str(bool(policy_score_history.get('raw_recipient_addresses_included'))).lower()}`",
                 f"- mailer_policy_history_secrets: `{str(bool(policy_score_history.get('secrets_included'))).lower()}`",
+                f"- mailer_business_kpi_history_rows: `{business_kpi_history.get('count', 0)}`",
+                f"- mailer_business_kpi_latest_policy_score: `{business_kpi_history.get('latest_policy_score')}`",
+                f"- mailer_business_kpi_latest_queue_rows: `{business_kpi_history.get('latest_action_queue_rows', 0)}`",
+                f"- mailer_business_kpi_latest_safe_actions: `{business_kpi_history.get('latest_safe_actions_queued', 0)}`",
+                f"- mailer_business_kpi_latest_blocked_actions: `{business_kpi_history.get('latest_blocked_actions', 0)}`",
+                f"- mailer_business_kpi_latest_send_mail: `{str(bool(business_kpi_history.get('latest_send_mail'))).lower()}`",
+                f"- mailer_business_kpi_raw_recipients: `{str(bool(business_kpi_history.get('raw_recipient_addresses_included'))).lower()}`",
+                f"- mailer_business_kpi_secrets: `{str(bool(business_kpi_history.get('secrets_included'))).lower()}`",
                 f"- send_decision: `{owner_report.get('send_decision', '')}`",
                 "",
                 "Raw recipient addresses, message bodies, mailbox passwords, and secrets are intentionally omitted.",
@@ -981,6 +1143,16 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
             "latest_send_mail": bool(policy_score_history.get("latest_send_mail")),
             "raw_recipient_addresses_included": bool(policy_score_history.get("raw_recipient_addresses_included")),
             "secrets_included": bool(policy_score_history.get("secrets_included")),
+        },
+        "mailer_business_kpi_history": {
+            "count": int(business_kpi_history.get("count", 0) or 0),
+            "latest_policy_score": business_kpi_history.get("latest_policy_score"),
+            "latest_action_queue_rows": int(business_kpi_history.get("latest_action_queue_rows", 0) or 0),
+            "latest_safe_actions_queued": int(business_kpi_history.get("latest_safe_actions_queued", 0) or 0),
+            "latest_blocked_actions": int(business_kpi_history.get("latest_blocked_actions", 0) or 0),
+            "latest_send_mail": bool(business_kpi_history.get("latest_send_mail")),
+            "raw_recipient_addresses_included": bool(business_kpi_history.get("raw_recipient_addresses_included")),
+            "secrets_included": bool(business_kpi_history.get("secrets_included")),
         },
     }
     row = execute(

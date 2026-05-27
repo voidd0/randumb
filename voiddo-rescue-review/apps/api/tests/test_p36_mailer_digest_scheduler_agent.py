@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
-from app.mailer_control_room import cleanup_mailer_policy_score_history, latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, latest_mailer_policy_score_regression_guard_summary, mailer_digest_summary, mailer_policy_score, mailer_policy_score_regression_guard, mailer_policy_score_retention_summary
+from app.mailer_control_room import cleanup_mailer_policy_score_history, latest_mailer_business_kpi_history, latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, latest_mailer_policy_score_regression_guard_summary, mailer_business_kpi_snapshot, mailer_digest_summary, mailer_policy_score, mailer_policy_score_regression_guard, mailer_policy_score_retention_summary
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -380,13 +380,16 @@ def test_daily_loop_includes_mailer_policy_score_after_trend_guard():
     assert "mailer_policy_score_retention_agent" in agents
     assert "mailer_policy_score_regression_guard_agent" in agents
     assert "policy_trend_reporting_agent" in agents
+    assert "mailer_business_kpi_agent" in agents
     assert agents.index("mailer_policy_score_agent") < agents.index("mailer_policy_score_retention_agent")
     assert agents.index("mailer_policy_score_retention_agent") < agents.index("mailer_policy_score_regression_guard_agent")
     assert agents.index("mailer_policy_score_regression_guard_agent") < agents.index("policy_trend_reporting_agent")
+    assert agents.index("policy_trend_reporting_agent") < agents.index("mailer_business_kpi_agent")
     policy_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_agent"][0]
     retention_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_retention_agent"][0]
     guard_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_regression_guard_agent"][0]
     trend_report_run = [item for item in result["runs"] if item["agent"] == "policy_trend_reporting_agent"][0]
+    business_kpi_run = [item for item in result["runs"] if item["agent"] == "mailer_business_kpi_agent"][0]
     assert policy_run["result_json"]["send_mail"] is False
     assert policy_run["result_json"]["smtp_called"] is False
     assert policy_run["result_json"]["live_outreach_allowed"] is False
@@ -400,6 +403,10 @@ def test_daily_loop_includes_mailer_policy_score_after_trend_guard():
     assert trend_report_run["result_json"]["runtime"]["mailer_policy_trend"]["raw_recipient_addresses_included"] is False
     assert trend_report_run["result_json"]["daily_business_report"]["send_mail"] is False
     assert trend_report_run["result_json"]["blockers_report"]["send_mail"] is False
+    assert business_kpi_run["result_json"]["send_mail"] is False
+    assert business_kpi_run["result_json"]["live_outreach_allowed"] is False
+    assert business_kpi_run["result_json"]["business_kpi_history"]["send_mail"] is False
+    assert business_kpi_run["result_json"]["business_kpi_history"]["raw_recipient_addresses_included"] is False
     assert result["live_outreach"] is False
     digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
     if digest_runs:
@@ -559,6 +566,49 @@ def test_latest_policy_score_regression_guard_summary_fails_closed_without_run()
     assert "missing_policy_score_regression_guard_run" in summary["regressions"]
     assert summary["send_mail"] is False
     assert summary["live_outreach_allowed"] is False
+
+
+def test_mailer_business_kpi_agent_persists_no_send_history():
+    snapshot = mailer_business_kpi_snapshot()
+    assert snapshot["send_mail"] is False
+    assert snapshot["live_outreach_allowed"] is False
+    assert snapshot["raw_recipient_addresses_included"] is False
+    before = fetch_one("SELECT count(*) AS count FROM mailer_business_kpi_history")
+    run = run_agent("mailer_business_kpi_agent")
+    after = fetch_one("SELECT count(*) AS count FROM mailer_business_kpi_history")
+    assert run["status"] == "completed"
+    assert int(after["count"]) == int(before["count"]) + 1
+    history = run["result_json"]["business_kpi_history"]
+    assert history["send_mail"] is False
+    assert history["live_outreach_allowed"] is False
+    assert history["raw_recipient_addresses_included"] is False
+    assert history["secrets_included"] is False
+    execute("DELETE FROM mailer_business_kpi_history WHERE id = %s", (history["id"],))
+
+
+def test_mailer_business_kpi_endpoint_requires_auth_and_is_redacted():
+    run = run_agent("mailer_business_kpi_agent")
+    assert client.get("/admin/mailer/business-kpi").status_code == 401
+    response = client.get("/admin/mailer/business-kpi", headers=admin_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["snapshot"]["send_mail"] is False
+    assert payload["history"]["latest_send_mail"] is False
+    assert payload["history"]["raw_recipient_addresses_included"] is False
+    assert "private@" not in str(payload)
+    execute("DELETE FROM mailer_business_kpi_history WHERE id = %s", (run["result_json"]["business_kpi_history"]["id"],))
+
+
+def test_mailer_digest_includes_business_kpi_history_without_sending():
+    run = run_agent("mailer_business_kpi_agent")
+    digest = mailer_digest_summary()
+    kpi = digest["mailer_business_kpi_history"]
+    assert kpi["count"] >= 1
+    assert kpi["latest_send_mail"] is False
+    assert kpi["latest_live_outreach_allowed"] is False
+    assert kpi["raw_recipient_addresses_included"] is False
+    assert kpi["secrets_included"] is False
+    execute("DELETE FROM mailer_business_kpi_history WHERE id = %s", (run["result_json"]["business_kpi_history"]["id"],))
 
 
 def test_mailer_digest_retention_agent_does_not_touch_action_queue_or_send_ledger():

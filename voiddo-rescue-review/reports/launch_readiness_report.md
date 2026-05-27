@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 05:29 IDT
+Generated: 2026-05-27 05:54 IDT
 
 ## Decision
 
@@ -23,13 +23,11 @@ Generated: 2026-05-27 05:29 IDT
 - mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
 - mailer policy trend: `stable`
 - mailer policy regression guard: `PASS_NO_SEND`
-- mailer policy regression count: `0`
-- policy trend reporting agent: `PASS`
-- daily business report policy trend evidence: `PASS`
-- blockers report policy trend evidence: `PASS`
-- runtime state report policy trend evidence: `PASS`
-- tests: `310 passed`
-- smoke: `310 passed, ok`
+- mailer business KPI agent: `PASS`
+- mailer business KPI latest send mail: `false`
+- mailer business KPI latest live outreach allowed: `false`
+- tests: `313 passed`
+- smoke: `313 passed, ok`
 
 ## Current Runtime Counts
 
@@ -39,14 +37,11 @@ Generated: 2026-05-27 05:29 IDT
 - mailer send ledger rows: `0`
 - recipient resolver audit rows: `0`
 - mailer policy score history rows: `2`
-- mailer policy score agent runs: `2`
-- mailer policy score retention agent runs: `1`
-- mailer policy score regression guard agent runs: `1`
-- policy trend reporting agent runs: `1`
+- mailer business KPI history rows: `1`
 
 ## Remaining Launch Gates
 
 - keep cold outreach disabled until explicit launch approval and campaign QA pass.
 - let warmup proceed only through scheduled pre-send gates.
-- continue autonomous mailer self-audit, policy trend reporting, retention, and regression guard cycles.
+- continue autonomous mailer self-audit, policy trend, KPI trend, retention, and regression guard cycles.
 - continue building the autonomous revenue engine without touching non-Rescue systems.

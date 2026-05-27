@@ -85,6 +85,7 @@ apps/api/migrations/026_mailer_ops_run_retention.sql
 apps/api/migrations/027_mailer_digest_reports.sql
 apps/api/migrations/028_mailer_ops_retention_reports.sql
 apps/api/migrations/029_mailer_policy_score_history.sql
+apps/api/migrations/030_mailer_business_kpi_history.sql
 apps/api/requirements.txt
 apps/api/tests/test_core.py
 apps/api/tests/test_p0_integration.py
@@ -306,7 +307,9 @@ reports/p60_next_self_written_tz.md
 reports/p60_policy_score_retention_regression_guard.md
 reports/p61_next_self_written_tz.md
 reports/p61_policy_trend_reporting_report.md
+reports/p62_mailer_business_kpi_trend_report.md
 reports/p62_next_self_written_tz.md
+reports/p63_next_self_written_tz.md
 reports/p6_autonomous_mailer_report.md
 reports/p6_cycle_audit_and_fixes.md
 reports/p6_economics_engine_report.md

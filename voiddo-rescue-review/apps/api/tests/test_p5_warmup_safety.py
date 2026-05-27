@@ -140,9 +140,12 @@ def test_runtime_state_report_generated(tmp_path):
     assert "mailer_policy_score_trend_direction" in text
     assert "mailer_policy_raw_recipients: false" in text
     assert "mailer_policy_secrets: false" in text
+    assert "mailer_business_kpi_history_count" in text
+    assert "mailer_business_kpi_latest_send_mail: false" in text
     assert result["current_branch_head"] == "head-test"
     assert result["mailer_policy_trend"]["raw_recipient_addresses_included"] is False
     assert result["mailer_policy_trend"]["secrets_included"] is False
+    assert result["mailer_business_kpi"]["latest_send_mail"] is False
 
 
 def test_policy_trend_snapshot_is_redacted():
@@ -161,6 +164,8 @@ def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
     assert blockers["send_mail"] is False
     assert "mailer_policy_score_trend_direction" in business_text
     assert "mailer_policy_regression_guard_decision" in blockers_text
+    assert "mailer_business_kpi_history_count" in business_text
+    assert "mailer_business_kpi_latest_send_mail" in blockers_text
     assert "No raw recipient addresses" in business_text
     assert "No raw recipient addresses" in blockers_text
 

@@ -1,14 +1,14 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 05:29 IDT
+Generated: 2026-05-27 05:54 IDT
 
 ## Package
 
-- pass: P61 policy trend reporting
+- pass: P62 mailer business KPI trend
 - source path: /opt/voiddo-rescue
 - review folder: voiddo-rescue-review/
-- branch before commit: c27e5754d4a3140925882dd868229cc1c73dc413
-- filelist sha256: dca142f24f3025eec07860cce14267fdcf6d4c42e2b0d54d08e3dfb8fe17bc6b
+- branch before commit: b5c864488e289c87ef3ea1830757a65d03b374ac
+- filelist sha256: af3d5a7cb6f49fb0bf094bdf3b7da91f4edd72e71040d6abfa8df6d99aed3f38
 
 ## Included
 
@@ -19,7 +19,7 @@ Generated: 2026-05-27 05:29 IDT
 - redacted reports
 - .env.example
 - docker-compose.yml
-- P61 runtime, daily business, blockers, launch, smoke, and policy trend reports
+- P62 runtime, daily business, blockers, launch, smoke, KPI, and next-TZ reports
 
 ## Excluded
 
@@ -40,9 +40,9 @@ Generated: 2026-05-27 05:29 IDT
 
 ## Verification
 
-- targeted tests: 46 passed
-- full API tests: 310 passed
-- smoke: 310 passed, ok
+- targeted tests: 49 passed
+- full API tests: 313 passed
+- smoke: 313 passed, ok
 - Huanshu adapter: PASS
 - services: api/web/worker/postgres/redis healthy
 - secret/artifact scan: clean for raw secrets and blocked artifacts; code-level env variable names are present only as configuration references

@@ -1,8 +1,8 @@
 # Vøiddo Rescue Runtime State
 
-- generated_at: 2026-05-27T02:27:52.579350+00:00
-- current_branch_head: c27e5754d4a3140925882dd868229cc1c73dc413
-- current_zip_sha: pending-p61-export
+- generated_at: 2026-05-27T02:53:54.149084+00:00
+- current_branch_head: b5c864488e289c87ef3ea1830757a65d03b374ac
+- current_zip_sha: pending-p62-export
 - checkout_status: READY
 - mail_auth_status: PASS
 - latest_mail_qa_decision: PASS
@@ -27,5 +27,11 @@
 - mailer_policy_regression_review_task_created: false
 - mailer_policy_raw_recipients: false
 - mailer_policy_secrets: false
+- mailer_business_kpi_history_count: 1
+- mailer_business_kpi_latest_replies: 170
+- mailer_business_kpi_latest_safe_actions: 0
+- mailer_business_kpi_latest_blocked_actions: 0
+- mailer_business_kpi_latest_queue_rows: 0
+- mailer_business_kpi_latest_send_mail: false
 
 Raw recipient addresses are intentionally omitted.
