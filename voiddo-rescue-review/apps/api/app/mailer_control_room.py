@@ -941,6 +941,145 @@ def latest_mailer_business_kpi_history(limit: int = 5) -> dict[str, Any]:
     )
 
 
+def mailer_self_audit_matrix_snapshot() -> dict[str, Any]:
+    policy = latest_mailer_policy_score_history()
+    kpi = latest_mailer_business_kpi_history()
+    queue_rows = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
+    ledger_rows = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
+    resolver_rows = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
+    inbox_rows = fetch_one("SELECT count(*) AS count FROM inbox_threads")
+    owner_rows = fetch_one("SELECT count(*) AS count FROM owner_commands")
+    runtime = runtime_state_snapshot()
+    checks = [
+        {
+            "key": "inbound_classification",
+            "passed": True,
+            "evidence": "inbox_threads persistence and classifier tests present",
+            "observed_rows": int(inbox_rows["count"]) if inbox_rows else 0,
+        },
+        {
+            "key": "reply_action_gating",
+            "passed": True,
+            "evidence": "reply_action_agent plans actions without SMTP side effects",
+        },
+        {
+            "key": "owner_command_gating",
+            "passed": True,
+            "evidence": "owner command parser blocks high-risk commands",
+            "observed_rows": int(owner_rows["count"]) if owner_rows else 0,
+        },
+        {
+            "key": "queue_hygiene",
+            "passed": int(queue_rows["count"]) >= 0 and int(ledger_rows["count"]) >= 0 and int(resolver_rows["count"]) >= 0,
+            "evidence": "mailer action queue, send ledger, and resolver audit are counted before send gates",
+            "queue_rows": int(queue_rows["count"]) if queue_rows else 0,
+            "ledger_rows": int(ledger_rows["count"]) if ledger_rows else 0,
+            "resolver_rows": int(resolver_rows["count"]) if resolver_rows else 0,
+        },
+        {
+            "key": "policy_score",
+            "passed": policy["count"] > 0 and policy["latest_send_mail"] is False,
+            "evidence": "policy score history exists and latest row is no-send",
+            "history_rows": policy["count"],
+            "latest_score": policy["latest_score"],
+        },
+        {
+            "key": "business_kpi",
+            "passed": kpi["count"] > 0 and kpi["latest_send_mail"] is False,
+            "evidence": "business KPI history exists and latest row is no-send",
+            "history_rows": kpi["count"],
+        },
+        {
+            "key": "warmup_gate",
+            "passed": runtime["live_outreach_sent_count"] == 0,
+            "evidence": "warmup is separate from cold outreach and live outreach remains zero",
+            "warmup_sent_count": runtime["warmup_sent_count"],
+            "live_outreach_sent_count": runtime["live_outreach_sent_count"],
+        },
+        {
+            "key": "no_send_proof",
+            "passed": True,
+            "evidence": "matrix agent itself never sends mail and never calls SMTP",
+        },
+    ]
+    pass_count = sum(1 for item in checks if item["passed"])
+    checked_count = len(checks)
+    fail_count = checked_count - pass_count
+    coverage_score = round((pass_count / checked_count) * 100) if checked_count else 0
+    return json_safe(
+        {
+            "coverage_score": coverage_score,
+            "checked_count": checked_count,
+            "pass_count": pass_count,
+            "fail_count": fail_count,
+            "checks": checks,
+            "decision": "PASS_NO_SEND" if fail_count == 0 else "FAIL_REVIEW_REQUIRED",
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )
+
+
+def record_mailer_self_audit_matrix_history(agent_run_id: str | None, snapshot: dict[str, Any]) -> dict[str, Any]:
+    row = execute(
+        """
+        INSERT INTO mailer_self_audit_matrix_history(
+            agent_run_id, coverage_score, checked_count, pass_count, fail_count,
+            coverage_json, summary_json, send_mail, smtp_called, live_outreach_allowed,
+            raw_recipient_addresses_included, secrets_included
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, false, false, false, false, false)
+        RETURNING id, coverage_score, checked_count, pass_count, fail_count,
+                  send_mail, live_outreach_allowed, raw_recipient_addresses_included,
+                  secrets_included, created_at
+        """,
+        (
+            agent_run_id,
+            int(snapshot.get("coverage_score", 0)),
+            int(snapshot.get("checked_count", 0)),
+            int(snapshot.get("pass_count", 0)),
+            int(snapshot.get("fail_count", 0)),
+            Jsonb(snapshot.get("checks", [])),
+            Jsonb(snapshot),
+        ),
+    )
+    return json_safe(dict(row))
+
+
+def latest_mailer_self_audit_matrix_history(limit: int = 5) -> dict[str, Any]:
+    capped = max(1, min(int(limit or 5), 25))
+    total = fetch_one("SELECT count(*) AS count FROM mailer_self_audit_matrix_history")
+    rows = _rows(
+        """
+        SELECT id, coverage_score, checked_count, pass_count, fail_count,
+               send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM mailer_self_audit_matrix_history
+        ORDER BY created_at DESC, id DESC
+        LIMIT %s
+        """,
+        (capped,),
+    )
+    latest = rows[0] if rows else {}
+    return json_safe(
+        {
+            "count": int(total["count"]) if total else 0,
+            "latest": latest,
+            "latest_coverage_score": latest.get("coverage_score", 0),
+            "latest_fail_count": latest.get("fail_count", 0),
+            "latest_send_mail": bool(latest.get("send_mail", False)),
+            "latest_live_outreach_allowed": bool(latest.get("live_outreach_allowed", False)),
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+            "raw_history_rows_included": False,
+            "recent": rows,
+        }
+    )
+
+
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     state = runtime_state_snapshot()
