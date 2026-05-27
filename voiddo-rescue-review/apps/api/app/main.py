@@ -51,6 +51,7 @@ from .campaign_control import campaign_readiness_snapshot
 from .campaign_actions import campaign_actions_summary, run_campaign_action
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
+from .campaign_preflight import campaign_preflight_batch, latest_campaign_preflight_runs
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, latest_campaign_preview_refresh_runs, refresh_campaign_previews_if_needed
 from .post_scan_campaign_cycle import latest_post_scan_campaign_cycles, post_scan_campaign_cycle
 from .campaign_preview_quality import campaign_preview_quality_pack
@@ -1185,6 +1186,23 @@ async def campaign_preview_refresh_run(request: Request):
             int(payload.get("limit", 100)),
             int(payload.get("stale_hours", 24)),
             bool(payload.get("dry_run", True)),
+        ),
+    }
+
+
+@app.get("/admin/campaign-preflight/runs", dependencies=[Depends(require_admin)])
+def campaign_preflight_runs_get(limit: int = 10):
+    return {"ok": True, "runs": latest_campaign_preflight_runs(limit)}
+
+
+@app.post("/admin/campaign-preflight/run", dependencies=[Depends(require_admin)])
+async def campaign_preflight_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "preflight": campaign_preflight_batch(
+            int(payload.get("limit", 20)),
+            payload.get("campaign_id"),
         ),
     }
 
