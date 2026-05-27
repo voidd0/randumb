@@ -65,7 +65,7 @@ from .quality_plugins import latest_quality_summary, quality_plugin_manifest, re
 from .revenue_simulation import run_synthetic_lead_simulation
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, latest_scout_quality_gate, run_scout_quality_gate, run_scout_self_check, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
-from .scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, latest_scout_source_readiness, latest_scout_source_readiness_regression_guard_summary, prepare_campaign, prepare_campaign_gated, process_scout_run, process_scout_run_gated, run_scout_source_readiness, scout_campaign_expansion_gate, scout_source_readiness_gate, scout_source_readiness_regression_guard, scout_source_readiness_summary
+from .scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, latest_scout_source_readiness, latest_scout_source_readiness_regression_guard_summary, prepare_campaign, prepare_campaign_gated, prepare_scout_source_from_adapter, process_scout_run, process_scout_run_gated, run_scout_source_readiness, scout_campaign_expansion_gate, scout_source_readiness_gate, scout_source_readiness_regression_guard, scout_source_readiness_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup, rollback_latest_spacing_repair
 from .self_operating import (
     create_self_fix_task,
@@ -920,10 +920,22 @@ async def source_adapter_domain_list(request: Request):
     return {"ok": True, "csv": domain_list_to_csv(payload.get("text", ""), payload.get("country", ""), payload.get("niche", ""), payload.get("language", "en"))}
 
 
+@app.post("/admin/source-adapters/domain-list/source", dependencies=[Depends(require_admin)])
+async def source_adapter_domain_list_source(request: Request):
+    payload = await request.json()
+    return {"ok": True, "result": prepare_scout_source_from_adapter("domain_list", payload)}
+
+
 @app.post("/admin/source-adapters/directory", dependencies=[Depends(require_admin)])
 async def source_adapter_directory(request: Request):
     payload = await request.json()
     return {"ok": True, "csv": directory_rows_to_csv(payload.get("csv", ""), payload.get("country", ""), payload.get("niche", ""), payload.get("language", "en"))}
+
+
+@app.post("/admin/source-adapters/directory/source", dependencies=[Depends(require_admin)])
+async def source_adapter_directory_source(request: Request):
+    payload = await request.json()
+    return {"ok": True, "result": prepare_scout_source_from_adapter("directory", payload)}
 
 
 @app.post("/admin/scouts/runs/{run_id}/self-check", dependencies=[Depends(require_admin)])

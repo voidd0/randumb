@@ -12,7 +12,7 @@ from app.db import execute, fetch_one
 from app.language_gate import check_no_ai_public_language
 from app.main import app
 from app.scout_quality import run_scout_self_check
-from app.scouts import create_scout_run, create_scout_source, process_scout_run
+from app.scouts import create_scout_run, create_scout_source, prepare_scout_source_from_adapter, process_scout_run
 from app.source_adapters import directory_rows_to_csv, domain_list_to_csv, normalize_domain
 
 
@@ -33,6 +33,33 @@ def test_directory_adapter_outputs_import_csv():
     csv_text = directory_rows_to_csv("name,website,email,city\nAcme,https://acme.example.test,hi@acme.example.test,Tallinn", "EE", "dentists")
     assert "Acme" in csv_text
     assert "hi@acme.example.test" in csv_text
+
+
+def test_adapter_source_preflight_creates_readiness_without_processing_or_leaking_recipients():
+    token = uuid.uuid4().hex[:8]
+    result = prepare_scout_source_from_adapter(
+        "directory",
+        {
+            "name": f"p80-directory-{token}",
+            "csv": f"name,website,email,city,source_url\nAcme,https://p80-{token}.example.test,owner@p80-{token}.example.test,Tallinn,https://directory.example.test/acme\n",
+            "country": "EE",
+            "language": "en",
+            "niche": "dentists",
+        },
+    )
+    try:
+        assert result["source"]["config_redacted"] is True
+        assert result["readiness"]["status"] == "PASS_SOURCE_READY"
+        assert result["created_scout_runs"] == 0
+        assert result["created_scanner_jobs"] == 0
+        assert result["processed_now"] is False
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+        assert result["raw_recipient_addresses_included"] is False
+        assert "owner@" not in str(result)
+    finally:
+        execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (result["source"]["id"],))
+        execute("DELETE FROM scout_sources WHERE id = %s", (result["source"]["id"],))
 
 
 def test_normalize_domain_removes_www_and_paths():
@@ -89,6 +116,22 @@ def test_no_ai_public_language_gate_fails_bad_sample():
 def test_p8_admin_endpoints_work():
     assert client.post("/admin/source-adapters/domain-list", json={"text": "example.com"}).status_code == 401
     assert client.post("/admin/source-adapters/domain-list", json={"text": "example.com"}, headers=admin_headers()).status_code == 200
+    assert client.post("/admin/source-adapters/domain-list/source", json={"text": "example.com"}).status_code == 401
+    response = client.post(
+        "/admin/source-adapters/domain-list/source",
+        json={"text": "p80-admin-source.example.test", "country": "EE", "niche": "dentists", "name": "p80-admin-source"},
+        headers=admin_headers(),
+    )
+    assert response.status_code == 200
+    payload = response.json()["result"]
+    try:
+        assert payload["created_scout_runs"] == 0
+        assert payload["created_scanner_jobs"] == 0
+        assert payload["source"]["config_redacted"] is True
+        assert payload["readiness"]["send_mail"] is False
+    finally:
+        execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (payload["source"]["id"],))
+        execute("DELETE FROM scout_sources WHERE id = %s", (payload["source"]["id"],))
     assert client.post("/admin/language/no-ai-gate", json={"samples": [{"name": "ok", "text": "Built by Vøiddo Rescue"}]}, headers=admin_headers()).status_code == 200
 
 

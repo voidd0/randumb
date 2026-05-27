@@ -13,6 +13,7 @@ from .db import execute, fetch_all, fetch_one
 from .lead_scoring import score_lead
 from .mailer_control_room import latest_mailer_self_audit_matrix_history
 from .scout_quality import lead_scout_quality_gate, run_scout_quality_gate
+from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 
 EXCLUDED_NICHES = {"government", "banks", "bank", "hospitals", "hospital", "gambling", "adult", "crypto", "political"}
 SUPPORTED_SCOUT_TYPES = {
@@ -72,6 +73,60 @@ def create_scout_source(payload: dict[str, Any]) -> dict[str, Any]:
         ),
     )
     return dict(row)
+
+
+def _public_source_summary(source: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(source["id"]),
+        "name": source.get("name"),
+        "source_type": source.get("source_type"),
+        "country": source.get("country"),
+        "language": source.get("language"),
+        "niche": source.get("niche"),
+        "status": source.get("status"),
+        "created_at": source["created_at"].isoformat() if source.get("created_at") else None,
+        "updated_at": source["updated_at"].isoformat() if source.get("updated_at") else None,
+        "config_redacted": True,
+    }
+
+
+def prepare_scout_source_from_adapter(adapter_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+    country = payload.get("country", "")
+    niche = payload.get("niche", "")
+    language = payload.get("language", "en")
+    if adapter_type == "domain_list":
+        csv_text = domain_list_to_csv(payload.get("text", ""), country, niche, language)
+        source_type = "manual_csv_scout"
+    elif adapter_type == "directory":
+        csv_text = directory_rows_to_csv(payload.get("csv", ""), country, niche, language)
+        source_type = "business_directory_import_scout"
+    else:
+        raise ValueError("unsupported_source_adapter")
+    source = create_scout_source(
+        {
+            "name": payload.get("name") or f"{adapter_type}-{country or 'global'}-{niche or 'general'}",
+            "source_type": source_type,
+            "country": country,
+            "language": language,
+            "niche": niche,
+            "status": "preflight_ready",
+            "config_json": {"csv": csv_text},
+        }
+    )
+    readiness = run_scout_source_readiness(str(source["id"]))
+    return {
+        "adapter_type": adapter_type,
+        "source": _public_source_summary(source),
+        "readiness": readiness,
+        "created_scout_runs": 0,
+        "created_scanner_jobs": 0,
+        "processed_now": False,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
 
 
 def create_scout_run(source_id: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
