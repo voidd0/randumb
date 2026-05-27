@@ -34,6 +34,7 @@ from .p0 import (
 )
 from .outreach import outreach_allowed, render_template
 from .scanner import deterministic_safe_scan
+from .scanner_completion_watch import latest_scanner_completion_watches, scanner_completion_watch
 from .scanner_ops import retry_transient_scanner_failures, scanner_queue_health_snapshot
 from .scanner_priority import latest_scanner_priority_runs, prioritize_guided_scanner_jobs, scanner_guided_backlog
 from .security import verify_paddle_signature
@@ -183,6 +184,24 @@ async def scanner_prioritize_guided_run(request: Request):
         "ok": True,
         "priority": prioritize_guided_scanner_jobs(
             int(payload.get("limit", 25)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
+
+
+@app.get("/admin/scanner/completion-watches", dependencies=[Depends(require_admin)])
+def scanner_completion_watches_get(limit: int = 10):
+    return {"ok": True, "watches": latest_scanner_completion_watches(limit)}
+
+
+@app.post("/admin/scanner/completion-watch", dependencies=[Depends(require_admin)])
+async def scanner_completion_watch_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "watch": scanner_completion_watch(
+            int(payload.get("limit", 100)),
+            int(payload.get("min_new_completed", 1)),
             bool(payload.get("dry_run", True)),
         ),
     }

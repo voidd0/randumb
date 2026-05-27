@@ -46,6 +46,7 @@ from .source_campaign_operator import advance_source_to_campaign, source_campaig
 from .language_gate import check_no_ai_public_language
 from .scanner_ops import retry_transient_scanner_failures, scanner_queue_health_snapshot
 from .scanner_priority import prioritize_guided_scanner_jobs, scanner_guided_backlog
+from .scanner_completion_watch import scanner_completion_watch
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
@@ -165,6 +166,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "scanner_retry_agent": lambda: retry_transient_scanner_failures(int(payload.get("limit", 5)), dry_run=bool(payload.get("dry_run", False))),
         "scanner_guided_backlog_agent": lambda: scanner_guided_backlog(int(payload.get("limit", 50))),
         "scanner_guided_priority_agent": lambda: prioritize_guided_scanner_jobs(int(payload.get("limit", 25)), dry_run=bool(payload.get("dry_run", True))),
+        "scanner_completion_watch_agent": lambda: scanner_completion_watch(
+            int(payload.get("limit", 100)),
+            int(payload.get("min_new_completed", 1)),
+            dry_run=bool(payload.get("dry_run", False)),
+        ),
         "post_scan_lead_scoring_agent": lambda: backfill_post_scan_lead_scores(int(payload.get("limit", 50)), dry_run=bool(payload.get("dry_run", False))),
         "lead_quality_diagnostics_agent": lambda: record_lead_quality_diagnostics(int(payload.get("limit", 50))),
         "scout_source_feedback_agent": lambda: apply_scout_source_feedback(int(payload.get("limit", 50)), dry_run=bool(payload.get("dry_run", True))),
@@ -256,6 +262,7 @@ def run_daily_loop() -> dict[str, Any]:
         "scanner_retry_agent",
         "scanner_guided_backlog_agent",
         "scanner_guided_priority_agent",
+        "scanner_completion_watch_agent",
         "post_scan_lead_scoring_agent",
         "lead_quality_diagnostics_agent",
         "scout_source_feedback_agent",
