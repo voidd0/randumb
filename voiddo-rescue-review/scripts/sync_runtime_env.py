@@ -66,12 +66,12 @@ def main() -> int:
     if not current.get("PADDLE_WEBHOOK_SECRET"):
         current["PADDLE_WEBHOOK_SECRET"] = "vdr_" + secrets.token_urlsafe(32)
 
-    current["SMTP_HOST"] = "mail.voiddorescue.com"
+    current["SMTP_HOST"] = "mail.voiddo.com"
     current["SMTP_PORT"] = "587"
     current["SMTP_USERNAME"] = "audit@voiddorescue.com"
     current["SMTP_PASSWORD"] = mailboxes.get("MAILBOX_AUDIT_PASSWORD", current.get("SMTP_PASSWORD", ""))
     current["SMTP_FROM_DEFAULT"] = "audit@voiddorescue.com"
-    current["IMAP_HOST"] = "mail.voiddorescue.com"
+    current["IMAP_HOST"] = "mail.voiddo.com"
     current["IMAP_PORT"] = "993"
     current["IMAP_USERNAME_AUDIT"] = "audit@voiddorescue.com"
     current["IMAP_PASSWORD_AUDIT"] = mailboxes.get("MAILBOX_AUDIT_PASSWORD", current.get("IMAP_PASSWORD_AUDIT", ""))
@@ -79,7 +79,7 @@ def main() -> int:
     current["IMAP_PASSWORD_FIX"] = mailboxes.get("MAILBOX_FIX_PASSWORD", current.get("IMAP_PASSWORD_FIX", ""))
     current["IMAP_USERNAME_SUPPORT"] = "support@voiddorescue.com"
     current["IMAP_PASSWORD_SUPPORT"] = mailboxes.get("MAILBOX_SUPPORT_PASSWORD", current.get("IMAP_PASSWORD_SUPPORT", ""))
-    current["MAIL_TLS_VERIFY"] = "false"
+    current["MAIL_TLS_VERIFY"] = "true"
 
     # Optional money-pipeline APIs. Do not enable paid calls by default; code must opt in per gate.
     for key in ["GEMINI_API_KEY", "HUNTER_API_KEY", "APOLLO_API_KEY", "PSI_KEY", "RESEND_API_KEY", "SENTRY_DSN"]:

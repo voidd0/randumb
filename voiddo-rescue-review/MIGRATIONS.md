@@ -10,5 +10,9 @@ Applied order is filename-sorted and recorded in `schema_migrations`.
 - `006_p4_deliverability_warmup.sql` — deliverability and warmup pools.
 - `007_warmup_calendar.sql` — scheduled warmup calendar.
 - `008_p5_mail_signals.sql` — structured mail signals for bounce/rate-limit/spam/auth/TLS handling.
+- `009_production_autonomy.sql` through `050_studio_mail_monitor.sql` — production autonomy, mailer control room, scanner/campaign recovery, and studio mail monitor tables.
+- `051_schema_migrations_manifest.sql` — non-destructive manifest for databases initialized directly from Docker SQL files.
 
 `005_p3_checkout_manifest.sql` may be applied after `006`/`007` on existing runtime databases because it is intentionally non-destructive and data-free.
+
+`051_schema_migrations_manifest.sql` exists because PostgreSQL Docker entrypoint applies raw SQL files without calling the app migration runner. It creates `schema_migrations` if needed and records the filename-sorted migration set without changing business data.
