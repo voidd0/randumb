@@ -36,7 +36,7 @@ from .quality_plugins import latest_quality_summary
 from .revenue_simulation import run_synthetic_lead_simulation
 from .language_gate import check_no_ai_public_language
 from .scouts import process_queued_scout_runs, process_scout_run_gated
-from .scout_quality import latest_scout_quality_gate, run_scout_quality_gate, scout_campaign_quality_summary
+from .scout_quality import latest_scout_quality_gate, record_scout_campaign_quality_history, run_scout_quality_gate, scout_campaign_quality_summary
 from .self_operating import run_self_audit, self_operating_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
 
@@ -60,6 +60,8 @@ def _record_agent(agent: str, func: Callable[[], dict[str, Any]]) -> dict[str, A
             result["business_kpi_history"] = record_mailer_business_kpi_history(str(row["id"]), result)
         if agent == "mailer_self_audit_matrix_agent":
             result["self_audit_matrix_history"] = record_mailer_self_audit_matrix_history(str(row["id"]), result)
+        if agent == "scout_campaign_quality_summary_agent":
+            result["scout_campaign_quality_history"] = json.loads(json.dumps(record_scout_campaign_quality_history(str(row["id"]), result), default=str))
         done = execute(
             "UPDATE agent_runs SET status = 'completed', completed_at = now(), result_json = %s WHERE id = %s RETURNING *",
             (Jsonb(result), row["id"]),

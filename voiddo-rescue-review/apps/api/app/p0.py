@@ -338,6 +338,7 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "outbound_mailer_decisions": scalar("SELECT count(*) FROM outbound_mailer_decisions"),
         "reply_action_plans": scalar("SELECT count(*) FROM reply_action_plans"),
         "scout_provenance_scores": scalar("SELECT count(*) FROM scout_provenance_scores"),
+        "scout_campaign_quality_history": scalar("SELECT count(*) FROM scout_campaign_quality_history"),
         "mail_clean_window_transitions": scalar("SELECT count(*) FROM mail_clean_window_transitions"),
         "mailbox_health_scores": scalar("SELECT count(*) FROM mailbox_health_scores"),
         "sender_rotation_readiness": scalar("SELECT count(*) FROM sender_rotation_readiness"),

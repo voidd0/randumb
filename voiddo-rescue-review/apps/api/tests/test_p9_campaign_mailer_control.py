@@ -12,7 +12,7 @@ from app.db import execute, fetch_one
 from app.mailer_control import evaluate_outbound_message
 from app.main import app
 from app.reply_actions import plan_reply_action
-from app.scout_quality import run_scout_quality_gate, score_scout_provenance, scout_campaign_quality_summary
+from app.scout_quality import latest_scout_campaign_quality_history, run_scout_quality_gate, score_scout_provenance, scout_campaign_quality_summary
 from app.scouts import create_campaign, create_scout_run, create_scout_source, prepare_campaign, process_scout_run
 
 
@@ -143,6 +143,8 @@ def test_p9_admin_endpoints_require_auth_and_work():
     assert client.post(f"/admin/campaigns/{campaign_id}/readiness", headers=admin_headers()).status_code == 200
     assert client.get("/admin/scouts/campaign-quality-summary").status_code == 401
     assert client.get("/admin/scouts/campaign-quality-summary", headers=admin_headers()).status_code == 200
+    assert client.get("/admin/scouts/campaign-quality-history").status_code == 401
+    assert client.get("/admin/scouts/campaign-quality-history", headers=admin_headers()).status_code == 200
     assert client.post("/admin/mailer/outbound-decision", json={"email": "lead@example.test"}, headers=admin_headers()).status_code == 200
     assert client.post("/admin/replies/action-plan", json={"subject": "Price", "body": "cost?"}, headers=admin_headers()).status_code == 200
 
@@ -157,6 +159,10 @@ def test_scout_campaign_quality_summary_and_agent_are_no_send():
     agent = run_agent("scout_campaign_quality_summary_agent")
     assert agent["status"] == "completed"
     assert agent["result_json"]["send_mail"] is False
+    history = latest_scout_campaign_quality_history()
+    assert history["count"] >= 1
+    assert history["latest"]["send_mail"] is False
+    assert history["latest"]["raw_recipient_addresses_included"] is False
 
 
 def test_p9_tables_exist():

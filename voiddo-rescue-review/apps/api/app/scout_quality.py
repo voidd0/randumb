@@ -244,3 +244,52 @@ def scout_campaign_quality_summary() -> dict[str, Any]:
         "raw_recipient_addresses_included": False,
         "secrets_included": False,
     }
+
+
+def record_scout_campaign_quality_history(agent_run_id: str | None, summary: dict[str, Any]) -> dict[str, Any]:
+    row = execute(
+        """
+        INSERT INTO scout_campaign_quality_history(
+          agent_run_id, status, blocker_count, scout_runs_json, latest_self_check_json,
+          latest_provenance_json, campaign_quality_json, send_mail, smtp_called,
+          live_outreach_allowed, raw_recipient_addresses_included, secrets_included
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, false, false, false, false, false)
+        RETURNING *
+        """,
+        (
+            agent_run_id,
+            summary.get("status", "unknown"),
+            len(summary.get("blockers") or []),
+            Jsonb(summary.get("scout_runs_by_status") or {}),
+            Jsonb(summary.get("latest_self_check") or {}),
+            Jsonb(summary.get("latest_provenance") or {}),
+            Jsonb(summary.get("campaign_quality") or {}),
+        ),
+    )
+    return dict(row)
+
+
+def latest_scout_campaign_quality_history(limit: int = 10) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT id, status, blocker_count, scout_runs_json, latest_self_check_json,
+               latest_provenance_json, campaign_quality_json, send_mail, smtp_called,
+               live_outreach_allowed, raw_recipient_addresses_included, secrets_included, created_at
+        FROM scout_campaign_quality_history
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (max(1, min(int(limit or 10), 50)),),
+    )
+    latest = dict(rows[0]) if rows else None
+    return {
+        "count": len(rows),
+        "latest": latest,
+        "history": [dict(row) for row in rows],
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
