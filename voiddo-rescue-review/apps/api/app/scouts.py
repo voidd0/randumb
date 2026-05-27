@@ -250,7 +250,7 @@ def latest_scout_source_readiness(source_id: str) -> dict[str, Any]:
             "raw_recipient_addresses_included": False,
             "secrets_included": False,
         }
-    payload = dict(row)
+    payload = _json_safe(dict(row))
     payload["allowed_for_scout_run"] = payload["status"] == "PASS_SOURCE_READY"
     payload["issues"] = payload.get("issues_json") or []
     return payload
@@ -305,6 +305,132 @@ def scout_source_readiness_summary() -> dict[str, Any]:
         "live_outreach_allowed": False,
         "raw_recipient_addresses_included": False,
         "secrets_included": False,
+    }
+
+
+def cleanup_scout_source_readiness_checks(keep: int = 120) -> dict[str, Any]:
+    capped = max(10, min(int(keep or 120), 500))
+    before = fetch_one("SELECT count(*) AS count FROM scout_source_readiness_checks")
+    deleted = execute(
+        """
+        WITH retained AS (
+          SELECT id FROM scout_source_readiness_checks ORDER BY created_at DESC, id DESC LIMIT %s
+        ),
+        removed AS (
+          DELETE FROM scout_source_readiness_checks
+          WHERE id NOT IN (SELECT id FROM retained)
+          RETURNING id
+        )
+        SELECT count(*) AS deleted_count FROM removed
+        """,
+        (capped,),
+    )
+    after = fetch_one("SELECT count(*) AS count FROM scout_source_readiness_checks")
+    return {
+        "keep": capped,
+        "before_count": int(before["count"]) if before else 0,
+        "deleted_count": int((deleted or {}).get("deleted_count", 0) or 0),
+        "after_count": int(after["count"]) if after else 0,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def scout_source_readiness_regression_guard(limit: int = 12) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT id, source_id, status, score, row_count, duplicate_domain_count,
+               excluded_niche_count, suppressed_email_count, invalid_email_count,
+               send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM scout_source_readiness_checks
+        ORDER BY created_at DESC, id DESC
+        LIMIT %s
+        """,
+        (max(2, min(int(limit or 12), 50)),),
+    )
+    latest = dict(rows[0]) if rows else None
+    prior = [dict(row) for row in rows[1:]]
+    regressions: list[str] = []
+    latest_score = int((latest or {}).get("score") or 0)
+    baseline_scores = [
+        int(row.get("score") or 0)
+        for row in prior
+        if row.get("status") == "PASS_SOURCE_READY"
+        and not any(bool(row.get(flag)) for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"])
+    ]
+    baseline_score = max(baseline_scores) if baseline_scores else None
+    if not latest:
+        decision = "MISSING_NO_SEND"
+    else:
+        if latest["status"] != "PASS_SOURCE_READY":
+            regressions.append("latest_source_readiness_not_pass")
+        if any(bool(latest.get(flag)) for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"]):
+            regressions.append("latest_source_readiness_flags_not_safe")
+        if baseline_score is not None and latest_score <= baseline_score - 10:
+            regressions.append("source_readiness_score_dropped")
+        decision = "PASS_NO_SEND" if not regressions else "FAIL_REVIEW_REQUIRED_NO_SEND"
+    event_id = None
+    task_id = None
+    if latest and regressions:
+        event = execute(
+            """
+            INSERT INTO system_events(type, severity, message, payload_json)
+            VALUES ('scout.source_readiness_regression', 'warning', 'Scout source readiness regression requires review', %s)
+            RETURNING id
+            """,
+            (
+                Jsonb(
+                    {
+                        "decision": decision,
+                        "regressions": regressions,
+                        "latest_check_id": str(latest["id"]),
+                        "latest_source_id": str(latest["source_id"]),
+                        "latest_score": latest_score,
+                        "baseline_score": baseline_score,
+                        "send_mail": False,
+                    }
+                ),
+            ),
+        )
+        event_id = str(event["id"]) if event else None
+        task = execute(
+            """
+            INSERT INTO codex_tasks(type, priority, status, title, description, input_json)
+            VALUES ('scanner_failed_case', 'medium', 'open', 'Review scout source readiness regression',
+                    'Scout source readiness regression guard detected weaker source intake evidence.', %s)
+            RETURNING id
+            """,
+            (
+                Jsonb(
+                    {
+                        "source": "scout_source_readiness_regression_guard",
+                        "regressions": regressions,
+                        "latest_scout_source_readiness_check_id": str(latest["id"]),
+                        "constraints": ["no_live_outreach", "no_secret_exposure", "source_quality_review_only"],
+                    }
+                ),
+            ),
+        )
+        task_id = str(task["id"]) if task else None
+    return {
+        "decision": decision,
+        "regressions": regressions,
+        "rows_checked": len(rows),
+        "latest_score": latest_score if latest else None,
+        "baseline_score": baseline_score,
+        "system_event_id": event_id,
+        "codex_task_id": task_id,
+        "review_task_created": bool(task_id),
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+        "raw_history_rows_included": False,
     }
 
 

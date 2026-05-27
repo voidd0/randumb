@@ -13,7 +13,7 @@ from app.mailer_control import evaluate_outbound_message
 from app.main import app
 from app.reply_actions import plan_reply_action
 from app.scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, run_scout_quality_gate, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
-from app.scouts import create_campaign, create_scout_run, create_scout_source, latest_scout_source_readiness, prepare_campaign, process_scout_run, run_scout_source_readiness, scout_source_readiness_summary
+from app.scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, latest_scout_source_readiness, prepare_campaign, process_scout_run, run_scout_source_readiness, scout_source_readiness_regression_guard, scout_source_readiness_summary
 
 
 client = TestClient(app)
@@ -184,6 +184,41 @@ def test_scout_source_readiness_summary_and_agent_are_no_send():
     assert agent["result_json"]["send_mail"] is False
 
 
+def test_scout_source_readiness_retention_and_regression_are_no_send():
+    token = uuid.uuid4().hex[:8]
+    source = create_scout_source({"name": f"p77-source-{token}", "source_type": "manual_csv_scout", "country": "P9", "niche": "dentists", "config_json": {"csv": ""}})
+    try:
+        execute(
+            """
+            INSERT INTO scout_source_readiness_checks(source_id, status, score, row_count, parseable_count, issues_json, created_at)
+            VALUES (%s, 'PASS_SOURCE_READY', 95, 10, 10, '[]'::jsonb, now() - interval '2 minutes')
+            """,
+            (source["id"],),
+        )
+        execute(
+            """
+            INSERT INTO scout_source_readiness_checks(source_id, status, score, row_count, parseable_count, issues_json, created_at)
+            VALUES (%s, 'REVIEW_SOURCE_BEFORE_RUN', 40, 1, 0, %s, now())
+            """,
+            (source["id"], Jsonb([{"code": "weak_domain_coverage", "severity": "high"}])),
+        )
+        guard = scout_source_readiness_regression_guard(5)
+        assert guard["decision"] == "FAIL_REVIEW_REQUIRED_NO_SEND"
+        assert "latest_source_readiness_not_pass" in guard["regressions"]
+        assert guard["send_mail"] is False
+        assert guard["review_task_created"] is True
+        retention = cleanup_scout_source_readiness_checks(120)
+        assert retention["send_mail"] is False
+        retention_agent = run_agent("scout_source_readiness_retention_agent")
+        regression_agent = run_agent("scout_source_readiness_regression_guard_agent")
+        assert retention_agent["status"] == "completed"
+        assert regression_agent["status"] == "completed"
+        assert regression_agent["result_json"]["send_mail"] is False
+    finally:
+        execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (source["id"],))
+        execute("DELETE FROM scout_sources WHERE id = %s", (source["id"],))
+
+
 def test_p9_admin_endpoints_require_auth_and_work():
     campaign_id = _campaign_with_audit(uuid.uuid4().hex[:8])
     assert client.post(f"/admin/campaigns/{campaign_id}/readiness").status_code == 401
@@ -194,6 +229,8 @@ def test_p9_admin_endpoints_require_auth_and_work():
     assert client.get("/admin/scouts/campaign-quality-history", headers=admin_headers()).status_code == 200
     assert client.get("/admin/scouts/source-readiness-summary").status_code == 401
     assert client.get("/admin/scouts/source-readiness-summary", headers=admin_headers()).status_code == 200
+    assert client.post("/admin/scouts/source-readiness-retention", headers=admin_headers()).status_code == 200
+    assert client.post("/admin/scouts/source-readiness-regression-guard", headers=admin_headers()).status_code == 200
     assert client.post("/admin/scouts/campaign-quality-regression-guard", headers=admin_headers()).status_code == 200
     assert client.post("/admin/mailer/outbound-decision", json={"email": "lead@example.test"}, headers=admin_headers()).status_code == 200
     assert client.post("/admin/replies/action-plan", json={"subject": "Price", "body": "cost?"}, headers=admin_headers()).status_code == 200
