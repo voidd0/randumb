@@ -65,6 +65,7 @@ from .language_gate import check_no_ai_public_language
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
+from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, latest_scout_quality_gate, run_scout_quality_gate, run_scout_self_check, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, latest_scout_source_readiness, latest_scout_source_readiness_regression_guard_summary, prepare_campaign, prepare_campaign_gated, prepare_scout_source_from_adapter, process_scout_run, process_scout_run_gated, queue_ready_scout_source_runs, ready_scout_source_queue_candidates, run_scout_source_readiness, scout_campaign_expansion_gate, scout_source_readiness_gate, scout_source_readiness_regression_guard, scout_source_readiness_summary
@@ -943,6 +944,26 @@ async def campaign_control_room_prepare(request: Request):
             bool(payload.get("dry_run", True)),
             payload.get("offer_key", "contact_form_repair"),
             int(payload.get("max_segments", 3)),
+        ),
+    }
+
+
+@app.get("/admin/source-campaign-operator", dependencies=[Depends(require_admin)])
+def source_campaign_operator_get(limit: int = 25, source_id: str | None = None):
+    return {"ok": True, "operator": source_campaign_operator_snapshot(limit, source_id)}
+
+
+@app.post("/admin/source-campaign-operator/advance", dependencies=[Depends(require_admin)])
+async def source_campaign_operator_advance(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "operator": advance_source_to_campaign(
+            payload.get("source_id"),
+            int(payload.get("limit", 25)),
+            bool(payload.get("dry_run", True)),
+            bool(payload.get("process_scout", False)),
+            bool(payload.get("prepare_campaigns", True)),
         ),
     }
 
