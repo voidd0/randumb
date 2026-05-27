@@ -293,3 +293,129 @@ def latest_scout_campaign_quality_history(limit: int = 10) -> dict[str, Any]:
         "raw_recipient_addresses_included": False,
         "secrets_included": False,
     }
+
+
+def cleanup_scout_campaign_quality_history(keep: int = 120) -> dict[str, Any]:
+    capped = max(10, min(int(keep or 120), 500))
+    before = fetch_one("SELECT count(*) AS count FROM scout_campaign_quality_history")
+    deleted = execute(
+        """
+        WITH retained AS (
+          SELECT id FROM scout_campaign_quality_history ORDER BY created_at DESC LIMIT %s
+        ),
+        removed AS (
+          DELETE FROM scout_campaign_quality_history
+          WHERE id NOT IN (SELECT id FROM retained)
+          RETURNING id
+        )
+        SELECT count(*) AS deleted_count FROM removed
+        """,
+        (capped,),
+    )
+    after = fetch_one("SELECT count(*) AS count FROM scout_campaign_quality_history")
+    return {
+        "keep": capped,
+        "before_count": int(before["count"]) if before else 0,
+        "deleted_count": int((deleted or {}).get("deleted_count", 0) or 0),
+        "after_count": int(after["count"]) if after else 0,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def scout_campaign_quality_regression_guard(limit: int = 12) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT id, status, blocker_count, campaign_quality_json, send_mail, smtp_called,
+               live_outreach_allowed, raw_recipient_addresses_included, secrets_included, created_at
+        FROM scout_campaign_quality_history
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (max(2, min(int(limit or 12), 50)),),
+    )
+    latest = dict(rows[0]) if rows else None
+    prior = [dict(row) for row in rows[1:]]
+    regressions: list[str] = []
+    latest_failed = int(((latest or {}).get("campaign_quality_json") or {}).get("latest_failed_count") or 0)
+    baseline_failed = min(
+        [
+            int((row.get("campaign_quality_json") or {}).get("latest_failed_count") or 0)
+            for row in prior
+            if row.get("status") == "PASS_NO_SEND" and int(row.get("blocker_count") or 0) == 0
+        ],
+        default=None,
+    )
+    if not latest:
+        regressions.append("missing_scout_campaign_quality_history")
+    else:
+        if latest["status"] != "PASS_NO_SEND":
+            regressions.append("latest_scout_campaign_quality_not_pass")
+        if int(latest.get("blocker_count") or 0) > 0:
+            regressions.append("latest_scout_campaign_quality_blockers_present")
+        if any(bool(latest.get(flag)) for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"]):
+            regressions.append("latest_scout_campaign_quality_flags_not_safe")
+        if baseline_failed is not None and latest_failed > baseline_failed:
+            regressions.append("scout_campaign_quality_failed_count_increased")
+    event_id = None
+    task_id = None
+    decision = "PASS_NO_SEND" if not regressions else "FAIL_REVIEW_REQUIRED_NO_SEND"
+    if regressions and latest:
+        event = execute(
+            """
+            INSERT INTO system_events(type, severity, message, payload_json)
+            VALUES ('scout.campaign_quality_regression', 'warning', 'Scout campaign quality regression requires review', %s)
+            RETURNING id
+            """,
+            (
+                Jsonb(
+                    {
+                        "decision": decision,
+                        "regressions": regressions,
+                        "latest_history_id": str(latest["id"]),
+                        "latest_failed_count": latest_failed,
+                        "baseline_failed_count": baseline_failed,
+                        "send_mail": False,
+                    }
+                ),
+            ),
+        )
+        event_id = str(event["id"]) if event else None
+        task = execute(
+            """
+            INSERT INTO codex_tasks(type, priority, status, title, description, input_json)
+            VALUES ('scanner_failed_case', 'medium', 'open', 'Review scout campaign quality regression',
+                    'Scout campaign quality regression guard detected weaker source or campaign-quality evidence.', %s)
+            RETURNING id
+            """,
+            (
+                Jsonb(
+                    {
+                        "source": "scout_campaign_quality_regression_guard",
+                        "regressions": regressions,
+                        "latest_scout_campaign_quality_history_id": str(latest["id"]),
+                        "constraints": ["no_live_outreach", "no_secret_exposure", "quality_review_only"],
+                    }
+                ),
+            ),
+        )
+        task_id = str(task["id"]) if task else None
+    return {
+        "decision": decision,
+        "regressions": regressions,
+        "rows_checked": len(rows),
+        "latest_failed_count": latest_failed,
+        "baseline_failed_count": baseline_failed,
+        "system_event_id": event_id,
+        "codex_task_id": task_id,
+        "review_task_created": bool(task_id),
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+        "raw_history_rows_included": False,
+    }

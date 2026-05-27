@@ -64,7 +64,7 @@ from .language_gate import check_no_ai_public_language
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
-from .scout_quality import latest_scout_campaign_quality_history, latest_scout_quality_gate, run_scout_quality_gate, run_scout_self_check, score_scout_provenance, scout_campaign_quality_summary
+from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, latest_scout_quality_gate, run_scout_quality_gate, run_scout_self_check, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, prepare_campaign_gated, process_scout_run, process_scout_run_gated, scout_campaign_expansion_gate
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup, rollback_latest_spacing_repair
 from .self_operating import (
@@ -397,6 +397,16 @@ def scout_campaign_quality_summary_get():
 @app.get("/admin/scouts/campaign-quality-history", dependencies=[Depends(require_admin)])
 def scout_campaign_quality_history_get(limit: int = 10):
     return {"ok": True, "history": latest_scout_campaign_quality_history(limit)}
+
+
+@app.post("/admin/scouts/campaign-quality-history/retention", dependencies=[Depends(require_admin)])
+def scout_campaign_quality_history_retention(keep: int = 120):
+    return {"ok": True, "retention": cleanup_scout_campaign_quality_history(keep)}
+
+
+@app.post("/admin/scouts/campaign-quality-regression-guard", dependencies=[Depends(require_admin)])
+def scout_campaign_quality_regression_guard_run(limit: int = 12):
+    return {"ok": True, "guard": scout_campaign_quality_regression_guard(limit)}
 
 
 @app.get("/admin/campaigns/{campaign_id}", dependencies=[Depends(require_admin)])
