@@ -43,6 +43,7 @@ from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 from .language_gate import check_no_ai_public_language
+from .scanner_ops import retry_transient_scanner_failures, scanner_queue_health_snapshot
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
@@ -150,7 +151,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "scout_campaign_quality_summary_agent": lambda: scout_campaign_quality_summary(),
         "scout_campaign_quality_retention_agent": lambda: cleanup_scout_campaign_quality_history(),
         "scout_campaign_quality_regression_guard_agent": lambda: scout_campaign_quality_regression_guard(),
-        "scanner_agent": lambda: {"dry_run": True, "status": "scanner_worker_processes_existing_queue"},
+        "scanner_agent": lambda: scanner_queue_health_snapshot(int(payload.get("limit", 20))),
+        "scanner_retry_agent": lambda: retry_transient_scanner_failures(int(payload.get("limit", 5)), dry_run=bool(payload.get("dry_run", False))),
         "audit_page_agent": lambda: {"dry_run": True, "status": "audit_pages_api_backed"},
         "visual_qa_agent": lambda: {"dry_run": True, "status": "huanshu_required", "routes": ["/", "/r/demo", "/admin", "/customer", "/status"]},
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
@@ -231,6 +233,8 @@ def run_daily_loop() -> dict[str, Any]:
         "email_template_agent",
         "visual_qa_agent",
         "deliverability_agent",
+        "scanner_agent",
+        "scanner_retry_agent",
         "campaign_agent",
         "campaign_operator_agent",
         "campaign_control_room_agent",

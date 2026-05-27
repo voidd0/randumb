@@ -294,6 +294,15 @@ def admin_metrics_from_db() -> dict[str, Any]:
         },
         "qualified_leads": scalar("SELECT count(*) FROM leads WHERE score >= 70"),
         "audit_pages_generated": scalar("SELECT count(*) FROM audits WHERE public_slug IS NOT NULL"),
+        "scanner_retryable_transient": scalar(
+            """
+            SELECT count(*)
+            FROM scanner_jobs
+            WHERE status = 'failed'
+              AND error IN ('TimeoutError', 'Error', 'PlaywrightTimeoutError', 'NetworkError')
+              AND COALESCE((result_json->>'scanner_retry_count')::int, 0) < 1
+            """
+        ),
         "emails": {
             "queued": sum(int(r["count"]) for r in email_rows if r["status"] == "queued"),
             "sent": sum(int(r["count"]) for r in email_rows if r["status"] == "sent"),
