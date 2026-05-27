@@ -37,6 +37,7 @@ from .scanner import deterministic_safe_scan
 from .scanner_completion_watch import latest_scanner_completion_watches, scanner_completion_watch
 from .scanner_ops import retry_transient_scanner_failures, scanner_queue_health_snapshot
 from .scanner_priority import latest_scanner_priority_runs, prioritize_guided_scanner_jobs, scanner_guided_backlog
+from .source_scanner_queue import latest_source_scanner_queue_runs, queue_source_scanner_jobs, source_scanner_backlog
 from .security import verify_paddle_signature
 from .visual_quality import check_visual_publish_gate
 from .autonomous_agents import run_agent, run_daily_loop
@@ -203,6 +204,29 @@ async def scanner_completion_watch_run(request: Request):
             int(payload.get("limit", 100)),
             int(payload.get("min_new_completed", 1)),
             bool(payload.get("dry_run", True)),
+        ),
+    }
+
+
+@app.get("/admin/scanner/source-backlog", dependencies=[Depends(require_admin)])
+def source_scanner_backlog_get(limit: int = 100, source_id: str | None = None):
+    return {"ok": True, "backlog": source_scanner_backlog(limit, source_id)}
+
+
+@app.get("/admin/scanner/source-queue-runs", dependencies=[Depends(require_admin)])
+def source_scanner_queue_runs_get(limit: int = 10):
+    return {"ok": True, "runs": latest_source_scanner_queue_runs(limit)}
+
+
+@app.post("/admin/scanner/queue-source-leads", dependencies=[Depends(require_admin)])
+async def source_scanner_queue_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "queue": queue_source_scanner_jobs(
+            int(payload.get("limit", 100)),
+            bool(payload.get("dry_run", True)),
+            payload.get("source_id"),
         ),
     }
 

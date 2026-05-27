@@ -320,6 +320,7 @@ def admin_metrics_from_db() -> dict[str, Any]:
         ),
         "scanner_priority_runs": scalar("SELECT count(*) FROM scanner_priority_runs"),
         "scanner_completion_watches": scalar("SELECT count(*) FROM scanner_completion_watches"),
+        "source_scanner_queue_runs": scalar("SELECT count(*) FROM source_scanner_queue_runs"),
         "emails": {
             "queued": sum(int(r["count"]) for r in email_rows if r["status"] == "queued"),
             "sent": sum(int(r["count"]) for r in email_rows if r["status"] == "sent"),
