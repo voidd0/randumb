@@ -65,6 +65,7 @@ from .customer_access import customer_dashboard_by_token, ensure_customer_access
 from .monitoring import ensure_monitoring_target, process_due_monitoring_targets, run_monitoring_check
 from .language_gate import check_no_ai_public_language
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
+from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
@@ -1003,6 +1004,12 @@ def launch_repair_plan_get(limit: int = 25):
 async def launch_repair_plan_execute(request: Request):
     payload = await request.json()
     return {"ok": True, "plan": execute_launch_repair_plan(int(payload.get("limit", 25)), bool(payload.get("dry_run", True)))}
+
+
+@app.post("/admin/launch-repair-cycle", dependencies=[Depends(require_admin)])
+async def launch_repair_cycle_run(request: Request):
+    payload = await request.json()
+    return {"ok": True, "cycle": run_launch_repair_cycle(int(payload.get("limit", 25)), bool(payload.get("execute_safe_auto", False)))}
 
 
 @app.post("/admin/mail/clean-window", dependencies=[Depends(require_admin)])
