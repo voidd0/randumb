@@ -37,6 +37,7 @@ from .outreach import outreach_allowed, render_template
 from .scanner import deterministic_safe_scan
 from .scanner_completion_watch import latest_scanner_completion_watches, scanner_completion_watch
 from .scanner_ops import retry_transient_scanner_failures, scanner_queue_health_snapshot
+from .scanner_queue_hygiene import archive_scanner_queue_artifacts, scanner_queue_hygiene_snapshot
 from .scanner_priority import latest_scanner_priority_runs, prioritize_guided_scanner_jobs, scanner_guided_backlog
 from .source_scanner_queue import latest_source_scanner_queue_runs, queue_source_scanner_jobs, source_scanner_backlog
 from .security import verify_paddle_signature
@@ -168,6 +169,23 @@ def scanner_job_get(job_id: str):
 @app.get("/admin/scanner/queue-health", dependencies=[Depends(require_admin)])
 def scanner_queue_health_get(limit: int = 20):
     return {"ok": True, "scanner": scanner_queue_health_snapshot(limit)}
+
+
+@app.get("/admin/scanner/queue-hygiene", dependencies=[Depends(require_admin)])
+def scanner_queue_hygiene_get(limit: int = 500):
+    return {"ok": True, "hygiene": scanner_queue_hygiene_snapshot(limit)}
+
+
+@app.post("/admin/scanner/archive-artifacts", dependencies=[Depends(require_admin)])
+async def scanner_archive_artifacts(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "hygiene": archive_scanner_queue_artifacts(
+            int(payload.get("limit", 500)),
+            bool(payload.get("apply", False)),
+        ),
+    }
 
 
 @app.post("/admin/scanner/retry-transient", dependencies=[Depends(require_admin)])
