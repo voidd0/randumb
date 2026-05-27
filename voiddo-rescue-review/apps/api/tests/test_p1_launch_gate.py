@@ -240,6 +240,43 @@ def test_mail_qa_blocks_deliverability_errors(monkeypatch):
     assert "deliverability_diagnostic_failed" in result["issues_json"]
 
 
+def test_mail_qa_does_not_block_on_diagnostic_minute_cap(monkeypatch):
+    import app.p0 as p0
+
+    class FakeSMTP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def ehlo(self): pass
+        def starttls(self, context=None): pass
+        def login(self, user, password): pass
+
+    class FakeIMAP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def login(self, user, password): pass
+        def select(self, *args, **kwargs): pass
+        def logout(self): pass
+
+    def fake_dig(record_type: str, name: str) -> str:
+        if name.startswith("dkim."):
+            return "v=DKIM1; p=test"
+        if name.startswith("_dmarc."):
+            return "v=DMARC1; p=none"
+        return "ok"
+
+    monkeypatch.setattr(p0, "_dig", fake_dig)
+    monkeypatch.setattr(p0.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setattr(p0.imaplib, "IMAP4_SSL", FakeIMAP)
+    monkeypatch.setattr(p0, "approved_test_inbox_emails", lambda settings=None: ["qa@example.test"])
+    monkeypatch.setattr(p0, "provider_counts_for_test_inboxes", lambda: {"external": 1})
+    monkeypatch.setattr(p0, "run_deliverability_diagnostics", lambda settings, recipients, smtp_ready: {"sent": 0, "errors": ["diagnostic_minute_cap_reached"]})
+    result = run_mail_qa()
+    assert result["decision"] == "PASS"
+    assert "deliverability_diagnostic_failed" not in result["issues_json"]
+
+
 def test_deliverability_diagnostic_sends_max_one(monkeypatch):
     import app.p0 as p0
 
@@ -286,7 +323,18 @@ def test_warmup_pool_missing_blocks(monkeypatch):
     assert result["status"] == "blocked_no_recipient_pool"
 
 
-def test_owner_start_warmup_blocked_without_pool_or_mail_pass():
+def test_owner_start_warmup_blocked_without_pool_or_mail_pass(monkeypatch):
+    import app.p0 as p0
+
+    original_fetch_one = p0.fetch_one
+
+    def fake_fetch_one(sql, params=()):
+        if "FROM mail_qa_runs" in sql:
+            return {"decision": "FAIL_BLOCK_LAUNCH", "issues_json": ["approved_test_inbox_pool_missing"]}
+        return original_fetch_one(sql, params)
+
+    monkeypatch.setattr(p0, "approved_warmup_recipient_emails", lambda settings=None: [])
+    monkeypatch.setattr(p0, "fetch_one", fake_fetch_one)
     result = store_owner_command(
         {
             "mailbox": "owner",

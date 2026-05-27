@@ -1982,7 +1982,12 @@ def run_mail_qa(allow_deliverability_send: bool = True) -> dict[str, Any]:
     else:
         deliverability = {"sent": 0, "skipped": "no_approved_test_inboxes"}
     checks["deliverability_diagnostics"] = deliverability
-    if deliverability.get("errors"):
+    deliverability_errors = [
+        str(error)
+        for error in (deliverability.get("errors") or [])
+        if str(error) not in {"diagnostic_minute_cap_reached", "diagnostic_daily_cap_reached"}
+    ]
+    if deliverability_errors:
         issues.append("deliverability_diagnostic_failed")
     external_providers = provider_counts_for_test_inboxes().get("external", 0)
     internal_only = bool(checks["approved_test_inboxes"] > 0 and external_providers == 0)
