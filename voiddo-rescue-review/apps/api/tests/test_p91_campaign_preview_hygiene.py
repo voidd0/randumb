@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
 from app.autonomous_agents import run_agent
-from app.campaign_preview_hygiene import archive_campaign_preview_artifacts, campaign_preview_hygiene_snapshot
+from app.campaign_preview_hygiene import archive_campaign_preview_artifacts, archive_campaign_shell_artifacts, campaign_preview_hygiene_snapshot, campaign_shell_hygiene_snapshot
 from app.db import execute, fetch_one
 from app.main import app
 
@@ -98,5 +98,62 @@ def test_campaign_preview_hygiene_endpoints_and_agent_are_admin_gated_no_send():
         agent = run_agent("campaign_preview_hygiene_snapshot_agent", {"limit": 50})
         assert agent["status"] == "completed"
         assert agent["result_json"]["raw_recipient_addresses_included"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_shell_hygiene_archives_synthetic_campaigns_without_touching_real_campaigns():
+    token = uuid.uuid4().hex[:8]
+    try:
+        synthetic = execute(
+            """
+            INSERT INTO campaigns(name, status, country, language, niche, offer_key, dry_run)
+            VALUES (%s, 'preview_ready', 'P91', 'en', 'dentists', 'contact_form_repair', true)
+            RETURNING id
+            """,
+            (f"P91 synthetic {token}",),
+        )
+        real = execute(
+            """
+            INSERT INTO campaigns(name, status, country, language, niche, offer_key, dry_run)
+            VALUES (%s, 'preview_ready', 'US', 'en', 'dentists', 'contact_form_repair', true)
+            RETURNING id
+            """,
+            (f"Real shell {token}",),
+        )
+        snapshot = campaign_shell_hygiene_snapshot(50)
+        assert snapshot["artifact_count"] >= 1
+        result = archive_campaign_shell_artifacts(50, apply=True)
+        assert result["archived_count"] >= 1
+        assert result["send_mail"] is False
+        archived = fetch_one("SELECT status FROM campaigns WHERE id = %s", (synthetic["id"],))
+        untouched = fetch_one("SELECT status FROM campaigns WHERE id = %s", (real["id"],))
+        assert archived["status"] == "archived_test_artifact"
+        assert untouched["status"] == "preview_ready"
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_shell_hygiene_endpoint_and_agent_are_admin_gated_no_send():
+    token = uuid.uuid4().hex[:8]
+    try:
+        execute(
+            """
+            INSERT INTO campaigns(name, status, country, language, niche, offer_key, dry_run)
+            VALUES (%s, 'preview_ready', 'P91', 'en', 'dentists', 'contact_form_repair', true)
+            RETURNING id
+            """,
+            (f"P91 endpoint {token}",),
+        )
+        assert client.get("/admin/campaign-shell-hygiene").status_code == 401
+        ok = client.get("/admin/campaign-shell-hygiene", headers=admin_headers())
+        assert ok.status_code == 200
+        assert ok.json()["hygiene"]["raw_recipient_addresses_included"] is False
+        run = client.post("/admin/campaign-shell-hygiene/archive-artifacts", json={"limit": 50, "apply": False}, headers=admin_headers())
+        assert run.status_code == 200
+        assert run.json()["hygiene"]["live_outreach_allowed"] is False
+        agent = run_agent("campaign_shell_hygiene_snapshot_agent", {"limit": 50})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["send_mail"] is False
     finally:
         _cleanup(token)

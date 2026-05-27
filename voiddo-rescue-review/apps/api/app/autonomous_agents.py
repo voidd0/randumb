@@ -48,7 +48,7 @@ from .campaign_preflight import campaign_preflight_batch
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation
 from .campaign_remediation_feedback import campaign_remediation_feedback
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, refresh_campaign_previews_if_needed
-from .campaign_preview_hygiene import archive_campaign_preview_artifacts, campaign_preview_hygiene_snapshot
+from .campaign_preview_hygiene import archive_campaign_preview_artifacts, archive_campaign_shell_artifacts, campaign_preview_hygiene_snapshot, campaign_shell_hygiene_snapshot
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .campaign_preview_reviews import auto_review_campaign_previews
 from .campaign_review_remediation import held_preview_remediation_candidates, remediate_held_preview_reviews
@@ -289,6 +289,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             apply=bool(payload.get("apply", True)),
         ),
         "campaign_preview_hygiene_snapshot_agent": lambda: campaign_preview_hygiene_snapshot(int(payload.get("limit", 500))),
+        "campaign_shell_hygiene_agent": lambda: archive_campaign_shell_artifacts(
+            int(payload.get("limit", 500)),
+            apply=bool(payload.get("apply", True)),
+        ),
+        "campaign_shell_hygiene_snapshot_agent": lambda: campaign_shell_hygiene_snapshot(int(payload.get("limit", 500))),
         "campaign_preflight_agent": lambda: campaign_preflight_batch(int(payload.get("limit", 20)), payload.get("campaign_id")),
         "campaign_remediation_agent": lambda: campaign_remediation_plan(
             int(payload.get("limit", 25)),
@@ -403,6 +408,7 @@ def run_daily_loop() -> dict[str, Any]:
             "quality_plugin_agent",
             "warmup_block_recovery_snapshot_agent",
             "campaign_preview_hygiene_snapshot_agent",
+            "campaign_shell_hygiene_snapshot_agent",
             "scanner_queue_hygiene_snapshot_agent",
             "scout_run_recovery_snapshot_agent",
             "self_audit_agent",
@@ -444,6 +450,8 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_preview_refresh_agent",
         "campaign_preview_hygiene_agent",
         "campaign_preview_hygiene_snapshot_agent",
+        "campaign_shell_hygiene_agent",
+        "campaign_shell_hygiene_snapshot_agent",
         "campaign_preview_self_review_agent",
         "campaign_review_remediation_snapshot_agent",
         "campaign_review_remediation_agent",
@@ -478,6 +486,7 @@ def run_daily_loop() -> dict[str, Any]:
         "customer_mail_simulation_agent",
         "mailer_ops_retention_agent",
         "mailer_digest_agent",
+        "autonomous_mailer_executor_agent",
         "mailer_digest_retention_agent",
         "mailer_digest_trend_guard_agent",
         "mailer_policy_score_agent",

@@ -26,6 +26,7 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("campaign_preflight_agent", {"limit": 20}),
     ("launch_readiness_scoreboard_agent", {"limit": 25}),
     ("reporting_agent", {}),
+    ("autonomous_mailer_executor_agent", {"limit": 10}),
     ("mailer_digest_trend_guard_agent", {}),
     ("mailer_policy_score_agent", {}),
 )

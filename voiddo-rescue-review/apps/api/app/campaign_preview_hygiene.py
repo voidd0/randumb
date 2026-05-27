@@ -39,6 +39,18 @@ def _artifact_reason(row: dict[str, Any]) -> str:
     return ""
 
 
+def _campaign_artifact_reason(row: dict[str, Any]) -> str:
+    name = str(row.get("campaign_name") or "").lower()
+    country = str(row.get("campaign_country") or "").upper()
+    if country.startswith(TEST_COUNTRY_PREFIXES):
+        return "test_campaign_country"
+    if name.startswith(("p7-", "p8-", "p9-", "p59", "p60", "p61", "p62", "p63", "p68", "p72", "p73", "p74")):
+        return "test_campaign_name"
+    if "synthetic" in name:
+        return "synthetic_campaign_name"
+    return ""
+
+
 def campaign_preview_hygiene_snapshot(limit: int = 500) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 500), 2000))
     rows = fetch_all(
@@ -148,5 +160,107 @@ def archive_campaign_preview_artifacts(limit: int = 500, apply: bool = False) ->
         VALUES ('campaign_preview.hygiene', %s, 'Campaign preview hygiene evaluated', %s)
         """,
         ("info" if artifacts else "info", Jsonb(result)),
+    )
+    return result
+
+
+def campaign_shell_hygiene_snapshot(limit: int = 500) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 500), 2000))
+    rows = fetch_all(
+        """
+        SELECT c.id AS campaign_id, c.name AS campaign_name, c.country AS campaign_country,
+               c.status AS campaign_status,
+               count(cl.id) FILTER (WHERE cl.status = 'preview') AS active_preview_rows,
+               count(cl.id) FILTER (WHERE cl.status = 'archived_test_artifact') AS archived_artifact_rows
+        FROM campaigns c
+        LEFT JOIN campaign_leads cl ON cl.campaign_id = c.id
+        WHERE c.status IN ('preview_ready', 'draft')
+        GROUP BY c.id, c.name, c.country, c.status
+        ORDER BY c.updated_at DESC, c.created_at DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    artifact_reasons: dict[str, int] = {}
+    artifact_count = 0
+    real_campaign_count = 0
+    for row in rows:
+        reason = _campaign_artifact_reason(dict(row))
+        if reason:
+            artifact_count += 1
+            artifact_reasons[reason] = artifact_reasons.get(reason, 0) + 1
+        else:
+            real_campaign_count += 1
+    return json_safe(
+        {
+            "status": "artifacts_found" if artifact_count else "clean",
+            "inspected_count": len(rows),
+            "artifact_count": artifact_count,
+            "real_campaign_count": real_campaign_count,
+            "artifact_reasons": artifact_reasons,
+            **SAFE_FLAGS,
+        }
+    )
+
+
+def archive_campaign_shell_artifacts(limit: int = 500, apply: bool = False) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 500), 2000))
+    rows = fetch_all(
+        """
+        SELECT c.id AS campaign_id, c.name AS campaign_name, c.country AS campaign_country,
+               c.status AS campaign_status,
+               count(cl.id) FILTER (WHERE cl.status = 'preview') AS active_preview_rows,
+               count(cl.id) FILTER (WHERE cl.status = 'archived_test_artifact') AS archived_artifact_rows
+        FROM campaigns c
+        LEFT JOIN campaign_leads cl ON cl.campaign_id = c.id
+        WHERE c.status IN ('preview_ready', 'draft')
+        GROUP BY c.id, c.name, c.country, c.status
+        ORDER BY c.updated_at DESC, c.created_at DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    artifacts = []
+    for row in rows:
+        reason = _campaign_artifact_reason(dict(row))
+        if not reason:
+            continue
+        artifacts.append(
+            {
+                "campaign_id": str(row["campaign_id"]),
+                "reason": reason,
+                "active_preview_rows": int(row["active_preview_rows"] or 0),
+                "archived_artifact_rows": int(row["archived_artifact_rows"] or 0),
+                **SAFE_FLAGS,
+            }
+        )
+        if apply:
+            execute(
+                """
+                UPDATE campaigns
+                SET status = 'archived_test_artifact',
+                    updated_at = now()
+                WHERE id = %s
+                  AND status IN ('preview_ready', 'draft')
+                """,
+                (row["campaign_id"],),
+            )
+    result = json_safe(
+        {
+            "status": "applied" if apply and artifacts else ("planned" if artifacts else "clean"),
+            "applied": bool(apply),
+            "inspected_count": len(rows),
+            "archived_count": len(artifacts) if apply else 0,
+            "artifact_count": len(artifacts),
+            "artifacts": artifacts[:50],
+            **SAFE_FLAGS,
+        }
+    )
+    execute(
+        """
+        INSERT INTO system_events(type, severity, message, payload_json)
+        VALUES ('campaign_shell.hygiene', 'info', 'Campaign shell hygiene evaluated', %s)
+        """,
+        (Jsonb(result),),
     )
     return result
