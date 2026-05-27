@@ -25,6 +25,8 @@ def _cleanup(token: str) -> None:
     execute("DELETE FROM owner_commands WHERE message_id LIKE %s OR uid LIKE %s OR body LIKE %s", (f"%{token}%", f"%{token}%", f"%{token}%"))
     execute("DELETE FROM suppression_list WHERE email LIKE %s", (f"%{token}%",))
     execute("DELETE FROM system_events WHERE payload_json::text LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM mail_signals WHERE message_id LIKE %s OR raw_summary LIKE %s", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM codex_tasks WHERE input_json::text LIKE %s OR title LIKE %s", (f"%{token}%", f"%{token}%"))
 
 
 def _message(token: str, sender: str, subject: str, body: str, to: str = "support@voiddo.com") -> dict:
@@ -82,6 +84,28 @@ def test_studio_mail_owner_command_accepts_russian_alias(monkeypatch):
         get_settings.cache_clear()
 
 
+def test_studio_mail_high_risk_owner_command_creates_review_task(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    owner = f"owner-{token}@example.test"
+    monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)
+    get_settings.cache_clear()
+    try:
+        result = ingest_studio_mail_messages([_message(token, owner, "RUN SHELL", f"RUN SHELL {token}")])
+        assert result["owner_command_count"] == 1
+        command = fetch_one("SELECT command, risk_level, status, result_json FROM owner_commands WHERE message_id = %s", (f"<msg-{token}@example.test>",))
+        assert command["command"] == "RUN SHELL"
+        assert command["risk_level"] == "HIGH_RISK"
+        assert command["status"] == "review_required"
+        assert command["result_json"]["action"] == "review_required"
+        assert command["result_json"]["codex_task_id"]
+        task = fetch_one("SELECT type, status FROM codex_tasks WHERE id = %s", (command["result_json"]["codex_task_id"],))
+        assert task["type"] == "owner_command_review"
+        assert task["status"] == "open"
+    finally:
+        _cleanup(token)
+        get_settings.cache_clear()
+
+
 def test_studio_mail_classifies_unsubscribe_and_suppresses_without_reply():
     token = uuid.uuid4().hex[:8]
     sender = f"stop-{token}@example.test"
@@ -99,6 +123,22 @@ def test_studio_mail_classifies_unsubscribe_and_suppresses_without_reply():
         _cleanup(token)
 
 
+def test_studio_mail_bounce_records_mail_signal_without_raw_address():
+    token = uuid.uuid4().hex[:8]
+    sender = f"mailer-daemon-{token}@mx.example.test"
+    try:
+        result = ingest_studio_mail_messages([_message(token, sender, "Delivery Status Notification", f"Delivery failed {token}", "em@voiddo.com")])
+        assert result["stored_count"] == 1
+        assert result["results"][0]["classification"] == "bounce"
+        assert result["results"][0]["mail_signal"]["signal_type"] == "bounce"
+        signal = fetch_one("SELECT signal_type, raw_summary, recipient_hash FROM mail_signals WHERE message_id = %s", (f"<msg-{token}@example.test>",))
+        assert signal["signal_type"] == "bounce"
+        assert sender not in signal["raw_summary"]
+        assert signal["recipient_hash"] != sender
+    finally:
+        _cleanup(token)
+
+
 def test_studio_mail_personal_support_is_human_review_and_redacted_in_listing():
     token = uuid.uuid4().hex[:8]
     sender = f"person-{token}@example.test"
@@ -108,6 +148,11 @@ def test_studio_mail_personal_support_is_human_review_and_redacted_in_listing():
         assert classified["human_review_required"] is True
         result = ingest_studio_mail_messages([_message(token, sender, "hello", "A private support question", "support@voiddo.com")])
         assert result["human_review_count"] == 1
+        assert result["results"][0]["triage_task"]["task_type"] == "customer_fix_request"
+        task = fetch_one("SELECT type, status, input_json FROM codex_tasks WHERE id = %s", (result["results"][0]["triage_task"]["codex_task_id"],))
+        assert task["type"] == "customer_fix_request"
+        assert task["status"] == "open"
+        assert sender not in str(task["input_json"])
         listed = latest_studio_mail_messages(5)
         assert "person-" not in str(listed)
         assert "private support" not in str(listed).lower()

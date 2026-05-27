@@ -42,6 +42,77 @@ def _alias_from_headers(to_header: str, delivered_to: str = "", x_original_to: s
     return ""
 
 
+def _message_hash(message_id: str) -> str:
+    return hashlib.sha256((message_id or "").encode("utf-8")).hexdigest()[:16]
+
+
+def _record_mail_signal(classified: dict[str, Any], message: dict[str, Any], message_id: str) -> dict[str, Any] | None:
+    signal_map = {
+        "bounce": ("bounce", "warning", "studio_mail_monitor", "studio mailbox delivery failure"),
+        "dmarc_report": ("dmarc_failure", "info", "studio_mail_monitor", "studio mailbox DMARC report received"),
+    }
+    if classified["classification"] not in signal_map:
+        return None
+    signal_type, severity, source, summary = signal_map[classified["classification"]]
+    sender = parseaddr(str(message.get("sender") or ""))[1].lower()
+    row = execute(
+        """
+        INSERT INTO mail_signals(signal_type, severity, source, mailbox, recipient_hash, provider, message_id, raw_summary)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            signal_type,
+            severity,
+            source,
+            str(message.get("mailbox") or "studio:voiddo"),
+            _hash_email(sender),
+            classified.get("sender_domain") or "",
+            message_id,
+            summary,
+        ),
+    )
+    return {"mail_signal_id": str(row["id"]), "signal_type": signal_type, "severity": severity}
+
+
+def _create_studio_mail_task(classified: dict[str, Any], message: dict[str, Any], message_id: str) -> dict[str, Any] | None:
+    task_map = {
+        "billing": ("billing_bug", "high", "Autonomously triage billing mailbox signal"),
+        "personal_or_support": ("customer_fix_request", "medium", "Autonomously triage studio support mailbox signal"),
+        "stale_outreach_reply": ("outreach_template_improvement", "medium", "Autonomously triage stale outreach reply"),
+    }
+    if classified["classification"] not in task_map:
+        return None
+    task_type, priority, title = task_map[classified["classification"]]
+    row = execute(
+        """
+        INSERT INTO codex_tasks(type, priority, status, title, description, input_json)
+        VALUES (%s, %s, 'open', %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            task_type,
+            priority,
+            title,
+            "Created from studio mailbox monitor. Payload is redacted; inspect mailbox through approved monitor tooling only.",
+            Jsonb(
+                {
+                    "source": "studio_mail_monitor",
+                    "classification": classified["classification"],
+                    "priority": classified["priority"],
+                    "alias": classified["alias"],
+                    "sender_hash": classified["sender_hash"],
+                    "sender_domain": classified["sender_domain"],
+                    "message_hash": _message_hash(message_id),
+                    "autonomous_next_step": "classify_context_prepare_safe_action",
+                    **SAFE_FLAGS,
+                }
+            ),
+        ),
+    )
+    return {"codex_task_id": str(row["id"]), "task_type": task_type, "task_priority": priority}
+
+
 def classify_studio_mail(message: dict[str, Any]) -> dict[str, Any]:
     sender = parseaddr(str(message.get("sender") or ""))[1].lower()
     reply_to = parseaddr(str(message.get("reply_to") or ""))[1].lower()
@@ -107,6 +178,8 @@ def store_studio_mail_message(message: dict[str, Any]) -> dict[str, Any]:
     classified = classify_studio_mail(message)
     owner_command_id = None
     owner_result: dict[str, Any] | None = None
+    mail_signal: dict[str, Any] | None = None
+    triage_task: dict[str, Any] | None = None
 
     existing = fetch_all(
         """
@@ -141,6 +214,8 @@ def store_studio_mail_message(message: dict[str, Any]) -> dict[str, Any]:
             }
         )
         owner_command_id = owner_result.get("id")
+    mail_signal = _record_mail_signal(classified, message, message_id)
+    triage_task = _create_studio_mail_task(classified, message, message_id)
 
     result_json = json_safe(
         {
@@ -149,6 +224,8 @@ def store_studio_mail_message(message: dict[str, Any]) -> dict[str, Any]:
             "alias": classified["alias"],
             "sender_domain": classified["sender_domain"],
             "owner_command_id": owner_command_id,
+            "mail_signal": mail_signal,
+            "triage_task": triage_task,
             "owner_command": {
                 "command": owner_result.get("command") if owner_result else None,
                 "risk_level": owner_result.get("risk_level") if owner_result else None,
@@ -236,6 +313,8 @@ def store_studio_mail_message(message: dict[str, Any]) -> dict[str, Any]:
         "priority": classified["priority"],
         "human_review_required": classified["human_review_required"],
         "owner_command_id": owner_command_id,
+        "mail_signal": mail_signal,
+        "triage_task": triage_task,
         **SAFE_FLAGS,
     }
 

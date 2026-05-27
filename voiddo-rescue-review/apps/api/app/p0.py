@@ -1508,7 +1508,31 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
     command = parsed["command"]
     risk = parsed["risk_level"]
     if risk == "HIGH_RISK":
-        result = {"ok": False, "action": "review_required", "reason": "high_risk_command_blocked"}
+        task = execute(
+            """
+            INSERT INTO codex_tasks(type, priority, status, title, description, input_json)
+            VALUES ('owner_command_review', 'high', 'open', 'Review blocked owner command',
+                    'High-risk owner command was blocked by the autonomous command gate. No shell or live-send action was executed.', %s)
+            RETURNING id
+            """,
+            (
+                Jsonb(
+                    json_safe(
+                        {
+                            "command": command,
+                            "risk_level": risk,
+                            "args": parsed.get("args_json", {}),
+                            "reason": "high_risk_command_blocked",
+                            "send_mail": False,
+                            "smtp_called": False,
+                            "live_outreach_allowed": False,
+                            "secrets_included": False,
+                        }
+                    )
+                ),
+            ),
+        )
+        result = {"ok": False, "action": "review_required", "reason": "high_risk_command_blocked", "codex_task_id": str(task["id"])}
     elif command == "STATUS":
         result = {"ok": True, "action": "metrics", "metrics": admin_metrics_from_db()}
     elif command == "REPORT TODAY":
