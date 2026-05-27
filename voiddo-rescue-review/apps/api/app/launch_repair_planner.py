@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any, Callable
 
 from psycopg.types.json import Jsonb
@@ -8,7 +9,7 @@ from .buyer_journey_scenarios import run_buyer_journey_scenario
 from .campaign_control_room import prepare_campaign_control_room
 from .db import execute, fetch_one
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
-from .mailer_control_room import mailer_policy_score
+from .mailer_control_room import mailer_digest_trend_guard, mailer_policy_score, record_mailer_policy_score_history
 from .p0 import build_warmup_calendar, json_safe, run_mail_qa
 
 
@@ -178,9 +179,30 @@ def launch_repair_plan(limit: int = 25) -> dict[str, Any]:
 
 
 def _handlers() -> dict[str, Callable[[], dict[str, Any]]]:
+    def record_policy_score() -> dict[str, Any]:
+        agent_run = execute(
+            "INSERT INTO agent_runs(agent, status, started_at) VALUES ('mailer_digest_trend_guard_agent', 'running', now()) RETURNING id"
+        )
+        trend_guard = mailer_digest_trend_guard()
+        execute(
+            "UPDATE agent_runs SET status = 'completed', completed_at = now(), result_json = %s WHERE id = %s RETURNING id",
+            (Jsonb(trend_guard), agent_run["id"]),
+        )
+        score = mailer_policy_score()
+        history = record_mailer_policy_score_history(str(uuid.uuid4()), score)
+        return {
+            "trend_guard_agent_run_id": str(agent_run["id"]),
+            "trend_guard": trend_guard,
+            "score": score,
+            "history": history,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+        }
+
     return {
         "mail_qa_no_send": lambda: run_mail_qa(allow_deliverability_send=False),
-        "mailer_policy_score": mailer_policy_score,
+        "mailer_policy_score": record_policy_score,
         "buyer_journey_scenario_no_send": lambda: run_buyer_journey_scenario(cleanup=True),
         "campaign_preview_refresh": lambda: prepare_campaign_control_room(100, 70, dry_run=True),
         "warmup_calendar_no_send": lambda: build_warmup_calendar(),

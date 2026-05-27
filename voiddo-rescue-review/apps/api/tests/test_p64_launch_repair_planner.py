@@ -24,6 +24,7 @@ def _cleanup() -> None:
         "DELETE FROM codex_tasks WHERE input_json->>'source' = 'launch_repair_planner' AND title LIKE %s",
         ("Review launch blocker:%",),
     )
+    execute("DELETE FROM agent_runs WHERE agent = 'mailer_digest_trend_guard_agent' AND result_json::text LIKE %s", ("%p64-trend-guard%",))
 
 
 def test_launch_repair_plan_endpoint_requires_auth_and_is_no_send():
@@ -108,12 +109,16 @@ def test_launch_repair_execute_safe_auto_without_sending(monkeypatch):
                 "secrets_included": False,
             },
         )
+        monkeypatch.setattr(planner_module, "mailer_digest_trend_guard", lambda: {"decision": "PASS_NO_SEND", "regressions": [], "marker": "p64-trend-guard", "send_mail": False, "smtp_called": False, "live_outreach_allowed": False})
         monkeypatch.setattr(planner_module, "mailer_policy_score", lambda: {"score": 90, "decision": "NO_SEND_OBSERVE", "send_mail": False, "smtp_called": False, "live_outreach_allowed": False})
+        monkeypatch.setattr(planner_module, "record_mailer_policy_score_history", lambda agent_run_id, score: {"id": "history-test", "agent_run_id": agent_run_id, "send_mail": False, "smtp_called": False, "live_outreach_allowed": False})
         result = execute_launch_repair_plan(5, dry_run=False)
         assert result["status"] == "executed"
         assert result["executed_count"] == 1
         assert result["review_task_count"] == 0
-        assert result["results"][0]["result"]["send_mail"] is False
+        assert result["results"][0]["result"]["trend_guard"]["send_mail"] is False
+        assert result["results"][0]["result"]["score"]["send_mail"] is False
+        assert result["results"][0]["result"]["history"]["send_mail"] is False
         assert fetch_one("SELECT id FROM system_events WHERE type = 'launch_repair.plan_executed' ORDER BY created_at DESC LIMIT 1")
     finally:
         _cleanup()
