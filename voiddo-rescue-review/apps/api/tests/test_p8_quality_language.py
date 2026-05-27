@@ -12,7 +12,7 @@ from app.db import execute, fetch_one
 from app.language_gate import check_no_ai_public_language
 from app.main import app
 from app.scout_quality import run_scout_self_check
-from app.scouts import create_scout_run, create_scout_source, prepare_scout_source_from_adapter, process_scout_run
+from app.scouts import create_scout_run, create_scout_source, prepare_scout_source_from_adapter, process_scout_run, queue_ready_scout_source_runs, ready_scout_source_queue_candidates
 from app.source_adapters import directory_rows_to_csv, domain_list_to_csv, normalize_domain
 
 
@@ -58,6 +58,36 @@ def test_adapter_source_preflight_creates_readiness_without_processing_or_leakin
         assert result["raw_recipient_addresses_included"] is False
         assert "owner@" not in str(result)
     finally:
+        execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (result["source"]["id"],))
+        execute("DELETE FROM scout_sources WHERE id = %s", (result["source"]["id"],))
+
+
+def test_ready_source_queue_candidates_are_redacted_and_preview_only():
+    token = uuid.uuid4().hex[:8]
+    result = prepare_scout_source_from_adapter(
+        "domain_list",
+        {
+            "name": f"p81-source-{token}",
+            "text": f"p81-{token}.example.test",
+            "country": "EE",
+            "language": "en",
+            "niche": "dentists",
+        },
+    )
+    try:
+        candidates = ready_scout_source_queue_candidates(10)
+        matching = [item for item in candidates["candidates"] if item["source"]["id"] == result["source"]["id"]]
+        assert matching
+        assert matching[0]["source"]["config_redacted"] is True
+        assert candidates["send_mail"] is False
+        assert candidates["raw_recipient_addresses_included"] is False
+        preview = queue_ready_scout_source_runs(10, dry_run=True)
+        assert preview["status"] == "preview_only"
+        assert preview["queued_count"] == 0
+        assert preview["created_scanner_jobs"] == 0
+        assert preview["send_mail"] is False
+    finally:
+        execute("DELETE FROM scout_runs WHERE source_id = %s", (result["source"]["id"],))
         execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (result["source"]["id"],))
         execute("DELETE FROM scout_sources WHERE id = %s", (result["source"]["id"],))
 
@@ -116,6 +146,11 @@ def test_no_ai_public_language_gate_fails_bad_sample():
 def test_p8_admin_endpoints_work():
     assert client.post("/admin/source-adapters/domain-list", json={"text": "example.com"}).status_code == 401
     assert client.post("/admin/source-adapters/domain-list", json={"text": "example.com"}, headers=admin_headers()).status_code == 200
+    assert client.get("/admin/scouts/source-queue-candidates").status_code == 401
+    assert client.get("/admin/scouts/source-queue-candidates", headers=admin_headers()).status_code == 200
+    queue_response = client.post("/admin/scouts/source-queue", json={"dry_run": True, "limit": 5}, headers=admin_headers())
+    assert queue_response.status_code == 200
+    assert queue_response.json()["queue"]["send_mail"] is False
     assert client.post("/admin/source-adapters/domain-list/source", json={"text": "example.com"}).status_code == 401
     response = client.post(
         "/admin/source-adapters/domain-list/source",

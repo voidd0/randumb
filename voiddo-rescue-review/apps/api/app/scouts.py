@@ -712,6 +712,102 @@ def process_scout_run_gated(run_id: str) -> dict[str, Any]:
     return result
 
 
+def ready_scout_source_queue_candidates(limit: int = 20) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 20), 100))
+    rows = fetch_all(
+        """
+        WITH latest AS (
+          SELECT DISTINCT ON (source_id) *
+          FROM scout_source_readiness_checks
+          ORDER BY source_id, created_at DESC, id DESC
+        )
+        SELECT s.*, latest.id AS readiness_id, latest.status AS readiness_status,
+               latest.score AS readiness_score, latest.row_count AS readiness_row_count,
+               latest.parseable_count AS readiness_parseable_count,
+               latest.created_at AS readiness_created_at
+        FROM scout_sources s
+        JOIN latest ON latest.source_id = s.id
+        WHERE latest.status = 'PASS_SOURCE_READY'
+          AND s.status IN ('active', 'preflight_ready')
+          AND NOT EXISTS (
+            SELECT 1 FROM scout_runs sr
+            WHERE sr.source_id = s.id
+              AND sr.status IN ('queued', 'running', 'completed', 'review_required')
+          )
+        ORDER BY latest.created_at DESC, s.created_at DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    candidates = []
+    for row in rows:
+        source = _public_source_summary(dict(row))
+        candidates.append(
+            {
+                "source": source,
+                "readiness": {
+                    "id": str(row["readiness_id"]),
+                    "status": row["readiness_status"],
+                    "score": int(row["readiness_score"] or 0),
+                    "row_count": int(row["readiness_row_count"] or 0),
+                    "parseable_count": int(row["readiness_parseable_count"] or 0),
+                    "created_at": row["readiness_created_at"].isoformat() if row.get("readiness_created_at") else None,
+                },
+            }
+        )
+    return {
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def queue_ready_scout_source_runs(limit: int = 10, dry_run: bool = True) -> dict[str, Any]:
+    candidates = ready_scout_source_queue_candidates(limit)
+    gate = scout_campaign_expansion_gate()
+    queued: list[dict[str, Any]] = []
+    if dry_run or not gate["allowed"]:
+        return {
+            "status": "preview_only" if dry_run else "blocked",
+            "reason": "" if dry_run else "self_audit_gate_blocked",
+            "dry_run": dry_run,
+            "candidate_count": candidates["candidate_count"],
+            "candidates": candidates["candidates"],
+            "queued_count": 0,
+            "queued": queued,
+            "gate": gate,
+            "created_scanner_jobs": 0,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    for item in candidates["candidates"]:
+        source = item["source"]
+        run = create_scout_run(source["id"], {"country": source.get("country"), "niche": source.get("niche"), "language": source.get("language")})
+        queued.append({"id": str(run["id"]), "source_id": source["id"], "status": run["status"]})
+    return {
+        "status": "queued" if queued else "idle",
+        "reason": "",
+        "dry_run": False,
+        "candidate_count": candidates["candidate_count"],
+        "queued_count": len(queued),
+        "queued": queued,
+        "gate": gate,
+        "created_scanner_jobs": 0,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
 def process_queued_scout_runs(limit: int = 5) -> dict[str, Any]:
     gate = scout_campaign_expansion_gate()
     if not gate["allowed"]:
