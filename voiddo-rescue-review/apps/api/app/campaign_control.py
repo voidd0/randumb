@@ -6,6 +6,7 @@ from psycopg.types.json import Jsonb
 
 from .audit_strength import score_audit_strength
 from .campaign_economics import run_campaign_economics_check
+from .campaign_preview_reviews import campaign_preview_review_summary
 from .db import execute, fetch_all, fetch_one
 from .p0 import latest_decision, mail_signal_summary
 from .scout_quality import lead_scout_quality_gate
@@ -59,6 +60,7 @@ def campaign_readiness_snapshot(campaign_id: str) -> dict[str, Any]:
     min_strength = min(strengths) if strengths else 0
     qualified = len([lead for lead in leads if int(lead.get("score") or 0) >= 70])
     economics = run_campaign_economics_check(campaign_id, campaign.get("offer_key") or "contact_form_repair", 0.02)
+    review_summary = campaign_preview_review_summary(campaign_id)
     signals = mail_signal_summary(24)
     mail_qa = latest_decision("mail_qa_runs")
     visual = latest_decision("visual_qa_runs")
@@ -87,6 +89,10 @@ def campaign_readiness_snapshot(campaign_id: str) -> dict[str, Any]:
         blockers.append({"code": "audit_strength_below_threshold", "severity": "medium", "min_audit_strength": min_strength})
     if economics["decision"] != "pass":
         blockers.append({"code": "campaign_economics_blocked", "severity": "high", "decision": economics["decision"]})
+    if int(review_summary.get("rejected_count") or 0) >= len(leads) and leads:
+        blockers.append({"code": "all_preview_rows_rejected", "severity": "high", "review_summary": review_summary})
+    elif int(review_summary.get("held_count") or 0) > 0:
+        blockers.append({"code": "preview_rows_held_for_review", "severity": "medium", "review_summary": review_summary})
     if mail_qa != "PASS":
         blockers.append({"code": "mail_qa_not_pass", "severity": "high", "decision": mail_qa})
     if signals["bounce_or_dsn_count"] or signals["rate_limit_count"] or signals["spam_signal_count"]:
@@ -137,6 +143,7 @@ def campaign_readiness_snapshot(campaign_id: str) -> dict[str, Any]:
                         "raw_recipient_addresses_included": False,
                         "secrets_included": False,
                     },
+                    "preview_reviews": review_summary,
                 }
             ),
         ),

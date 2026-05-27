@@ -126,3 +126,54 @@ def latest_campaign_preview_reviews(limit: int = 25) -> dict[str, Any]:
             "secrets_included": False,
         }
     )
+
+
+def campaign_preview_review_summary(campaign_id: str) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT cl.id AS campaign_lead_id, latest_review.action, latest_review.reason, latest_review.created_at
+        FROM campaign_leads cl
+        LEFT JOIN LATERAL (
+          SELECT action, reason, created_at
+          FROM campaign_preview_reviews
+          WHERE campaign_lead_id = cl.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) latest_review ON true
+        WHERE cl.campaign_id = %s
+          AND cl.status = 'preview'
+        """,
+        (campaign_id,),
+    )
+    counts = {"approved": 0, "held": 0, "rejected": 0, "unreviewed": 0}
+    latest = []
+    for row in rows:
+        action = row["action"] or "unreviewed"
+        counts[action] = counts.get(action, 0) + 1
+        latest.append(
+            {
+                "campaign_lead_id": str(row["campaign_lead_id"]),
+                "action": action,
+                "reason": row["reason"] or "",
+                "created_at": row["created_at"],
+            }
+        )
+    usable = counts["approved"] + counts["unreviewed"]
+    return json_safe(
+        {
+            "campaign_id": campaign_id,
+            "checked_count": len(rows),
+            "approved_count": counts["approved"],
+            "held_count": counts["held"],
+            "rejected_count": counts["rejected"],
+            "unreviewed_count": counts["unreviewed"],
+            "usable_preview_count": usable,
+            "decision": "BLOCKED_BY_REVIEW" if rows and usable <= 0 else "PASS_REVIEW_GATE",
+            "latest_reviews": latest[:25],
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )

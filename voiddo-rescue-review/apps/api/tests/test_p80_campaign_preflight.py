@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 
 from app.autonomous_agents import run_agent
 from app.campaign_preflight import campaign_preflight_batch, latest_campaign_preflight_runs
-from app.db import execute
+from app.campaign_preview_reviews import review_campaign_preview
+from app.db import execute, fetch_one
 from app.lead_scoring import score_lead
 from app.main import app
 from app.scouts import create_campaign, prepare_campaign
@@ -25,6 +26,7 @@ def _cleanup(token: str) -> None:
     execute("DELETE FROM outbound_mailer_decisions WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM public_language_gate_runs WHERE scope = 'campaign_preview_quality' AND issues_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM agent_runs WHERE agent = 'campaign_preflight_agent' AND result_json::text LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM campaign_preview_reviews WHERE campaign_lead_id IN (SELECT id FROM campaign_leads WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s) OR preview_json::text LIKE %s)", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM campaign_leads WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s) OR preview_json::text LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM campaigns WHERE name LIKE %s", (f"%{token}%",))
     execute("DELETE FROM audit_strength_scores WHERE audit_id IN (SELECT id FROM audits WHERE public_slug LIKE %s)", (f"%{token}%",))
@@ -123,6 +125,24 @@ def test_campaign_preflight_blocks_weak_preview(monkeypatch):
         result = campaign_preflight_batch(5, campaign_id)
         assert result["failed_count"] == 1
         assert "preview_quality_not_pass" in result["runs"][0]["blockers"]
+        assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_preflight_blocks_held_preview_review(monkeypatch):
+    import app.campaign_preflight as preflight
+
+    token = uuid.uuid4().hex[:8]
+    try:
+        campaign_id = _campaign(token)
+        preview = fetch_one("SELECT id FROM campaign_leads WHERE campaign_id = %s LIMIT 1", (campaign_id,))
+        review_campaign_preview(str(preview["id"]), "held", "needs stronger proof")
+        monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        result = campaign_preflight_batch(5, campaign_id)
+        assert result["failed_count"] == 1
+        assert "preview_rows_held_for_review" in result["runs"][0]["blockers"]
+        assert result["runs"][0]["preview_review_summary"]["held_count"] == 1
         assert result["send_mail"] is False
     finally:
         _cleanup(token)

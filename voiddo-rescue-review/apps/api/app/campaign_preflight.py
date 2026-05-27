@@ -5,6 +5,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .campaign_preview_quality import campaign_preview_quality_pack
+from .campaign_preview_reviews import campaign_preview_review_summary
 from .campaign_preflight_status import PREFLIGHT_FRESH_MINUTES, latest_campaign_preflight_status
 from .db import execute, fetch_all, fetch_one
 from .mailer_control_room import mailer_policy_score
@@ -43,6 +44,7 @@ def _campaign_ids(limit: int, campaign_id: str | None = None) -> list[str]:
 
 def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
     quality = campaign_preview_quality_pack(campaign_id, limit)
+    reviews = campaign_preview_review_summary(campaign_id)
     policy = mailer_policy_score()
     transport = transport_gate_status({"email": "redacted@example.test", "body": "Unsubscribe: https://go.rescue.voiddo.com/unsubscribe/preview"})
 
@@ -51,6 +53,10 @@ def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
         blockers.append("preview_quality_not_pass")
     if int(quality.get("ready_count") or 0) <= 0:
         blockers.append("no_ready_preview_rows")
+    if int(reviews.get("usable_preview_count") or 0) <= 0 and int(reviews.get("checked_count") or 0) > 0:
+        blockers.append("preview_reviews_no_usable_rows")
+    if int(reviews.get("held_count") or 0) > 0:
+        blockers.append("preview_rows_held_for_review")
     if int(policy.get("score") or 0) < 90 or policy.get("decision") != "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW":
         blockers.append("mailer_policy_not_ready")
     if transport.get("allowed"):
@@ -70,6 +76,7 @@ def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
             "blocker_count": len(blockers),
             "quality_status": quality.get("status"),
             "quality_blockers_by_code": quality.get("blockers_by_code", {}),
+            "preview_review_summary": reviews,
             "mailer_policy_score": int(policy.get("score") or 0),
             "mailer_policy_decision": policy.get("decision"),
             "transport_allowed": bool(transport.get("allowed")),
