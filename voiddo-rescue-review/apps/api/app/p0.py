@@ -1064,6 +1064,17 @@ def scout_source_readiness_trend_snapshot(limit: int = 8) -> dict[str, Any]:
         direction = "improving"
     else:
         direction = "stable"
+    guard_row = fetch_one(
+        """
+        SELECT result_json
+        FROM agent_runs
+        WHERE agent = 'scout_source_readiness_regression_guard_agent'
+          AND status = 'completed'
+        ORDER BY completed_at DESC NULLS LAST, started_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        """
+    )
+    guard = dict(guard_row["result_json"]) if guard_row and isinstance(guard_row.get("result_json"), dict) else {}
     return {
         "check_count": check_count,
         "current_sources_checked": len(latest_by_source),
@@ -1078,6 +1089,9 @@ def scout_source_readiness_trend_snapshot(limit: int = 8) -> dict[str, Any]:
         "latest_suppressed_email_count": int(latest.get("suppressed_email_count", 0) or 0),
         "latest_invalid_email_count": int(latest.get("invalid_email_count", 0) or 0),
         "blocked_source_trend_direction": direction,
+        "regression_guard_decision": guard.get("decision", "MISSING"),
+        "regression_count": len(guard.get("regressions", [])) if isinstance(guard.get("regressions"), list) else 0,
+        "regression_review_task_created": bool(guard.get("review_task_created", False)),
         "latest_send_mail": bool(latest.get("send_mail", False)),
         "latest_live_outreach_allowed": bool(latest.get("live_outreach_allowed", False)),
         "raw_recipient_addresses_included": False,
@@ -1165,6 +1179,8 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
         f"- scout_source_readiness_latest_status: {scout_source_readiness['latest_status']}",
         f"- scout_source_readiness_latest_score: {scout_source_readiness['latest_score']}",
         f"- scout_source_readiness_trend_direction: {scout_source_readiness['blocked_source_trend_direction']}",
+        f"- scout_source_readiness_regression_guard_decision: {scout_source_readiness['regression_guard_decision']}",
+        f"- scout_source_readiness_regression_count: {scout_source_readiness['regression_count']}",
         f"- scout_source_readiness_latest_send_mail: {str(scout_source_readiness['latest_send_mail']).lower()}",
         "",
         "Raw recipient addresses are intentionally omitted.",
@@ -1222,6 +1238,7 @@ def write_daily_business_report(path: str | Path | None = None) -> dict[str, Any
         f"- scout_source_readiness_sources_blocked: {scout_source_readiness['current_sources_blocked']}",
         f"- scout_source_readiness_latest_status: {scout_source_readiness['latest_status']}",
         f"- scout_source_readiness_trend_direction: {scout_source_readiness['blocked_source_trend_direction']}",
+        f"- scout_source_readiness_regression_guard_decision: {scout_source_readiness['regression_guard_decision']}",
         f"- mailer_policy_raw_recipients: {str(policy_trend['raw_recipient_addresses_included']).lower()}",
         f"- mailer_policy_secrets: {str(policy_trend['secrets_included']).lower()}",
         "",
@@ -1259,6 +1276,8 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
         blockers.append("scout_source_readiness_not_pass")
     if scout_source_readiness["latest_send_mail"] or scout_source_readiness["latest_live_outreach_allowed"]:
         blockers.append("scout_source_readiness_send_state_not_safe")
+    if scout_source_readiness["regression_guard_decision"] not in {"PASS_NO_SEND", "MISSING", "MISSING_NO_SEND"}:
+        blockers.append("scout_source_readiness_regression_guard_not_pass")
     target = Path(path) if path else Path(get_settings().storage_root) / "reports" / "blockers_report.md"
     lines = [
         "# Vøiddo Rescue Blockers Report",
@@ -1289,6 +1308,7 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
         f"- scout_source_readiness_sources_blocked: {scout_source_readiness['current_sources_blocked']}",
         f"- scout_source_readiness_latest_status: {scout_source_readiness['latest_status']}",
         f"- scout_source_readiness_trend_direction: {scout_source_readiness['blocked_source_trend_direction']}",
+        f"- scout_source_readiness_regression_guard_decision: {scout_source_readiness['regression_guard_decision']}",
         f"- live_outreach_sent_count: {snapshot['live_outreach_sent_count']}",
         f"- warmup_sent_count: {snapshot['warmup_sent_count']}",
         "",

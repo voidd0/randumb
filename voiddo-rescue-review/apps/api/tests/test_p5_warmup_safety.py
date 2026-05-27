@@ -192,6 +192,7 @@ def test_scout_source_readiness_trend_snapshot_is_redacted():
         trend = scout_source_readiness_trend_snapshot()
         assert trend["check_count"] >= 1
         assert "blocked_source_trend_direction" in trend
+        assert "regression_guard_decision" in trend
         assert trend["raw_recipient_addresses_included"] is False
         assert trend["secrets_included"] is False
         assert trend["latest_send_mail"] is False
@@ -215,6 +216,8 @@ def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
     assert "scout_campaign_quality_regression_guard_decision" in blockers_text
     assert "scout_source_readiness_check_count" in business_text
     assert "scout_source_readiness_latest_status" in blockers_text
+    assert "scout_source_readiness_regression_guard_decision" in business_text
+    assert "scout_source_readiness_regression_guard_decision" in blockers_text
     assert "No raw recipient addresses" in business_text
     assert "No raw recipient addresses" in blockers_text
 
