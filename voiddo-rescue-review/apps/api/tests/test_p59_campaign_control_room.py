@@ -190,6 +190,30 @@ def test_campaign_preview_self_review_agent_approves_strong_rows_without_send():
         _cleanup(token)
 
 
+def test_campaign_preview_self_review_approves_specific_two_issue_audits():
+    token = uuid.uuid4().hex[:8]
+    try:
+        _lead_id, audit_id = _qualified_lead(token)
+        execute("DELETE FROM audit_issues WHERE audit_id = %s AND issue_type = 'metadata'", (audit_id,))
+        campaign = create_campaign(
+            {
+                "name": f"P59 two issue review {token}",
+                "country": f"P59{token[:3].upper()}",
+                "language": "en",
+                "niche": "dentists",
+                "offer_key": "contact_form_repair",
+            }
+        )
+        prepare_campaign_gated(str(campaign["id"]), 70, 20)
+        result = auto_review_campaign_previews(100, apply=True, campaign_id=str(campaign["id"]))
+        row = [item for item in campaign_preview_rows(100)["rows"] if item["domain"] == f"p59-{token}.clinic"][0]
+        assert row["latest_review_action"] == "approved"
+        assert result["approved_count"] == 1
+        assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
 def test_held_preview_remediation_queues_safe_evidence_refresh_without_send():
     token = uuid.uuid4().hex[:8]
     try:

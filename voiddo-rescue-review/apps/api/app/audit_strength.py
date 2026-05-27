@@ -25,20 +25,33 @@ def score_audit_strength(audit_id: str) -> dict[str, Any]:
         completeness += 15
     else:
         findings.append({"code": "missing_public_slug"})
-    if len(issues) >= 3:
+    issue_count = len(issues)
+    has_strong_issue = any(row.get("severity") in {"critical", "high"} for row in issues)
+    has_screenshot = bool(screenshots)
+    has_public_summary = bool(audit.get("summary"))
+    strong_two_issue_audit = issue_count >= 2 and has_strong_issue and has_screenshot and has_public_summary
+    if issue_count >= 3:
         completeness += 20
         commercial += 20
-    elif issues:
+    elif issue_count >= 2:
+        if strong_two_issue_audit:
+            completeness += 15
+            commercial += 25
+        else:
+            completeness += 10
+            commercial += 10
+            findings.append({"code": "fewer_than_three_issues"})
+    elif issue_count == 1:
         completeness += 10
         commercial += 10
         findings.append({"code": "fewer_than_three_issues"})
     else:
         findings.append({"code": "missing_issues"})
-    if screenshots:
+    if has_screenshot:
         proof += 50
     else:
         findings.append({"code": "missing_screenshots"})
-    if any(row.get("severity") in {"critical", "high"} for row in issues):
+    if has_strong_issue:
         commercial += 20
     final = max(0, min(100, round((completeness + proof + commercial) / 3)))
     row = execute(

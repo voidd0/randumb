@@ -47,13 +47,23 @@ def _preview_rows(campaign_id: str, limit: int) -> list[dict[str, Any]]:
                    c.id AS campaign_id, c.language AS campaign_language, c.offer_key,
                    l.language AS lead_language, l.contact_name,
                    b.name AS business_name, b.domain,
+                   latest_review.action AS latest_review_action,
                    a.public_slug, a.summary
             FROM campaign_leads cl
             JOIN campaigns c ON c.id = cl.campaign_id
             JOIN leads l ON l.id = cl.lead_id
             JOIN businesses b ON b.id = l.business_id
             LEFT JOIN audits a ON a.id = cl.audit_id
+            LEFT JOIN LATERAL (
+              SELECT action
+              FROM campaign_preview_reviews
+              WHERE campaign_lead_id = cl.id
+              ORDER BY created_at DESC
+              LIMIT 1
+            ) latest_review ON true
             WHERE cl.campaign_id = %s
+              AND cl.status = 'preview'
+              AND (latest_review.action IS NULL OR latest_review.action = 'approved')
             ORDER BY cl.score DESC, cl.created_at
             LIMIT %s
             """,

@@ -172,6 +172,19 @@ def test_audit_strength_scores_proof_and_commercial_quality():
     assert score["final_score"] >= 70
 
 
+def test_audit_strength_accepts_specific_two_issue_public_audit():
+    token = uuid.uuid4().hex[:8]
+    business = execute("INSERT INTO businesses(name, domain, source) VALUES (%s, %s, 'p8_test') RETURNING id", (f"Two Issue {token}", f"two-{token}.example.test"))
+    lead = execute("INSERT INTO leads(business_id, email, source) VALUES (%s, %s, 'p8_test') RETURNING id", (business["id"], f"owner@two-{token}.example.test"))
+    audit = execute("INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at) VALUES (%s, %s, %s, %s, 'completed', 76, 'Public checkout and contact path evidence is ready.', %s, now()) RETURNING id", (business["id"], lead["id"], f"two-{token}.example.test", f"https://two-{token}.example.test", f"two-{token}"))
+    for issue_type, severity in [("contact_path", "high"), ("https", "critical")]:
+        execute("INSERT INTO audit_issues(audit_id, issue_type, severity, title, public_text) VALUES (%s, %s, %s, 'Public issue', 'Visible from a public browser session.')", (audit["id"], issue_type, severity))
+    execute("INSERT INTO screenshots(audit_id, type, file_path, public_url, viewport) VALUES (%s, 'desktop', '/tmp/two.png', '/media/two.png', 'desktop')", (audit["id"],))
+    score = score_audit_strength(str(audit["id"]))
+    assert score["final_score"] >= 75
+    assert all(issue["code"] != "fewer_than_three_issues" for issue in score["issues_json"])
+
+
 def test_audit_strength_flags_missing_evidence():
     token = uuid.uuid4().hex[:8]
     business = execute("INSERT INTO businesses(name, domain, source) VALUES (%s, %s, 'p8_test') RETURNING id", (f"Weak {token}", f"weak-{token}.example.test"))

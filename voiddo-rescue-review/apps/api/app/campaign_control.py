@@ -89,9 +89,10 @@ def campaign_readiness_snapshot(campaign_id: str) -> dict[str, Any]:
         blockers.append({"code": "audit_strength_below_threshold", "severity": "medium", "min_audit_strength": min_strength})
     if economics["decision"] != "pass":
         blockers.append({"code": "campaign_economics_blocked", "severity": "high", "decision": economics["decision"]})
+    usable_preview_count = int(review_summary.get("usable_preview_count") or 0)
     if int(review_summary.get("rejected_count") or 0) >= len(leads) and leads:
         blockers.append({"code": "all_preview_rows_rejected", "severity": "high", "review_summary": review_summary})
-    elif int(review_summary.get("held_count") or 0) > 0:
+    elif int(review_summary.get("held_count") or 0) > 0 and usable_preview_count <= 0:
         blockers.append({"code": "preview_rows_held_for_review", "severity": "medium", "review_summary": review_summary})
     if mail_qa != "PASS":
         blockers.append({"code": "mail_qa_not_pass", "severity": "high", "decision": mail_qa})

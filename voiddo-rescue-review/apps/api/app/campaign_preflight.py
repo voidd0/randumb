@@ -55,7 +55,7 @@ def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
         blockers.append("no_ready_preview_rows")
     if int(reviews.get("usable_preview_count") or 0) <= 0 and int(reviews.get("checked_count") or 0) > 0:
         blockers.append("preview_reviews_no_usable_rows")
-    if int(reviews.get("held_count") or 0) > 0:
+    if int(reviews.get("held_count") or 0) > 0 and int(reviews.get("usable_preview_count") or 0) <= 0:
         blockers.append("preview_rows_held_for_review")
     if int(policy.get("score") or 0) < 90 or policy.get("decision") != "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW":
         blockers.append("mailer_policy_not_ready")

@@ -4,6 +4,7 @@ import os
 import uuid
 
 from fastapi.testclient import TestClient
+from psycopg.types.json import Jsonb
 
 from app.autonomous_agents import run_agent
 from app.campaign_preflight import campaign_preflight_batch, latest_campaign_preflight_runs
@@ -144,6 +145,58 @@ def test_campaign_preflight_blocks_held_preview_review(monkeypatch):
         assert "preview_rows_held_for_review" in result["runs"][0]["blockers"]
         assert result["runs"][0]["preview_review_summary"]["held_count"] == 1
         assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_preflight_excludes_held_rows_when_usable_rows_exist(monkeypatch):
+    import app.campaign_preflight as preflight
+
+    token = uuid.uuid4().hex[:8]
+    try:
+        campaign_id = _campaign(token)
+        weak_domain = f"p80-held-{token}.clinic"
+        business = execute(
+            """
+            INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
+            VALUES (%s, 'QA', 'Preflight City', 'en', 'dentists', 'p80_test', %s, %s, %s, 'scouted')
+            RETURNING id
+            """,
+            (f"P80 Held Clinic {token}", f"https://{weak_domain}", weak_domain, f"held-{token}@{weak_domain}"),
+        )
+        lead = execute(
+            """
+            INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
+            VALUES (%s, %s, 'p80_test', 'scouted', 91, 'en', 'QA', 'Preflight City', 'dentists')
+            RETURNING id
+            """,
+            (business["id"], f"held-{token}@{weak_domain}"),
+        )
+        audit = execute(
+            """
+            INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+            VALUES (%s, %s, %s, %s, 'completed', 50, 'Weak single issue audit.', %s, now())
+            RETURNING id
+            """,
+            (business["id"], lead["id"], weak_domain, f"https://{weak_domain}", f"p80-held-{token}"),
+        )
+        execute("INSERT INTO audit_issues(audit_id, issue_type, severity, title, public_text) VALUES (%s, 'metadata', 'medium', 'Metadata issue', 'Visible from a public browser session.')", (audit["id"],))
+        preview = execute(
+            """
+            INSERT INTO campaign_leads(campaign_id, lead_id, audit_id, status, score, preview_json)
+            VALUES (%s, %s, %s, 'preview', 91, %s)
+            RETURNING id
+            """,
+            (campaign_id, lead["id"], audit["id"], Jsonb({"token": token, "kind": "held_weak_row"})),
+        )
+        review_campaign_preview(str(preview["id"]), "held", "single weak issue stays excluded")
+        monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        result = campaign_preflight_batch(5, campaign_id)
+        run = result["runs"][0]
+        assert result["passed_count"] == 1
+        assert run["preview_review_summary"]["held_count"] == 1
+        assert "preview_rows_held_for_review" not in run["blockers"]
+        assert run["send_mail"] is False
     finally:
         _cleanup(token)
 
