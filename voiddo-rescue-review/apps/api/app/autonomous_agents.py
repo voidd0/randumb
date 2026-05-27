@@ -34,6 +34,7 @@ from .p0 import (
 )
 from .quality_plugins import latest_quality_summary
 from .revenue_simulation import run_synthetic_lead_simulation
+from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .language_gate import check_no_ai_public_language
 from .scouts import cleanup_scout_source_readiness_checks, process_queued_scout_runs, process_scout_run_gated, ready_scout_source_queue_candidates, run_scout_source_readiness, scout_source_readiness_regression_guard, scout_source_readiness_summary
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_quality_gate, record_scout_campaign_quality_history, run_scout_quality_gate, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
@@ -152,6 +153,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "reply_action_agent": lambda: plan_reply_action("Price", "How much does it cost?", "audit@voiddorescue.com"),
         "quality_plugin_agent": lambda: latest_quality_summary(),
         "revenue_simulation_agent": lambda: run_synthetic_lead_simulation(int(payload.get("count", 25))),
+        "revenue_loop_snapshot_agent": lambda: revenue_loop_snapshot(int(payload.get("limit", 25))),
+        "revenue_loop_prepare_agent": lambda: prepare_revenue_loop(int(payload.get("limit", 25)), dry_run=True),
         "mail_clean_window_agent": lambda: check_mail_clean_window(24),
         "mail_clean_window_transition_agent": lambda: run_clean_window_transition(24),
         "mailer_status_agent": lambda: mailer_status_snapshot(),
@@ -203,6 +206,8 @@ def run_daily_loop() -> dict[str, Any]:
         "scout_campaign_quality_summary_agent",
         "scout_campaign_quality_retention_agent",
         "scout_campaign_quality_regression_guard_agent",
+        "revenue_loop_snapshot_agent",
+        "revenue_loop_prepare_agent",
         "outbound_mailer_gate_agent",
         "reply_action_agent",
         "mail_clean_window_transition_agent",

@@ -63,6 +63,7 @@ from .monitoring import ensure_monitoring_target, process_due_monitoring_targets
 from .language_gate import check_no_ai_public_language
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
+from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, latest_scout_quality_gate, run_scout_quality_gate, run_scout_self_check, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, latest_scout_source_readiness, latest_scout_source_readiness_regression_guard_summary, prepare_campaign, prepare_campaign_gated, prepare_scout_source_from_adapter, process_scout_run, process_scout_run_gated, queue_ready_scout_source_runs, ready_scout_source_queue_candidates, run_scout_source_readiness, scout_campaign_expansion_gate, scout_source_readiness_gate, scout_source_readiness_regression_guard, scout_source_readiness_summary
@@ -881,6 +882,28 @@ async def revenue_simulate(request: Request):
             payload.get("country", "EE"),
             payload.get("niche", "dentists"),
             payload.get("product_key", "contact_form_repair"),
+        ),
+    }
+
+
+@app.get("/admin/revenue-loop", dependencies=[Depends(require_admin)])
+def revenue_loop_get(limit: int = 25):
+    return {"ok": True, "revenue_loop": revenue_loop_snapshot(limit)}
+
+
+@app.post("/admin/revenue-loop/prepare", dependencies=[Depends(require_admin)])
+async def revenue_loop_prepare(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "revenue_loop": prepare_revenue_loop(
+            int(payload.get("limit", 25)),
+            bool(payload.get("dry_run", True)),
+            bool(payload.get("activate_sources", False)),
+            payload.get("source_id"),
+            bool(payload.get("allow_bulk_source_activation", False)),
+            bool(payload.get("prepare_campaigns", True)),
+            bool(payload.get("prepare_customers", True)),
         ),
     }
 
