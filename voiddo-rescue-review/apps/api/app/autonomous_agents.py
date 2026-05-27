@@ -62,6 +62,7 @@ from .scanner_queue_hygiene import archive_scanner_queue_artifacts, scanner_queu
 from .scanner_priority import prioritize_guided_scanner_jobs, scanner_guided_backlog
 from .scanner_completion_watch import scanner_completion_watch
 from .source_scanner_queue import queue_source_scanner_jobs, source_scanner_backlog
+from .scout_sensitive_hygiene import archive_sensitive_scout_targets, scout_sensitive_target_snapshot
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
@@ -211,6 +212,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("limit", 50)),
             int(payload.get("older_than_minutes", 120)),
         ),
+        "scout_sensitive_hygiene_agent": lambda: archive_sensitive_scout_targets(
+            int(payload.get("limit", 200)),
+            apply=bool(payload.get("apply", True)),
+        ),
+        "scout_sensitive_hygiene_snapshot_agent": lambda: scout_sensitive_target_snapshot(int(payload.get("limit", 200))),
         "audit_page_agent": lambda: {"dry_run": True, "status": "audit_pages_api_backed"},
         "audit_evidence_candidates_agent": lambda: audit_evidence_candidates(int(payload.get("limit", 25))),
         "audit_evidence_remediation_agent": lambda: audit_evidence_remediation(
@@ -403,6 +409,8 @@ def run_daily_loop() -> dict[str, Any]:
         "scout_source_feedback_agent",
         "scout_run_recovery_agent",
         "scout_run_recovery_snapshot_agent",
+        "scout_sensitive_hygiene_agent",
+        "scout_sensitive_hygiene_snapshot_agent",
         "campaign_agent",
         "campaign_operator_agent",
         "campaign_control_room_agent",
@@ -463,6 +471,7 @@ def run_daily_loop() -> dict[str, Any]:
         "scout_campaign_quality_summary_agent",
         "scout_campaign_quality_retention_agent",
         "scout_campaign_quality_regression_guard_agent",
+        "scout_sensitive_hygiene_snapshot_agent",
         "revenue_loop_snapshot_agent",
         "revenue_loop_prepare_agent",
         "outbound_mailer_gate_agent",

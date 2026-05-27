@@ -21,11 +21,11 @@ def _is_test_job(row: dict[str, Any]) -> str:
     url = str(row.get("url") or "").lower()
     business_name = str(row.get("business_name") or "").lower()
     result_text = str(row.get("result_json") or "").lower()
-    if ".example.test" in url or url.startswith("https://example.com") or url.startswith("http://example.com"):
+    if "example.test" in url or url.startswith("https://example.com") or url.startswith("http://example.com"):
         return "test_url"
     if business_name.startswith(("sim-", "p7 ", "p8 ", "p9 ", "p74 ", "self-")):
         return "test_business_name"
-    if ".example.test" in result_text or "pytest" in result_text:
+    if "example.test" in result_text or "pytest" in result_text:
         return "test_result_metadata"
     return ""
 

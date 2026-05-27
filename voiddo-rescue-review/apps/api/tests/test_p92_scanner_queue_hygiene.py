@@ -39,15 +39,18 @@ def test_scanner_queue_hygiene_archives_queued_test_jobs_only():
     token = uuid.uuid4().hex[:8]
     try:
         test_job = _job(token, f"https://sim-{token}.example.test", f"sim-{token}")
+        compact_test_job = _job(token, f"https://self-{token}example.test", f"One {token}")
         real_job = _job(token, f"https://real-{token}.com", f"Real {token}")
         snapshot = scanner_queue_hygiene_snapshot(50)
-        assert snapshot["artifact_count"] >= 1
+        assert snapshot["artifact_count"] >= 2
         result = archive_scanner_queue_artifacts(50, apply=True)
-        assert result["archived_count"] >= 1
+        assert result["archived_count"] >= 2
         assert result["send_mail"] is False
         archived = fetch_one("SELECT status, result_json FROM scanner_jobs WHERE id = %s", (test_job["id"],))
+        compact_archived = fetch_one("SELECT status FROM scanner_jobs WHERE id = %s", (compact_test_job["id"],))
         real = fetch_one("SELECT status FROM scanner_jobs WHERE id = %s", (real_job["id"],))
         assert archived["status"] == "archived_test_artifact"
+        assert compact_archived["status"] == "archived_test_artifact"
         assert archived["result_json"]["scanner_queue_hygiene"]["live_outreach_allowed"] is False
         assert real["status"] == "queued"
     finally:

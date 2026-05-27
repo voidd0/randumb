@@ -26,7 +26,7 @@ def _artifact_reason(row: dict[str, Any]) -> str:
     lead_source = str(row.get("lead_source") or "").lower()
     campaign_name = str(row.get("campaign_name") or "").lower()
     preview_text = str(row.get("preview_json") or "").lower()
-    if domain.endswith(".example.test") or domain in {"example.com", "localhost"}:
+    if "example.test" in domain or domain in {"example.com", "localhost"}:
         return "test_domain"
     if campaign_country.startswith(TEST_COUNTRY_PREFIXES):
         return "test_campaign_country"

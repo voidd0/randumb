@@ -63,6 +63,7 @@ from .campaign_remediation import campaign_remediation_plan, execute_campaign_re
 from .campaign_remediation_feedback import campaign_remediation_feedback, latest_campaign_remediation_feedback
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, latest_campaign_preview_refresh_runs, refresh_campaign_previews_if_needed
 from .campaign_preview_hygiene import archive_campaign_preview_artifacts, campaign_preview_hygiene_snapshot
+from .scout_sensitive_hygiene import archive_sensitive_scout_targets, scout_sensitive_target_snapshot
 from .post_scan_campaign_cycle import latest_post_scan_campaign_cycles, post_scan_campaign_cycle
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .studio_mail_monitor import ingest_studio_mail_messages, latest_studio_mail_messages, latest_studio_mail_runs
@@ -1239,6 +1240,23 @@ async def campaign_preview_archive_artifacts(request: Request):
         "ok": True,
         "hygiene": archive_campaign_preview_artifacts(
             int(payload.get("limit", 500)),
+            bool(payload.get("apply", False)),
+        ),
+    }
+
+
+@app.get("/admin/scouts/sensitive-targets", dependencies=[Depends(require_admin)])
+def scout_sensitive_targets_get(limit: int = 200):
+    return {"ok": True, "hygiene": scout_sensitive_target_snapshot(limit)}
+
+
+@app.post("/admin/scouts/archive-sensitive-targets", dependencies=[Depends(require_admin)])
+async def scout_sensitive_targets_archive(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "hygiene": archive_sensitive_scout_targets(
+            int(payload.get("limit", 200)),
             bool(payload.get("apply", False)),
         ),
     }

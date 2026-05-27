@@ -18,16 +18,33 @@ from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 EXCLUDED_NICHES = {"government", "banks", "bank", "hospitals", "hospital", "gambling", "adult", "crypto", "political"}
 EXCLUDED_LARGE_BRAND_TOKENS = {
     "bestwestern",
+    "casino",
     "choicehotels",
+    "cityof",
+    "communityhealth",
+    "county",
+    "department",
+    "dept",
+    "enterprise",
+    "gov",
+    "healthsystem",
     "hilton",
     "holidayinn",
+    "hopkinsmedicine",
+    "hospital",
     "hyatt",
     "ihg",
     "lq.com",
     "marriott",
+    "medicalcenter",
     "motel6",
     "radissonhotels",
+    "renown",
+    "ryancompanies",
+    "schooldistrict",
     "super8",
+    "university",
+    "wyndham",
     "wyndhamhotels",
 }
 SUPPORTED_SCOUT_TYPES = {
@@ -203,6 +220,13 @@ def _source_row_confidence(row: dict[str, Any]) -> float:
 def _is_excluded_large_brand(business_name: str, domain: str, website: str = "") -> bool:
     combined = re.sub(r"[^a-z0-9.]+", "", f"{business_name} {domain} {website}".lower())
     return any(token in combined for token in EXCLUDED_LARGE_BRAND_TOKENS)
+
+
+def is_excluded_sensitive_target(business_name: str, domain: str, website: str = "", niche: str = "") -> bool:
+    normalized_niche = (niche or "").strip().lower()
+    if normalized_niche in EXCLUDED_NICHES:
+        return True
+    return _is_excluded_large_brand(business_name, domain, website)
 
 
 def run_scout_source_readiness(source_id: str) -> dict[str, Any]:
@@ -614,8 +638,8 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
         rejection_reason = ""
         if not domain:
             rejection_reason = "missing_domain"
-        elif niche in EXCLUDED_NICHES:
-            rejection_reason = "excluded_niche"
+        elif is_excluded_sensitive_target(business_name, domain, website, niche):
+            rejection_reason = "excluded_niche" if niche in EXCLUDED_NICHES else "excluded_sensitive_target"
         elif fetch_one(
             """
             SELECT 1
@@ -627,7 +651,7 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
         ):
             rejection_reason = "duplicate_scout_lead"
         elif _is_excluded_large_brand(business_name, domain, website):
-            rejection_reason = "excluded_large_enterprise"
+            rejection_reason = "excluded_sensitive_target"
         elif fetch_one("SELECT 1 FROM businesses WHERE lower(domain) = lower(%s)", (domain,)):
             rejection_reason = "duplicate_domain"
         elif email and fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,)):
@@ -692,7 +716,18 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
         scanner_jobs += 1
         previews.append({"lead_id": str(lead["id"]), "domain": domain, "scanner_job_id": str(job["id"])})
         score_lead(str(lead["id"]))
-    result = {"found": len(rows), "accepted": accepted, "rejected": rejected, "scanner_jobs": scanner_jobs, "previews": previews[:20]}
+    result = {
+        "found": len(rows),
+        "accepted": accepted,
+        "rejected": rejected,
+        "scanner_jobs": scanner_jobs,
+        "previews": previews[:20],
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
     execute(
         """
         UPDATE scout_runs
@@ -928,7 +963,9 @@ def prepare_campaign(campaign_id: str, threshold: int = 70, limit: int = 20) -> 
           AND (%s::text IS NULL OR l.language = %s)
           AND (%s::text IS NULL OR l.niche = %s)
           AND l.email IS NOT NULL
+          AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
           AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(s.email) = lower(l.email))
+          AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(COALESCE(s.domain, '')) = lower(COALESCE(b.domain, '')))
         ORDER BY COALESCE(ls.final_score, l.score, 0) DESC, l.created_at DESC
         LIMIT %s
         """,
