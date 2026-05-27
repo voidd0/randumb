@@ -11,7 +11,7 @@ from psycopg.types.json import Jsonb
 
 import app.contact_enrichment as enrichment_module
 from app.autonomous_agents import run_agent
-from app.contact_enrichment import contact_enrichment_candidates, run_hunter_contact_enrichment
+from app.contact_enrichment import contact_enrichment_candidates, run_hunter_contact_enrichment, run_public_contact_page_enrichment
 from app.db import execute, fetch_one
 from app.main import app
 
@@ -25,6 +25,7 @@ def admin_headers() -> dict[str, str]:
 
 def _cleanup(token: str) -> None:
     execute("DELETE FROM contact_enrichment_runs WHERE result_json::text LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM suppression_list WHERE email LIKE %s OR domain LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM lead_scores WHERE reasoning_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM audit_issues WHERE audit_id IN (SELECT id FROM audits WHERE public_slug LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM screenshots WHERE audit_id IN (SELECT id FROM audits WHERE public_slug LIKE %s)", (f"%{token}%",))
@@ -122,6 +123,74 @@ def test_contact_enrichment_agent_and_endpoints_are_admin_gated(monkeypatch):
         assert agent["status"] == "completed"
         assert agent["result_json"]["status"] == "blocked_missing_hunter_api_key"
         assert agent["result_json"]["live_outreach_allowed"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_public_contact_page_enrichment_updates_lead_without_raw_email(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        seeded = _seed_lead(token)
+
+        def _fetch(url: str):
+            if url.endswith("/contact"):
+                return 200, f"<html><a href='mailto:hello@{seeded['domain']}'>Email us</a></html>", url
+            return 200, "<html><a href='/contact'>Contact</a></html>", url
+
+        monkeypatch.setattr(enrichment_module, "fetch_public_contact_page", _fetch)
+        result = run_public_contact_page_enrichment(10, dry_run=False, max_pages_per_domain=4)
+        assert result["enriched_count"] >= 1
+        assert result["send_mail"] is False
+        assert result["smtp_called"] is False
+        assert f"hello@{seeded['domain']}" not in str(result)
+        row = fetch_one("SELECT email FROM leads WHERE id = %s", (seeded["lead_id"],))
+        assert row["email"] == f"hello@{seeded['domain']}"
+    finally:
+        _cleanup(token)
+
+
+def test_public_contact_page_enrichment_respects_suppression(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        seeded = _seed_lead(token)
+        execute(
+            "INSERT INTO suppression_list(email, domain, reason, source) VALUES (%s, %s, 'test', 'p95')",
+            (f"hello@{seeded['domain']}", seeded["domain"]),
+        )
+        monkeypatch.setattr(
+            enrichment_module,
+            "fetch_public_contact_page",
+            lambda url: (200, f"<html>hello@{seeded['domain']}</html>", url),
+        )
+        result = run_public_contact_page_enrichment(10, dry_run=False, max_pages_per_domain=4)
+        assert result["enriched_count"] == 0
+        row = fetch_one("SELECT email FROM leads WHERE id = %s", (seeded["lead_id"],))
+        assert row["email"] is None
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_public_contact_page_agent_and_endpoint_are_admin_gated(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        seeded = _seed_lead(token)
+        monkeypatch.setattr(
+            enrichment_module,
+            "fetch_public_contact_page",
+            lambda url: (200, f"<html>contact@{seeded['domain']}</html>", url),
+        )
+        assert client.post("/admin/leads/contact-enrichment/public-contact-pages", json={"limit": 5}).status_code == 401
+        response = client.post(
+            "/admin/leads/contact-enrichment/public-contact-pages",
+            headers=admin_headers(),
+            json={"limit": 5, "dry_run": True},
+        )
+        assert response.status_code == 200
+        assert response.json()["enrichment"]["dry_run"] is True
+        agent = run_agent("contact_page_enrichment_agent", {"limit": 5, "dry_run": True})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["send_mail"] is False
     finally:
         _cleanup(token)
 

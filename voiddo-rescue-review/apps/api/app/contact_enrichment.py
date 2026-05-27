@@ -4,10 +4,12 @@ import hashlib
 import json
 import re
 from typing import Any
+from urllib.parse import urljoin
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+import httpx
 from psycopg.types.json import Jsonb
 
 from .config import get_settings
@@ -40,10 +42,97 @@ ROLE_LOCALS = {
     "webmaster",
 }
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EMAIL_FIND_RE = re.compile(r"(?i)\b[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}\b")
+MAILTO_RE = re.compile(r"(?i)mailto:([a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,})")
+PUBLIC_CONTACT_PATHS = (
+    "/contact",
+    "/contact/",
+    "/contact-us",
+    "/contact-us/",
+    "/about",
+    "/about/",
+    "/about-us",
+    "/about-us/",
+)
+MAX_PUBLIC_CONTACT_BYTES = 350_000
+PUBLIC_CONTACT_HEADERS = {
+    "User-Agent": "VoiddoRescue/1.0 public-contact-enrichment",
+    "Accept": "text/html,application/xhtml+xml",
+}
 
 
 def _hash(value: str) -> str:
     return hashlib.sha256((value or "").strip().lower().encode("utf-8")).hexdigest()[:12]
+
+
+def _base_url(domain: str, website_url: str | None = None) -> str:
+    raw = (website_url or "").strip()
+    if raw.startswith("http://") or raw.startswith("https://"):
+        return raw.rstrip("/")
+    normalized = normalize_domain(raw or domain)
+    return f"https://{normalized}".rstrip("/")
+
+
+def _contact_urls(domain: str, website_url: str | None = None, max_pages: int = 4) -> list[str]:
+    base = _base_url(domain, website_url)
+    urls: list[str] = [base]
+    for path in PUBLIC_CONTACT_PATHS:
+        urls.append(urljoin(base + "/", path.lstrip("/")))
+    seen: set[str] = set()
+    safe_urls: list[str] = []
+    normalized_domain = normalize_domain(domain)
+    for url in urls:
+        candidate_domain = normalize_domain(url)
+        if not candidate_domain or candidate_domain != normalized_domain:
+            continue
+        if any(marker in url.lower() for marker in ("/admin", "/login", "/wp-admin", "/user", "/account", "/checkout")):
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        safe_urls.append(url)
+        if len(safe_urls) >= max(1, min(max_pages, 8)):
+            break
+    return safe_urls
+
+
+def fetch_public_contact_page(url: str) -> tuple[int, str, str]:
+    with httpx.Client(timeout=12.0, follow_redirects=True, headers=PUBLIC_CONTACT_HEADERS) as client:
+        response = client.get(url)
+    content_type = response.headers.get("content-type", "")
+    if "text/html" not in content_type and "application/xhtml" not in content_type and response.status_code < 400:
+        return response.status_code, "", str(response.url)
+    return response.status_code, response.text[:MAX_PUBLIC_CONTACT_BYTES], str(response.url)
+
+
+def _extract_emails_from_html(html: str) -> set[str]:
+    if not html:
+        return set()
+    scrubbed = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", html)
+    emails = {match.group(1).strip().lower() for match in MAILTO_RE.finditer(scrubbed)}
+    emails.update(match.group(0).strip().lower() for match in EMAIL_FIND_RE.finditer(scrubbed))
+    return {email for email in emails if EMAIL_RE.match(email)}
+
+
+def _select_public_contact_email(domain: str, emails: set[str]) -> tuple[str | None, dict[str, Any]]:
+    normalized_domain = normalize_domain(domain)
+    choices: list[dict[str, Any]] = []
+    for value in emails:
+        local, email_domain = value.split("@", 1)
+        if normalize_domain(email_domain) != normalized_domain:
+            continue
+        if fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (value,)):
+            continue
+        role_bonus = 100 if local in ROLE_LOCALS else 0
+        shorter_bonus = max(0, 30 - len(local))
+        choices.append({"email": value, "local": local, "rank": role_bonus + shorter_bonus})
+    choices.sort(key=lambda row: row["rank"], reverse=True)
+    selected = next((row for row in choices if row["local"] in ROLE_LOCALS), None) or (choices[0] if choices else None)
+    return (selected["email"] if selected else None), {
+        "same_domain_email_count": len(choices),
+        "selected_role": bool(selected and selected["local"] in ROLE_LOCALS),
+        "selected_hash": _hash(selected["email"]) if selected else None,
+    }
 
 
 def contact_enrichment_candidates(limit: int = 25) -> dict[str, Any]:
@@ -226,6 +315,98 @@ def run_hunter_contact_enrichment(limit: int = 10, dry_run: bool = True) -> dict
             "skipped_count": skipped,
             "results": results,
             "dry_run": dry_run,
+            **SAFE_FLAGS,
+        }
+    )
+
+
+def run_public_contact_page_enrichment(limit: int = 10, dry_run: bool = True, max_pages_per_domain: int = 4) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 10), 25))
+    safe_max_pages = max(1, min(int(max_pages_per_domain or 4), 8))
+    candidates = contact_enrichment_candidates(safe_limit)["candidates"]
+    scanned = 0
+    enriched = 0
+    skipped = 0
+    results: list[dict[str, Any]] = []
+    for item in candidates:
+        scanned += 1
+        domain = item["domain"]
+        urls = _contact_urls(domain, None, safe_max_pages)
+        found_emails: set[str] = set()
+        page_results: list[dict[str, Any]] = []
+        for url in urls:
+            try:
+                status_code, html, final_url = fetch_public_contact_page(url)
+            except Exception as exc:
+                page_results.append({"path_hash": _hash(url), "status": "fetch_error", "error": type(exc).__name__})
+                continue
+            page_emails = _extract_emails_from_html(html)
+            found_emails.update(page_emails)
+            page_results.append(
+                {
+                    "path_hash": _hash(url),
+                    "final_path_hash": _hash(final_url),
+                    "status_code": status_code,
+                    "email_count": len(page_emails),
+                }
+            )
+            if page_emails:
+                break
+        selected, evidence = _select_public_contact_email(domain, found_emails)
+        if not selected:
+            skipped += 1
+            results.append(
+                {
+                    "domain_hash": item["domain_hash"],
+                    "status": "no_safe_public_contact_email",
+                    "pages_checked": len(page_results),
+                    "pages": page_results,
+                    **evidence,
+                }
+            )
+            continue
+        if not dry_run:
+            execute("UPDATE leads SET email = COALESCE(email, %s), updated_at = now() WHERE id = %s", (selected, item["lead_id"]))
+            execute("UPDATE businesses SET email = COALESCE(email, %s), updated_at = now() WHERE id = %s", (selected, item["business_id"]))
+            score_lead(item["lead_id"], item["audit_id"])
+        enriched += 1
+        results.append(
+            {
+                "domain_hash": item["domain_hash"],
+                "status": "would_enrich" if dry_run else "enriched",
+                "pages_checked": len(page_results),
+                "pages": page_results,
+                **evidence,
+            }
+        )
+
+    status = "dry_run" if dry_run else ("enriched" if enriched else "no_safe_enrichment")
+    row = execute(
+        """
+        INSERT INTO contact_enrichment_runs(provider, status, scanned_count, enriched_count, skipped_count, result_json)
+        VALUES ('public_contact_page', %s, %s, %s, %s, %s)
+        RETURNING id, created_at
+        """,
+        (
+            status,
+            scanned,
+            enriched,
+            skipped,
+            Jsonb({"results": results, "dry_run": dry_run, "max_pages_per_domain": safe_max_pages, **SAFE_FLAGS}),
+        ),
+    )
+    return json_safe(
+        {
+            "status": status,
+            "run_id": str(row["id"]),
+            "created_at": row["created_at"],
+            "candidate_count": len(candidates),
+            "scanned_count": scanned,
+            "enriched_count": enriched,
+            "skipped_count": skipped,
+            "results": results,
+            "dry_run": dry_run,
+            "max_pages_per_domain": safe_max_pages,
             **SAFE_FLAGS,
         }
     )
