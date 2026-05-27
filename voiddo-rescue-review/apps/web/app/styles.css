@@ -262,7 +262,7 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
 }
 .preview-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.25fr) 72px 72px minmax(130px, 0.8fr) 86px;
+  grid-template-columns: minmax(220px, 1.2fr) 72px 72px minmax(126px, 0.75fr) minmax(104px, 0.7fr) 86px minmax(260px, 1.35fr);
   gap: 10px;
   align-items: center;
   min-height: 64px;
@@ -281,6 +281,26 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
 }
 .preview-row span:not(.tag) {
   color: var(--muted);
+  font-size: 12px;
+}
+.preview-review-form {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) repeat(3, minmax(62px, auto));
+  gap: 6px;
+  align-items: center;
+}
+.preview-review-form input {
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.04);
+  color: var(--ink);
+}
+.preview-review-form .button {
+  min-height: 36px;
+  padding: 0 10px;
   font-size: 12px;
 }
 .ops-grid {
@@ -410,6 +430,8 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
   .segment-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .segment-row { grid-template-columns: 1fr 1fr; }
   .preview-row { grid-template-columns: 1fr 1fr; }
+  .preview-review-form { grid-column: 1 / -1; grid-template-columns: 1fr 1fr 1fr; }
+  .preview-review-form input { grid-column: 1 / -1; }
   .campaign-action-grid { grid-template-columns: 1fr; }
   .campaign-action-row { grid-template-columns: 1fr 1fr; }
   .ops-grid { grid-template-columns: 1fr; }

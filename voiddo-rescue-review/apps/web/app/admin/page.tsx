@@ -29,6 +29,14 @@ export default async function AdminPage() {
     await postJson("/admin/campaign-actions/run", { action, campaign_id, limit, dry_run });
   }
 
+  async function reviewCampaignPreview(formData: FormData) {
+    "use server";
+    const campaign_lead_id = String(formData.get("campaign_lead_id") || "");
+    const action = String(formData.get("review_action") || "held");
+    const reason = String(formData.get("reason") || "");
+    await postJson("/admin/campaign-control-room/review", { campaign_lead_id, action, reason, actor: "admin" });
+  }
+
   const requestHeaders = await headers();
   const authorization = requestHeaders.get("authorization") || "";
   const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
@@ -247,11 +255,22 @@ export default async function AdminPage() {
                     <span className="tag">gate</span>
                     <strong>{row.latest_preflight_status || "missing"}</strong>
                   </div>
+                  <div>
+                    <span className="tag">review</span>
+                    <strong>{row.latest_review_action || "unreviewed"}</strong>
+                  </div>
                   {row.audit_slug ? (
                     <a className="button secondary" href={`/r/${row.audit_slug}`}>Audit</a>
                   ) : (
                     <span className="button secondary disabled">Audit</span>
                   )}
+                  <form className="preview-review-form" action={reviewCampaignPreview}>
+                    <input type="hidden" name="campaign_lead_id" value={row.campaign_lead_id} />
+                    <input type="text" name="reason" aria-label="Review reason" placeholder="reason" defaultValue={row.latest_review_reason || ""} />
+                    <button name="review_action" value="approved" className="button secondary" type="submit">Approve</button>
+                    <button name="review_action" value="held" className="button secondary" type="submit">Hold</button>
+                    <button name="review_action" value="rejected" className="button secondary" type="submit">Reject</button>
+                  </form>
                 </div>
               ))}
             </div>

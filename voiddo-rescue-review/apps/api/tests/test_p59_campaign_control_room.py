@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.autonomous_agents import run_agent
 from app.campaign_control_room import campaign_control_room_snapshot, campaign_preview_rows, prepare_campaign_control_room, qualified_campaign_lead_candidates
+from app.campaign_preview_reviews import latest_campaign_preview_reviews, review_campaign_preview
 from app.db import execute, fetch_one
 from app.lead_scoring import score_lead
 from app.main import app
@@ -22,6 +23,7 @@ def admin_headers() -> dict[str, str]:
 
 def _cleanup(token: str) -> None:
     execute("DELETE FROM agent_runs WHERE agent IN ('campaign_control_room_agent', 'campaign_control_room_prepare_agent') AND result_json::text LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM campaign_preview_reviews WHERE campaign_lead_id IN (SELECT id FROM campaign_leads WHERE preview_json::text LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM campaign_readiness_snapshots WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM campaign_leads WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s) OR preview_json::text LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM campaigns WHERE name LIKE %s OR country = %s", (f"%{token}%", f"P59{token[:3].upper()}"))
@@ -141,6 +143,16 @@ def test_campaign_control_room_preview_rows_are_redacted_no_send():
         assert rows[0]["send_mail"] is False
         assert rows[0]["smtp_called"] is False
         assert rows[0]["audit_slug"] == f"p59-{token}"
+        review = review_campaign_preview(rows[0]["campaign_lead_id"], "approved", "proof looks specific")
+        assert review["send_mail"] is False
+        assert review["raw_recipient_addresses_included"] is False
+        assert f"owner-{token}@" not in str(review)
+        reviewed = campaign_preview_rows(100)
+        reviewed_row = [row for row in reviewed["rows"] if row["domain"] == f"p59-{token}.clinic"][0]
+        assert reviewed_row["latest_review_action"] == "approved"
+        latest_reviews = latest_campaign_preview_reviews(20)
+        assert latest_reviews["send_mail"] is False
+        assert any(item["campaign_lead_id"] == rows[0]["campaign_lead_id"] for item in latest_reviews["reviews"])
     finally:
         _cleanup(token)
 
@@ -148,9 +160,12 @@ def test_campaign_control_room_preview_rows_are_redacted_no_send():
 def test_campaign_control_room_admin_endpoints_require_auth():
     assert client.get("/admin/campaign-control-room").status_code == 401
     assert client.get("/admin/campaign-control-room/preview-rows").status_code == 401
+    assert client.get("/admin/campaign-control-room/reviews").status_code == 401
+    assert client.post("/admin/campaign-control-room/review", json={"campaign_lead_id": str(uuid.uuid4()), "action": "held"}).status_code == 401
     assert client.post("/admin/campaign-control-room/prepare", json={"dry_run": True}).status_code == 401
     assert client.get("/admin/campaign-control-room", headers=admin_headers()).status_code == 200
     assert client.get("/admin/campaign-control-room/preview-rows", headers=admin_headers()).status_code == 200
+    assert client.get("/admin/campaign-control-room/reviews", headers=admin_headers()).status_code == 200
     response = client.post("/admin/campaign-control-room/prepare", json={"dry_run": True, "limit": 5}, headers=admin_headers())
     assert response.status_code == 200
     assert response.json()["control_room"]["status"] == "preview_only"

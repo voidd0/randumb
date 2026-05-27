@@ -57,6 +57,7 @@ from .campaign_economics import run_campaign_economics_check
 from .campaign_control import campaign_readiness_snapshot
 from .campaign_actions import campaign_actions_summary, run_campaign_action
 from .campaign_control_room import campaign_control_room_snapshot, campaign_preview_rows, prepare_campaign_control_room
+from .campaign_preview_reviews import latest_campaign_preview_reviews, review_campaign_preview
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .campaign_preflight import campaign_preflight_batch, latest_campaign_preflight_runs
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation, latest_campaign_remediation_executions, latest_campaign_remediation_plans
@@ -1228,6 +1229,23 @@ def campaign_control_room_get(limit: int = 100, threshold: int = 70):
 @app.get("/admin/campaign-control-room/preview-rows", dependencies=[Depends(require_admin)])
 def campaign_control_room_preview_rows_get(limit: int = 25):
     return {"ok": True, "preview_rows": campaign_preview_rows(limit)}
+
+
+@app.get("/admin/campaign-control-room/reviews", dependencies=[Depends(require_admin)])
+def campaign_control_room_reviews_get(limit: int = 25):
+    return {"ok": True, "reviews": latest_campaign_preview_reviews(limit)}
+
+
+@app.post("/admin/campaign-control-room/review", dependencies=[Depends(require_admin)])
+async def campaign_control_room_review_post(request: Request):
+    payload = await request.json()
+    review = review_campaign_preview(
+        payload.get("campaign_lead_id", ""),
+        payload.get("action", "held"),
+        payload.get("reason", ""),
+        payload.get("actor", "admin"),
+    )
+    return {"ok": True, "review": review}
 
 
 @app.post("/admin/campaign-control-room/prepare", dependencies=[Depends(require_admin)])
