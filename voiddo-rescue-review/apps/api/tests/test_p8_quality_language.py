@@ -8,6 +8,7 @@ import csv
 from fastapi.testclient import TestClient
 
 from app.audit_strength import score_audit_strength
+from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
 from app.language_gate import check_no_ai_public_language
 from app.main import app
@@ -86,7 +87,13 @@ def test_ready_source_queue_candidates_are_redacted_and_preview_only():
         assert preview["queued_count"] == 0
         assert preview["created_scanner_jobs"] == 0
         assert preview["send_mail"] is False
+        agent = run_agent("scout_source_queue_preview_agent", {"limit": 10})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["candidate_count"] >= 1
+        assert agent["result_json"]["send_mail"] is False
+        assert agent["result_json"]["raw_recipient_addresses_included"] is False
     finally:
+        execute("DELETE FROM agent_runs WHERE agent = 'scout_source_queue_preview_agent'")
         execute("DELETE FROM scout_runs WHERE source_id = %s", (result["source"]["id"],))
         execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (result["source"]["id"],))
         execute("DELETE FROM scout_sources WHERE id = %s", (result["source"]["id"],))
