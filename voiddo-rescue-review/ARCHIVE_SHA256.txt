@@ -1,2 +1,2 @@
-P58 export ZIP: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p58-policy-score-agent-admin-surface-2026-05-27.zip`
-P58 export SHA256: `ea812db90cfd5249b452bde9442722af83c0e40a20de8ce27fd1e326a1b93359`
+P59 export ZIP: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p59-policy-score-history-digest-2026-05-27.zip`
+P59 export SHA256: `fa4df481e837ea8fa25adac3fe9bd5704a5e29394faa06a911f3800bd13cfe28`

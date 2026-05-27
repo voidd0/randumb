@@ -83,6 +83,7 @@
 ./apps/api/migrations/026_mailer_ops_run_retention.sql
 ./apps/api/migrations/027_mailer_digest_reports.sql
 ./apps/api/migrations/028_mailer_ops_retention_reports.sql
+./apps/api/migrations/029_mailer_policy_score_history.sql
 ./apps/api/requirements.txt
 ./apps/api/tests/test_core.py
 ./apps/api/tests/test_p0_integration.py
@@ -297,8 +298,10 @@
 ./reports/p58_mailer_policy_score_agent_admin_surface.md
 ./reports/p58_next_self_written_tz.md
 ./reports/p59_next_self_written_tz.md
+./reports/p59_policy_score_history_digest_wiring.md
 ./reports/p5_review_package_hygiene_report.md
 ./reports/p5_warmup_safety_report.md
+./reports/p60_next_self_written_tz.md
 ./reports/p6_autonomous_mailer_report.md
 ./reports/p6_cycle_audit_and_fixes.md
 ./reports/p6_economics_engine_report.md

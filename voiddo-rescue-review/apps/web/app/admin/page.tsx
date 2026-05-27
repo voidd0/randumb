@@ -35,6 +35,7 @@ export default async function AdminPage() {
   const digestData = await fetchJson("/admin/mailer/digest-summary", authorization ? { Authorization: authorization } : {});
   const trendGuardData = await fetchJson("/admin/mailer/digest-trend-guard/latest", authorization ? { Authorization: authorization } : {});
   const policyScoreData = await fetchJson("/admin/mailer/policy-score", authorization ? { Authorization: authorization } : {});
+  const policyScoreHistoryData = await fetchJson("/admin/mailer/policy-score/history", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
@@ -58,6 +59,7 @@ export default async function AdminPage() {
   const trendQueue = trendGuard.queue_hygiene || {};
   const policyScore = policyScoreData?.policy_score || {};
   const policyQueue = policyScore.queue_hygiene || {};
+  const policyScoreHistory = policyScoreHistoryData?.history || digest.mailer_policy_score_history || {};
   const latestRealOpsAction = opsActions.latest_real || {};
   const opsRetentionAgent = opsActions.latest_retention_agent || {};
   const opsRetentionReport = opsActions.retention_agent_report || {};
@@ -314,6 +316,12 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">send</span><span>policy score send state</span><span className="score">{policyScore.send_mail ? "send" : "no-send"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in policy score</span><span className="score">{policyScore.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">secret</span><span>secrets in policy score</span><span className="score">{policyScore.secrets_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">history</span><span>policy score history rows</span><span className="score">{policyScoreHistory.count ?? 0}</span></div>
+            <div className="row"><span className="tag">latest</span><span>latest policy history score</span><span className="score">{policyScoreHistory.latest_score ?? 0}</span></div>
+            <div className="row"><span className="tag">latest</span><span>latest policy history decision</span><span className="score">{policyScoreHistory.latest_decision ?? "missing"}</span></div>
+            <div className="row"><span className="tag">send</span><span>latest policy history send state</span><span className="score">{policyScoreHistory.latest_send_mail ? "send" : "no-send"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in policy history</span><span className="score">{policyScoreHistory.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">secret</span><span>secrets in policy history</span><span className="score">{policyScoreHistory.secrets_included ? "blocked" : "omitted"}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>

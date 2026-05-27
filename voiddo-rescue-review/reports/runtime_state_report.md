@@ -1,11 +1,11 @@
 # Runtime State Report
 
-Generated: 2026-05-27 04:07 IDT
+Generated: 2026-05-27 04:31 IDT
 
 ## Canonical Latest State
 
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- current branch head before P58 commit: `5599bfa8262bac89b30da20d6ef85529084f2644`
+- current branch head before P59 commit: `584c938c796617cdd17dc0b5a0642065f5957919`
 - checkout status: `READY`
 - mail auth status: `PASS`
 - latest mail QA decision: `PASS`
@@ -38,6 +38,11 @@ Generated: 2026-05-27 04:07 IDT
 - mailer policy score agent runs: `1`
 - protected admin surfaces policy score evidence: `true`
 - daily loop includes policy score agent after trend guard: `true`
+- mailer policy score history rows: `2`
+- latest policy score history score: `100`
+- latest policy score history decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
+- latest policy score history send state: `false`
+- digest includes policy score history evidence: `true`
 - daily loop surfaces retention history evidence: `true`
 - owner report includes retention history evidence: `true`
 - raw recipient addresses included: `false`
@@ -53,12 +58,12 @@ Generated: 2026-05-27 04:07 IDT
 
 ## Verification
 
-- targeted P58 mailer policy/admin tests: `45 passed`
-- API tests: `299 passed`
-- smoke test: `299 passed, ok`
+- targeted P59 policy history tests: `31 passed`
+- API tests: `303 passed`
+- smoke test: `303 passed, ok`
 - Next production build: `PASS`
-- Huanshu admin visual gate P58: `PASS`
-- Playwright desktop/mobile + axe + pa11y P58: `PASS`
+- Huanshu admin visual gate P59: `PASS`
+- Playwright desktop/mobile + axe + pa11y P59: `PASS`
 - API/web/worker/postgres/redis: healthy
 
 ## Next Allowed Action

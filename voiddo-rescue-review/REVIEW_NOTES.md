@@ -4,7 +4,7 @@ Branch: `voiddo-rescue-mvp-review-20260526-files`
 
 Folder: `voiddo-rescue-review/`
 
-Pass: `P58 Mailer Policy Score Agent Admin Surface`
+Pass: `P59 Policy Score History and Digest Wiring`
 
 ## Original Runtime Path
 
@@ -36,18 +36,19 @@ Pass: `P58 Mailer Policy Score Agent Admin Surface`
 
 ## Verification
 
-- targeted P58 tests: `45 passed`
-- full API tests: `299 passed`
-- smoke: `299 passed, ok`
+- targeted P59 tests: `31 passed`
+- full API tests: `303 passed`
+- smoke: `303 passed, ok`
 - Next production build: `PASS`
-- Huanshu P58: `PASS`
-- Playwright desktop/mobile + axe + pa11y P58: `PASS`
+- Huanshu P59: `PASS`
+- Playwright desktop/mobile + axe + pa11y P59: `PASS`
 
 ## Runtime Safety
 
 - live outreach sent: `0`
 - warmup sent: `0`
 - mailer policy score: `100`
+- mailer policy history rows: `2`
 - mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
 - non-Rescue projects touched: `no`
 

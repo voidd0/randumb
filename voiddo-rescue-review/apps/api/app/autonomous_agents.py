@@ -11,7 +11,7 @@ from .email_templates import render_all_samples
 from .economics import run_economics_audit
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
-from .mailer_control_room import cleanup_mailer_digest_history, mailer_digest_trend_guard, mailer_policy_score, write_mailer_digest_agent_report, write_owner_status_report
+from .mailer_control_room import cleanup_mailer_digest_history, mailer_digest_trend_guard, mailer_policy_score, record_mailer_policy_score_history, write_mailer_digest_agent_report, write_owner_status_report
 from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mailer_closed_loop import run_mailer_closed_loop
@@ -51,6 +51,8 @@ def _record_agent(agent: str, func: Callable[[], dict[str, Any]]) -> dict[str, A
         if agent == "mailer_ops_retention_agent":
             retention_report = write_mailer_ops_retention_agent_report(str(row["id"]), result)
             result["ops_retention_agent_report"] = retention_report
+        if agent == "mailer_policy_score_agent":
+            result["policy_score_history"] = record_mailer_policy_score_history(str(row["id"]), result)
         done = execute(
             "UPDATE agent_runs SET status = 'completed', completed_at = now(), result_json = %s WHERE id = %s RETURNING *",
             (Jsonb(result), row["id"]),

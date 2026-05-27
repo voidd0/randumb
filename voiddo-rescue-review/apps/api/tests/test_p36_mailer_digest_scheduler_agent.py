@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
-from app.mailer_control_room import latest_mailer_digest_trend_guard_summary, mailer_policy_score
+from app.mailer_control_room import latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, mailer_digest_summary, mailer_policy_score
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -23,6 +23,7 @@ def _cleanup(action_id: str | None = None) -> None:
         execute("DELETE FROM mailer_action_queue WHERE id = %s", (action_id,))
     execute("DELETE FROM mailer_action_queue WHERE payload_json::text LIKE %s", ("%daily_digest_hook%",))
     execute("DELETE FROM mailer_digest_reports WHERE report_path LIKE %s", ("%mailer_digest_agent_report.md%",))
+    execute("DELETE FROM mailer_policy_score_history WHERE agent_run_id IS NULL OR created_at > now() - interval '1 hour'")
 
 
 def _clean_trend_runtime() -> None:
@@ -365,6 +366,8 @@ def test_mailer_policy_score_agent_exists_and_is_no_send():
     assert result["live_outreach_allowed"] is False
     assert result["raw_recipient_addresses_included"] is False
     assert result["secrets_included"] is False
+    assert result["policy_score_history"]["score"] >= 90
+    assert result["policy_score_history"]["send_mail"] is False
 
 
 def test_daily_loop_includes_mailer_policy_score_after_trend_guard():
@@ -382,6 +385,83 @@ def test_daily_loop_includes_mailer_policy_score_after_trend_guard():
     digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
     if digest_runs:
         _cleanup(digest_runs[0]["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_policy_score_agent_persists_redacted_history():
+    _prepare_clean_policy_evidence()
+    before = fetch_one("SELECT count(*) AS count FROM mailer_policy_score_history")
+    run = run_agent("mailer_policy_score_agent")
+    history = run["result_json"]["policy_score_history"]
+    after = fetch_one("SELECT count(*) AS count FROM mailer_policy_score_history")
+    assert int(after["count"]) == int(before["count"]) + 1
+    row = fetch_one(
+        """
+        SELECT score, decision, blocker_count, send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included
+        FROM mailer_policy_score_history
+        WHERE id = %s
+        """,
+        (history["id"],),
+    )
+    assert row["score"] >= 90
+    assert row["decision"] == "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW"
+    assert row["blocker_count"] == 0
+    assert row["send_mail"] is False
+    assert row["smtp_called"] is False
+    assert row["live_outreach_allowed"] is False
+    assert row["raw_recipient_addresses_included"] is False
+    assert row["secrets_included"] is False
+    execute("DELETE FROM mailer_policy_score_history WHERE id = %s", (history["id"],))
+
+
+def test_policy_score_history_endpoint_requires_auth_and_is_redacted():
+    _prepare_clean_policy_evidence()
+    run = run_agent("mailer_policy_score_agent")
+    assert client.get("/admin/mailer/policy-score/history").status_code == 401
+    response = client.get("/admin/mailer/policy-score/history", headers=admin_headers())
+    assert response.status_code == 200
+    history = response.json()["history"]
+    assert history["count"] >= 1
+    assert history["latest_score"] >= 90
+    assert history["latest_send_mail"] is False
+    assert history["latest_live_outreach_allowed"] is False
+    assert history["raw_recipient_addresses_included"] is False
+    assert history["secrets_included"] is False
+    assert history["raw_history_rows_included"] is False
+    serialized = str(history)
+    assert "owner-private@" not in serialized
+    assert "SMTP_PASSWORD" not in serialized
+    execute("DELETE FROM mailer_policy_score_history WHERE id = %s", (run["result_json"]["policy_score_history"]["id"],))
+
+
+def test_mailer_digest_includes_policy_score_history_without_sending():
+    _prepare_clean_policy_evidence()
+    policy_run = run_agent("mailer_policy_score_agent")
+    digest = mailer_digest_summary()
+    policy_history = digest["mailer_policy_score_history"]
+    assert policy_history["count"] >= 1
+    assert policy_history["latest_score"] >= 90
+    assert policy_history["latest_send_mail"] is False
+    assert policy_history["raw_recipient_addresses_included"] is False
+    assert policy_history["secrets_included"] is False
+    execute("DELETE FROM mailer_policy_score_history WHERE id = %s", (policy_run["result_json"]["policy_score_history"]["id"],))
+
+
+def test_mailer_digest_agent_report_includes_policy_score_history_evidence():
+    _prepare_clean_policy_evidence()
+    policy_run = run_agent("mailer_policy_score_agent")
+    digest_run = run_agent("mailer_digest_agent")
+    report = digest_run["result_json"]["digest_agent_report"]
+    assert report["mailer_policy_score_history"]["count"] >= 1
+    assert report["mailer_policy_score_history"]["latest_score"] >= 90
+    assert report["mailer_policy_score_history"]["latest_send_mail"] is False
+    text = Path(report["path"]).read_text(encoding="utf-8")
+    assert "mailer_policy_score_history_rows" in text
+    assert "mailer_policy_latest_score" in text
+    assert "mailer_policy_history_raw_recipients: `false`" in text
+    assert "mailer_policy_history_secrets: `false`" in text
+    _cleanup(digest_run["result_json"]["owner_report_action"]["id"])
+    execute("DELETE FROM mailer_policy_score_history WHERE id = %s", (policy_run["result_json"]["policy_score_history"]["id"],))
 
 
 def test_mailer_digest_retention_agent_does_not_touch_action_queue_or_send_ledger():

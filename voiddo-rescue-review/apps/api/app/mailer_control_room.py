@@ -147,6 +147,7 @@ def monitoring_control_room_summary() -> dict[str, Any]:
 def mailer_digest_summary() -> dict[str, Any]:
     ops = mailer_ops_action_summary()
     ops_retention_history = mailer_ops_retention_report_history()
+    policy_score_history = latest_mailer_policy_score_history()
     settings = get_settings()
     digest_report_path = Path(settings.storage_root) / "reports" / "mailer_digest_agent_report.md"
     digest_report_exists = digest_report_path.exists()
@@ -191,6 +192,7 @@ def mailer_digest_summary() -> dict[str, Any]:
         {
             "mailer_ops": ops,
             "mailer_ops_retention_history": ops_retention_history,
+            "mailer_policy_score_history": policy_score_history,
             "latest_owner_report": dict(latest_report) if latest_report else None,
             "latest_owner_report_action": dict(latest_action) if latest_action else None,
             "owner_report_action_status": latest_action["status"] if latest_action else "none",
@@ -470,12 +472,109 @@ def mailer_policy_score() -> dict[str, Any]:
     )
 
 
+def record_mailer_policy_score_history(agent_run_id: str, score_result: dict[str, Any]) -> dict[str, Any]:
+    signals = score_result.get("signals") or {}
+    warmup = score_result.get("warmup") or {}
+    queue = score_result.get("queue_hygiene") or {}
+    blockers = score_result.get("blockers") if isinstance(score_result.get("blockers"), list) else []
+    row = execute(
+        """
+        INSERT INTO mailer_policy_score_history(
+            agent_run_id, score, decision, blocker_count, blockers_json,
+            trend_guard_decision, trend_guard_regression_count, mail_qa_decision,
+            bounce_or_dsn_count, rate_limit_count, spam_signal_count,
+            warmup_scheduled_total, warmup_due_now, warmup_sent_today, warmup_blocked_today,
+            mailer_action_queue_rows, mailer_send_ledger_rows, recipient_resolver_audit_rows,
+            send_mail, smtp_called, live_outreach_allowed,
+            raw_recipient_addresses_included, secrets_included
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id, created_at
+        """,
+        (
+            agent_run_id,
+            int(score_result.get("score", 0) or 0),
+            str(score_result.get("decision") or "unknown"),
+            len(blockers),
+            Jsonb(blockers),
+            str(score_result.get("trend_guard_decision") or "unknown"),
+            int(score_result.get("trend_guard_regression_count", 0) or 0),
+            str(score_result.get("mail_qa_decision") or "unknown"),
+            int(signals.get("bounce_or_dsn_count", 0) or 0),
+            int(signals.get("rate_limit_count", 0) or 0),
+            int(signals.get("spam_signal_count", 0) or 0),
+            int(warmup.get("scheduled_total", 0) or 0),
+            int(warmup.get("due_now", 0) or 0),
+            int(warmup.get("sent_today", 0) or 0),
+            int(warmup.get("blocked_today", 0) or 0),
+            int(queue.get("mailer_action_queue_rows", 0) or 0),
+            int(queue.get("mailer_send_ledger_rows", 0) or 0),
+            int(queue.get("recipient_resolver_audit_rows", 0) or 0),
+            bool(score_result.get("send_mail", False)),
+            bool(score_result.get("smtp_called", False)),
+            bool(score_result.get("live_outreach_allowed", False)),
+            bool(score_result.get("raw_recipient_addresses_included", False)),
+            bool(score_result.get("secrets_included", False)),
+        ),
+    )
+    return {
+        "id": str(row["id"]),
+        "agent_run_id": agent_run_id,
+        "created_at": row["created_at"].isoformat(),
+        "score": int(score_result.get("score", 0) or 0),
+        "decision": str(score_result.get("decision") or "unknown"),
+        "blocker_count": len(blockers),
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def latest_mailer_policy_score_history(limit: int = 5) -> dict[str, Any]:
+    capped = max(1, min(int(limit or 5), 25))
+    total = fetch_one("SELECT count(*) AS count FROM mailer_policy_score_history")
+    rows = _rows(
+        """
+        SELECT id, agent_run_id, score, decision, blocker_count, trend_guard_decision,
+               trend_guard_regression_count, mail_qa_decision, bounce_or_dsn_count,
+               rate_limit_count, spam_signal_count, warmup_scheduled_total, warmup_due_now,
+               warmup_sent_today, warmup_blocked_today, mailer_action_queue_rows,
+               mailer_send_ledger_rows, recipient_resolver_audit_rows, send_mail,
+               smtp_called, live_outreach_allowed, raw_recipient_addresses_included,
+               secrets_included, created_at
+        FROM mailer_policy_score_history
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (capped,),
+    )
+    latest = rows[0] if rows else None
+    return json_safe(
+        {
+            "count": int((total or {}).get("count", 0) or 0),
+            "latest": latest,
+            "rows": rows,
+            "latest_score": int((latest or {}).get("score", 0) or 0),
+            "latest_decision": (latest or {}).get("decision", "missing"),
+            "latest_blocker_count": int((latest or {}).get("blocker_count", 0) or 0),
+            "latest_send_mail": bool((latest or {}).get("send_mail", False)),
+            "latest_live_outreach_allowed": bool((latest or {}).get("live_outreach_allowed", False)),
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+            "raw_history_rows_included": False,
+        }
+    )
+
+
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     state = runtime_state_snapshot()
     mailer = mailer_control_room_summary(write_snapshot=True)
     ops = mailer_ops_action_summary()
     ops_retention_history = mailer_ops_retention_report_history()
+    policy_score_history = latest_mailer_policy_score_history()
     monitoring = monitoring_control_room_summary()
     blocked = bool(mailer["warmup_blocked_reason"]) or state["latest_mail_qa_decision"] != "PASS"
     email_sent = False
@@ -507,6 +606,12 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                 f"- mailer_ops_retention_latest_send_mail: `{str(bool((ops_retention_history.get('latest') or {}).get('send_mail'))).lower()}`",
                 f"- mailer_ops_retention_raw_recipients: `{str(bool(ops_retention_history.get('raw_recipient_addresses_included'))).lower()}`",
                 f"- mailer_ops_retention_secrets: `{str(bool(ops_retention_history.get('secrets_included'))).lower()}`",
+                f"- mailer_policy_score_history_rows: `{policy_score_history['count']}`",
+                f"- mailer_policy_latest_score: `{policy_score_history['latest_score']}`",
+                f"- mailer_policy_latest_decision: `{policy_score_history['latest_decision']}`",
+                f"- mailer_policy_latest_blockers: `{policy_score_history['latest_blocker_count']}`",
+                f"- mailer_policy_history_raw_recipients: `{str(bool(policy_score_history.get('raw_recipient_addresses_included'))).lower()}`",
+                f"- mailer_policy_history_secrets: `{str(bool(policy_score_history.get('secrets_included'))).lower()}`",
                 f"- email_sent: `{email_sent}`",
                 f"- send_decision: `{send_decision}`",
                 "",
@@ -535,6 +640,15 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                     "raw_recipient_addresses_included": bool(ops_retention_history.get("raw_recipient_addresses_included")),
                     "secrets_included": bool(ops_retention_history.get("secrets_included")),
                 },
+                "mailer_policy_score_history": {
+                    "count": policy_score_history["count"],
+                    "latest_score": policy_score_history["latest_score"],
+                    "latest_decision": policy_score_history["latest_decision"],
+                    "latest_blocker_count": policy_score_history["latest_blocker_count"],
+                    "latest_send_mail": policy_score_history["latest_send_mail"],
+                    "raw_recipient_addresses_included": bool(policy_score_history.get("raw_recipient_addresses_included")),
+                    "secrets_included": bool(policy_score_history.get("secrets_included")),
+                },
                 "email_sent": False,
             },
         }
@@ -555,6 +669,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         "monitoring": monitoring,
         "mailer_ops": ops,
         "mailer_ops_retention_history": ops_retention_history,
+        "mailer_policy_score_history": policy_score_history,
         "owner_report_action": draft,
     }
 
@@ -565,6 +680,7 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
     mailer = owner_report.get("mailer") or mailer_control_room_summary(write_snapshot=False)
     action = owner_report.get("owner_report_action") or {}
     ops_retention_history = owner_report.get("mailer_ops_retention_history") or mailer_ops_retention_report_history()
+    policy_score_history = owner_report.get("mailer_policy_score_history") or latest_mailer_policy_score_history()
     blockers = mailer.get("warmup_blocked_reason") or []
     email_sent = bool(owner_report.get("email_sent", False))
     path = Path(settings.storage_root) / "reports" / "mailer_digest_agent_report.md"
@@ -588,6 +704,12 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
                 f"- mailer_ops_retention_latest_send_mail: `{str(bool((ops_retention_history.get('latest') or {}).get('send_mail'))).lower()}`",
                 f"- mailer_ops_retention_raw_recipients: `{str(bool(ops_retention_history.get('raw_recipient_addresses_included'))).lower()}`",
                 f"- mailer_ops_retention_secrets: `{str(bool(ops_retention_history.get('secrets_included'))).lower()}`",
+                f"- mailer_policy_score_history_rows: `{policy_score_history.get('count', 0)}`",
+                f"- mailer_policy_latest_score: `{policy_score_history.get('latest_score', 0)}`",
+                f"- mailer_policy_latest_decision: `{policy_score_history.get('latest_decision', 'missing')}`",
+                f"- mailer_policy_latest_blockers: `{policy_score_history.get('latest_blocker_count', 0)}`",
+                f"- mailer_policy_history_raw_recipients: `{str(bool(policy_score_history.get('raw_recipient_addresses_included'))).lower()}`",
+                f"- mailer_policy_history_secrets: `{str(bool(policy_score_history.get('secrets_included'))).lower()}`",
                 f"- send_decision: `{owner_report.get('send_decision', '')}`",
                 "",
                 "Raw recipient addresses, message bodies, mailbox passwords, and secrets are intentionally omitted.",
@@ -610,6 +732,15 @@ def write_mailer_digest_agent_report(agent_run_id: str, owner_report: dict[str, 
             "latest_send_mail": bool((ops_retention_history.get("latest") or {}).get("send_mail")),
             "raw_recipient_addresses_included": bool(ops_retention_history.get("raw_recipient_addresses_included")),
             "secrets_included": bool(ops_retention_history.get("secrets_included")),
+        },
+        "mailer_policy_score_history": {
+            "count": int(policy_score_history.get("count", 0) or 0),
+            "latest_score": int(policy_score_history.get("latest_score", 0) or 0),
+            "latest_decision": policy_score_history.get("latest_decision", "missing"),
+            "latest_blocker_count": int(policy_score_history.get("latest_blocker_count", 0) or 0),
+            "latest_send_mail": bool(policy_score_history.get("latest_send_mail")),
+            "raw_recipient_addresses_included": bool(policy_score_history.get("raw_recipient_addresses_included")),
+            "secrets_included": bool(policy_score_history.get("secrets_included")),
         },
     }
     row = execute(
