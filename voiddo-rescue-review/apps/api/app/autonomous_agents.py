@@ -39,6 +39,7 @@ from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_cam
 from .post_scan_campaign_cycle import post_scan_campaign_cycle
 from .campaign_preflight import campaign_preflight_batch
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation
+from .campaign_remediation_feedback import campaign_remediation_feedback
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, refresh_campaign_previews_if_needed
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
@@ -214,6 +215,10 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("limit", 10)),
             rerun_preflight=bool(payload.get("rerun_preflight", True)),
         ),
+        "campaign_remediation_feedback_agent": lambda: campaign_remediation_feedback(
+            int(payload.get("limit", 25)),
+            int(payload.get("repeated_threshold", 3)),
+        ),
         "post_scan_campaign_cycle_agent": lambda: post_scan_campaign_cycle(
             int(payload.get("limit", 100)),
             dry_run=bool(payload.get("dry_run", True)),
@@ -308,6 +313,7 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_preflight_agent",
         "campaign_remediation_agent",
         "campaign_remediation_executor_agent",
+        "campaign_remediation_feedback_agent",
         "post_scan_campaign_cycle_agent",
         "campaign_preview_quality_agent",
         "buyer_journey_scoreboard_agent",

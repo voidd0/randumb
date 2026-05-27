@@ -53,6 +53,7 @@ from .campaign_control_room import campaign_control_room_snapshot, prepare_campa
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .campaign_preflight import campaign_preflight_batch, latest_campaign_preflight_runs
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation, latest_campaign_remediation_executions, latest_campaign_remediation_plans
+from .campaign_remediation_feedback import campaign_remediation_feedback, latest_campaign_remediation_feedback
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, latest_campaign_preview_refresh_runs, refresh_campaign_previews_if_needed
 from .post_scan_campaign_cycle import latest_post_scan_campaign_cycles, post_scan_campaign_cycle
 from .campaign_preview_quality import campaign_preview_quality_pack
@@ -1238,6 +1239,23 @@ async def campaign_remediation_execute_run(request: Request):
         "execution": execute_campaign_remediation(
             int(payload.get("limit", 10)),
             bool(payload.get("rerun_preflight", True)),
+        ),
+    }
+
+
+@app.get("/admin/campaign-remediation/feedback", dependencies=[Depends(require_admin)])
+def campaign_remediation_feedback_get(limit: int = 10):
+    return {"ok": True, "feedback": latest_campaign_remediation_feedback(limit)}
+
+
+@app.post("/admin/campaign-remediation/feedback", dependencies=[Depends(require_admin)])
+async def campaign_remediation_feedback_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "feedback": campaign_remediation_feedback(
+            int(payload.get("limit", 25)),
+            int(payload.get("repeated_threshold", 3)),
         ),
     }
 
