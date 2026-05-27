@@ -84,6 +84,8 @@ services:
     container_name: voiddo_rescue_worker
     restart: unless-stopped
     env_file: .env
+    environment:
+      SCANNER_JOBS_PER_TICK: ${SCANNER_JOBS_PER_TICK:-5}
     volumes:
       - voiddo_rescue_storage:/app/storage
       - ./codex_tasks:/app/codex_tasks
