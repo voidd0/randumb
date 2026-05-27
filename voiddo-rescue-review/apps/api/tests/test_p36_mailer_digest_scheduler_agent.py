@@ -379,11 +379,14 @@ def test_daily_loop_includes_mailer_policy_score_after_trend_guard():
     assert agents.index("mailer_digest_trend_guard_agent") < agents.index("mailer_policy_score_agent")
     assert "mailer_policy_score_retention_agent" in agents
     assert "mailer_policy_score_regression_guard_agent" in agents
+    assert "policy_trend_reporting_agent" in agents
     assert agents.index("mailer_policy_score_agent") < agents.index("mailer_policy_score_retention_agent")
     assert agents.index("mailer_policy_score_retention_agent") < agents.index("mailer_policy_score_regression_guard_agent")
+    assert agents.index("mailer_policy_score_regression_guard_agent") < agents.index("policy_trend_reporting_agent")
     policy_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_agent"][0]
     retention_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_retention_agent"][0]
     guard_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_regression_guard_agent"][0]
+    trend_report_run = [item for item in result["runs"] if item["agent"] == "policy_trend_reporting_agent"][0]
     assert policy_run["result_json"]["send_mail"] is False
     assert policy_run["result_json"]["smtp_called"] is False
     assert policy_run["result_json"]["live_outreach_allowed"] is False
@@ -392,6 +395,11 @@ def test_daily_loop_includes_mailer_policy_score_after_trend_guard():
     assert retention_run["result_json"]["send_mail"] is False
     assert guard_run["result_json"]["send_mail"] is False
     assert guard_run["result_json"]["live_outreach_allowed"] is False
+    assert trend_report_run["result_json"]["send_mail"] is False
+    assert trend_report_run["result_json"]["live_outreach_allowed"] is False
+    assert trend_report_run["result_json"]["runtime"]["mailer_policy_trend"]["raw_recipient_addresses_included"] is False
+    assert trend_report_run["result_json"]["daily_business_report"]["send_mail"] is False
+    assert trend_report_run["result_json"]["blockers_report"]["send_mail"] is False
     assert result["live_outreach"] is False
     digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
     if digest_runs:

@@ -1,2 +1,2 @@
-P60 export ZIP: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p60-policy-retention-regression-2026-05-27.zip`
-P60 export SHA256: `85f37d059ccb3066cb765b6c6a3e6d0eff19137ba72abc0ce56e3a30fff9c259`
+P61 source filelist sha256: dca142f24f3025eec07860cce14267fdcf6d4c42e2b0d54d08e3dfb8fe17bc6b
+ZIP sha256: see external .zip.sha256 file generated with export artifact

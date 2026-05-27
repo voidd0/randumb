@@ -29,6 +29,8 @@ from .p0 import (
     run_mail_qa,
     run_warmup_calendar_due,
     runtime_state_snapshot,
+    write_blockers_report,
+    write_daily_business_report,
 )
 from .quality_plugins import latest_quality_summary
 from .revenue_simulation import run_synthetic_lead_simulation
@@ -106,6 +108,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "mailer_policy_score_agent": lambda: mailer_policy_score(),
         "mailer_policy_score_retention_agent": lambda: cleanup_mailer_policy_score_history(120),
         "mailer_policy_score_regression_guard_agent": lambda: mailer_policy_score_regression_guard(),
+        "policy_trend_reporting_agent": lambda: {"runtime": runtime_state_snapshot(), "daily_business_report": write_daily_business_report(), "blockers_report": write_blockers_report(), "send_mail": False, "live_outreach_allowed": False},
         "mailer_ops_retention_agent": lambda: cleanup_mailer_ops_synthetic_history(),
         "outbound_mailer_gate_agent": lambda: evaluate_outbound_message({"email": "sample@example.test", "template_key": "first_audit_notice"}),
         "reply_action_agent": lambda: plan_reply_action("Price", "How much does it cost?", "audit@voiddorescue.com"),
@@ -152,6 +155,7 @@ def run_daily_loop() -> dict[str, Any]:
         "mailer_policy_score_agent",
         "mailer_policy_score_retention_agent",
         "mailer_policy_score_regression_guard_agent",
+        "policy_trend_reporting_agent",
         "outbound_mailer_gate_agent",
         "reply_action_agent",
         "mail_clean_window_transition_agent",

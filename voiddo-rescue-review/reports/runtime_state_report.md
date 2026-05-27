@@ -1,76 +1,31 @@
-# Runtime State Report
+# Vøiddo Rescue Runtime State
 
-Generated: 2026-05-27 04:53 IDT
+- generated_at: 2026-05-27T02:27:52.579350+00:00
+- current_branch_head: c27e5754d4a3140925882dd868229cc1c73dc413
+- current_zip_sha: pending-p61-export
+- checkout_status: READY
+- mail_auth_status: PASS
+- latest_mail_qa_decision: PASS
+- test_inbox_count: 7
+- warmup_recipient_count: 7
+- scheduled_warmup_count: 28
+- deliverability_diagnostic_sent_count: 8
+- warmup_sent_count: 0
+- live_outreach_sent_count: 0
+- bounce_count_24h: 0
+- rate_limit_signal_count_24h: 0
+- next_allowed_action: wait_until_recent_bounce_and_rate_limit_window_clears_then_recheck_mail_qa
+- launch_readiness_state: WARMUP_SCHEDULED_NO_OUTREACH
+- mailer_policy_score_history_count: 2
+- mailer_policy_latest_score: 100
+- mailer_policy_latest_decision: NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW
+- mailer_policy_latest_blockers: 0
+- mailer_policy_score_trend_direction: stable
+- mailer_policy_regression_guard_decision: PASS_NO_SEND
+- mailer_policy_regression_count: 0
+- mailer_policy_regression_score_drop: 0
+- mailer_policy_regression_review_task_created: false
+- mailer_policy_raw_recipients: false
+- mailer_policy_secrets: false
 
-## Canonical Latest State
-
-- branch: `voiddo-rescue-mvp-review-20260526-files`
-- current branch head before P60 commit: `e3a477473fb15d4020cc646b252e85e8f6080cbf`
-- checkout status: `READY`
-- mail auth status: `PASS`
-- latest mail QA decision: `PASS`
-- approved test inbox count: `7`
-- approved warmup recipient count: `7`
-- scheduled warmup count: `28`
-- warmup sent count: `0`
-- live outreach sent count: `0`
-- launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
-
-## Mailer Daily Evidence
-
-- mailer ops retention history rows: `1`
-- latest retention history: `0:1:0:send=false`
-- mailer digest history rows: `1`
-- latest digest history: `0:0:email=false`
-- daily digest admin surfaces ops retention history rows: `true`
-- daily digest admin surfaces ops retention no-send state: `true`
-- daily digest admin surfaces ops retention privacy/secrets flags: `true`
-- mailer digest trend guard decision: `PASS_NO_SEND`
-- mailer digest trend guard regressions: `0`
-- mailer digest trend guard agent runs: `1`
-- latest trend guard compact summary: `PASS_NO_SEND`
-- latest trend guard raw history rows included: `false`
-- protected admin surfaces compact trend guard summary: `true`
-- daily loop includes trend guard agent: `true`
-- mailer policy score: `100`
-- mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
-- mailer policy blockers: `0`
-- mailer policy score agent runs: `3`
-- mailer policy score retention agent runs: `2`
-- mailer policy score regression guard agent runs: `2`
-- protected admin surfaces policy score evidence: `true`
-- daily loop includes policy score agent after trend guard: `true`
-- mailer policy score history rows: `3`
-- latest policy score history score: `100`
-- latest policy score history decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
-- latest policy score history send state: `false`
-- policy score regression guard decision: `PASS_NO_SEND`
-- policy score regression count: `0`
-- policy score retention total rows: `3`
-- digest includes policy score history evidence: `true`
-- daily loop surfaces retention history evidence: `true`
-- owner report includes retention history evidence: `true`
-- raw recipient addresses included: `false`
-- secrets included: `false`
-
-## Mailer Queue Hygiene
-
-- mailer action queue rows: `0`
-- mailer send ledger rows: `0`
-- recipient resolver audit rows: `0`
-- send_mail: `false`
-- live_outreach_allowed: `false`
-
-## Verification
-
-- targeted P60 policy retention/regression tests: `36 passed`
-- API tests: `308 passed`
-- smoke test: `308 passed, ok`
-- Next production build: `PASS`
-- Huanshu admin visual gate P60: `PASS`
-- Playwright desktop/mobile + axe + pa11y P60: `PASS`
-- API/web/worker/postgres/redis: healthy
-
-## Next Allowed Action
-
-Continue the autonomous build/audit/fix loop. Warmup remains scheduled, but this pass did not force sends and did not enable live outreach.
+Raw recipient addresses are intentionally omitted.

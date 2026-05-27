@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 04:53 IDT
+Generated: 2026-05-27 05:29 IDT
 
 ## Decision
 
@@ -17,48 +17,36 @@ Generated: 2026-05-27 04:53 IDT
 - SMTP strict TLS: `PASS`
 - IMAP strict TLS: `PASS`
 - SPF/DKIM/DMARC: `PASS`
-- latest admin visual gate from P52: `PASS`
-- mailer daily retention-history evidence: `PASS`
-- protected admin daily digest evidence: `PASS`
-- mailer digest trend guard: `PASS_NO_SEND`
-- mailer digest trend guard agent: `PASS`
-- latest trend guard compact summary: `PASS_NO_SEND`
-- protected admin trend guard summary: `PASS`
-- Huanshu admin visual gate P56: `PASS`
+- Huanshu adapter: `PASS`
+- latest mail QA: `PASS`
 - mailer policy score: `100`
 - mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
-- mailer policy score agent: `PASS`
-- protected admin policy score evidence: `PASS`
-- mailer policy score history: `PASS`
-- mailer policy score retention: `PASS`
-- mailer policy score regression guard: `PASS_NO_SEND`
-- owner digest policy score evidence: `PASS`
-- protected admin policy history evidence: `PASS`
-- protected admin policy retention/regression evidence: `PASS`
-- Huanshu admin visual gate P60: `PASS`
-- tests: `308 passed`
-- smoke: `308 passed, ok`
+- mailer policy trend: `stable`
+- mailer policy regression guard: `PASS_NO_SEND`
+- mailer policy regression count: `0`
+- policy trend reporting agent: `PASS`
+- daily business report policy trend evidence: `PASS`
+- blockers report policy trend evidence: `PASS`
+- runtime state report policy trend evidence: `PASS`
+- tests: `310 passed`
+- smoke: `310 passed, ok`
 
 ## Current Runtime Counts
 
 - warmup sent count: `0`
 - live outreach sent count: `0`
-- mailer queue rows: `0`
-- mailer retention history rows: `1`
-- mailer digest history rows: `1`
-- mailer digest trend guard agent runs: `1`
-- mailer policy score agent runs: `3`
-- mailer policy score retention agent runs: `2`
-- mailer policy score regression guard agent runs: `2`
-- mailer policy score history rows: `3`
-- mailer digest trend regressions: `0`
-- latest trend guard raw history rows included: `false`
-- mailer policy blockers: `0`
-- mailer policy regression count: `0`
+- mailer action queue rows: `0`
+- mailer send ledger rows: `0`
+- recipient resolver audit rows: `0`
+- mailer policy score history rows: `2`
+- mailer policy score agent runs: `2`
+- mailer policy score retention agent runs: `1`
+- mailer policy score regression guard agent runs: `1`
+- policy trend reporting agent runs: `1`
 
 ## Remaining Launch Gates
 
-- keep live outreach disabled until explicit launch approval and campaign QA pass.
-- continue natural warmup scheduling only through pre-send gates.
-- continue autonomous mailer self-audit, retention history, and daily digest evidence.
+- keep cold outreach disabled until explicit launch approval and campaign QA pass.
+- let warmup proceed only through scheduled pre-send gates.
+- continue autonomous mailer self-audit, policy trend reporting, retention, and regression guard cycles.
 - continue building the autonomous revenue engine without touching non-Rescue systems.

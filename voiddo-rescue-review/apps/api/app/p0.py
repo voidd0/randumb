@@ -877,6 +877,64 @@ def launch_readiness_state() -> str:
     return "CHECKOUT_READY_NOT_WARMED"
 
 
+def mailer_policy_trend_snapshot(limit: int = 8) -> dict[str, Any]:
+    safe_limit = max(2, min(int(limit or 8), 30))
+    rows = fetch_all(
+        """
+        SELECT score, decision, blocker_count, send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM mailer_policy_score_history
+        ORDER BY created_at DESC, id DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    history_count = _count("SELECT count(*) FROM mailer_policy_score_history")
+    latest = dict(rows[0]) if rows else {}
+    scores = [int(row["score"]) for row in rows if row.get("score") is not None]
+    if len(scores) < 2:
+        direction = "insufficient_history"
+    else:
+        latest_score = scores[0]
+        oldest_recent_score = scores[-1]
+        if latest_score <= oldest_recent_score - 5:
+            direction = "degrading"
+        elif latest_score >= oldest_recent_score + 5:
+            direction = "improving"
+        else:
+            direction = "stable"
+    guard_row = fetch_one(
+        """
+        SELECT result_json
+        FROM agent_runs
+        WHERE agent = 'mailer_policy_score_regression_guard_agent'
+          AND status = 'completed'
+        ORDER BY completed_at DESC NULLS LAST, started_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        """
+    )
+    guard = dict(guard_row["result_json"]) if guard_row and isinstance(guard_row.get("result_json"), dict) else {}
+    return {
+        "policy_score_history_count": history_count,
+        "latest_policy_score": latest.get("score"),
+        "latest_policy_decision": latest.get("decision", "MISSING"),
+        "latest_policy_blocker_count": latest.get("blocker_count", 0),
+        "latest_policy_send_mail": bool(latest.get("send_mail", False)),
+        "latest_policy_live_outreach_allowed": bool(latest.get("live_outreach_allowed", False)),
+        "policy_score_min_recent": min(scores) if scores else None,
+        "policy_score_max_recent": max(scores) if scores else None,
+        "policy_score_avg_recent": round(sum(scores) / len(scores), 2) if scores else None,
+        "policy_score_recent_count": len(scores),
+        "policy_score_trend_direction": direction,
+        "policy_regression_guard_decision": guard.get("decision", "MISSING"),
+        "policy_regression_count": int(guard.get("regression_count", len(guard.get("regressions", []))) or 0),
+        "policy_regression_score_drop": guard.get("score_drop", 0),
+        "policy_regression_review_task_created": bool(guard.get("review_task_created", False)),
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
 def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> dict[str, Any]:
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -895,11 +953,13 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
         "rate_limit_signal_count": recent_mail_signal_count(["smtp_rate_limit"], 24),
         "next_allowed_action": "wait_until_recent_bounce_and_rate_limit_window_clears_then_recheck_mail_qa",
         "launch_readiness_state": launch_readiness_state(),
+        "mailer_policy_trend": mailer_policy_trend_snapshot(),
     }
 
 
 def write_runtime_state_report(path: str | Path, branch_head: str = "", current_zip_sha: str = "") -> dict[str, Any]:
     snapshot = runtime_state_snapshot(branch_head, current_zip_sha)
+    policy_trend = snapshot["mailer_policy_trend"]
     lines = [
         "# Vøiddo Rescue Runtime State",
         "",
@@ -919,6 +979,17 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
         f"- rate_limit_signal_count_24h: {snapshot['rate_limit_signal_count']}",
         f"- next_allowed_action: {snapshot['next_allowed_action']}",
         f"- launch_readiness_state: {snapshot['launch_readiness_state']}",
+        f"- mailer_policy_score_history_count: {policy_trend['policy_score_history_count']}",
+        f"- mailer_policy_latest_score: {policy_trend['latest_policy_score']}",
+        f"- mailer_policy_latest_decision: {policy_trend['latest_policy_decision']}",
+        f"- mailer_policy_latest_blockers: {policy_trend['latest_policy_blocker_count']}",
+        f"- mailer_policy_score_trend_direction: {policy_trend['policy_score_trend_direction']}",
+        f"- mailer_policy_regression_guard_decision: {policy_trend['policy_regression_guard_decision']}",
+        f"- mailer_policy_regression_count: {policy_trend['policy_regression_count']}",
+        f"- mailer_policy_regression_score_drop: {policy_trend['policy_regression_score_drop']}",
+        f"- mailer_policy_regression_review_task_created: {str(policy_trend['policy_regression_review_task_created']).lower()}",
+        f"- mailer_policy_raw_recipients: {str(policy_trend['raw_recipient_addresses_included']).lower()}",
+        f"- mailer_policy_secrets: {str(policy_trend['secrets_included']).lower()}",
         "",
         "Raw recipient addresses are intentionally omitted.",
     ]
@@ -926,6 +997,80 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("\n".join(lines) + "\n")
     return {"path": str(target), **snapshot}
+
+
+def write_daily_business_report(path: str | Path | None = None) -> dict[str, Any]:
+    snapshot = runtime_state_snapshot()
+    metrics = admin_metrics_from_db()
+    policy_trend = snapshot["mailer_policy_trend"]
+    target = Path(path) if path else Path(get_settings().storage_root) / "reports" / "daily_business_report.md"
+    lines = [
+        "# Vøiddo Rescue Daily Business Report",
+        "",
+        f"- generated_at: {snapshot['generated_at']}",
+        f"- launch_readiness_state: {snapshot['launch_readiness_state']}",
+        f"- checkout_status: {snapshot['checkout_status']}",
+        f"- mail_auth_status: {snapshot['mail_auth_status']}",
+        f"- latest_mail_qa_decision: {snapshot['latest_mail_qa_decision']}",
+        f"- leads_total: {metrics['leads_total']}",
+        f"- qualified_leads: {metrics['qualified_leads']}",
+        f"- audit_pages_generated: {metrics['audit_pages_generated']}",
+        f"- campaign_leads: {metrics['campaign_leads']}",
+        f"- customers: {metrics['customers']}",
+        f"- payments: {metrics['payments']}",
+        f"- subscriptions: {metrics['subscriptions']}",
+        f"- fix_requests: {metrics['fix_requests']}",
+        f"- warmup_sent_count: {snapshot['warmup_sent_count']}",
+        f"- live_outreach_sent_count: {snapshot['live_outreach_sent_count']}",
+        f"- mailer_policy_latest_score: {policy_trend['latest_policy_score']}",
+        f"- mailer_policy_latest_decision: {policy_trend['latest_policy_decision']}",
+        f"- mailer_policy_score_trend_direction: {policy_trend['policy_score_trend_direction']}",
+        f"- mailer_policy_regression_guard_decision: {policy_trend['policy_regression_guard_decision']}",
+        f"- mailer_policy_raw_recipients: {str(policy_trend['raw_recipient_addresses_included']).lower()}",
+        f"- mailer_policy_secrets: {str(policy_trend['secrets_included']).lower()}",
+        "",
+        "No raw recipient addresses, mailbox passwords, API keys, or private owner data are included.",
+    ]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines) + "\n")
+    return {"path": str(target), "send_mail": False, "live_outreach_allowed": False, "snapshot": snapshot}
+
+
+def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
+    snapshot = runtime_state_snapshot()
+    policy_trend = snapshot["mailer_policy_trend"]
+    blockers: list[str] = []
+    if snapshot["bounce_count"] > 0:
+        blockers.append("recent_bounce_or_dsn_signal")
+    if snapshot["rate_limit_signal_count"] > 0:
+        blockers.append("recent_smtp_rate_limit_signal")
+    if snapshot["latest_mail_qa_decision"] != "PASS":
+        blockers.append("mail_qa_not_pass")
+    if policy_trend["policy_regression_guard_decision"] not in {"PASS_NO_SEND", "MISSING"}:
+        blockers.append("mailer_policy_regression_guard_not_pass")
+    if policy_trend["latest_policy_decision"] not in {"NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW", "MISSING"}:
+        blockers.append("mailer_policy_not_ready")
+    target = Path(path) if path else Path(get_settings().storage_root) / "reports" / "blockers_report.md"
+    lines = [
+        "# Vøiddo Rescue Blockers Report",
+        "",
+        f"- generated_at: {snapshot['generated_at']}",
+        f"- launch_readiness_state: {snapshot['launch_readiness_state']}",
+        f"- blocker_count: {len(blockers)}",
+        f"- blockers: {', '.join(blockers) if blockers else 'none'}",
+        f"- bounce_count_24h: {snapshot['bounce_count']}",
+        f"- rate_limit_signal_count_24h: {snapshot['rate_limit_signal_count']}",
+        f"- mailer_policy_latest_decision: {policy_trend['latest_policy_decision']}",
+        f"- mailer_policy_score_trend_direction: {policy_trend['policy_score_trend_direction']}",
+        f"- mailer_policy_regression_guard_decision: {policy_trend['policy_regression_guard_decision']}",
+        f"- live_outreach_sent_count: {snapshot['live_outreach_sent_count']}",
+        f"- warmup_sent_count: {snapshot['warmup_sent_count']}",
+        "",
+        "No raw recipient addresses, mailbox passwords, API keys, or private owner data are included.",
+    ]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines) + "\n")
+    return {"path": str(target), "blockers": blockers, "send_mail": False, "live_outreach_allowed": False, "snapshot": snapshot}
 
 
 def resume_warmup_gate() -> dict[str, Any]:
@@ -1269,6 +1414,7 @@ def run_warmup_calendar_due(limit: int = 2) -> dict[str, Any]:
 
 def write_owner_daily_report() -> dict[str, Any]:
     metrics = admin_metrics_from_db()
+    policy_trend = mailer_policy_trend_snapshot()
     report_dir = Path(get_settings().storage_root) / "reports" / "owner"
     report_dir.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
@@ -1276,6 +1422,7 @@ def write_owner_daily_report() -> dict[str, Any]:
     payload = {
         "created_at": now.isoformat(),
         "metrics": metrics,
+        "mailer_policy_trend": policy_trend,
         "launch_decision": "NOT_LAUNCH_READY",
         "live_outreach_sent": 0,
         "warmup_sent": 0,

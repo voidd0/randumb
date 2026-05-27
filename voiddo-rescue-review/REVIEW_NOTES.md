@@ -1,57 +1,52 @@
 # Vøiddo Rescue Review Notes
 
-Branch: `voiddo-rescue-mvp-review-20260526-files`
+Generated: 2026-05-27 05:29 IDT
 
-Folder: `voiddo-rescue-review/`
+## Package
 
-Pass: `P60 Policy Score Retention and Regression Guard`
-
-## Original Runtime Path
-
-`/opt/voiddo-rescue`
-
-## Export
-
-- ZIP path: pending generation
-- SHA256: see `ARCHIVE_SHA256.txt` and sidecar `.sha256` file generated after packaging
+- pass: P61 policy trend reporting
+- source path: /opt/voiddo-rescue
+- review folder: voiddo-rescue-review/
+- branch before commit: c27e5754d4a3140925882dd868229cc1c73dc413
+- filelist sha256: dca142f24f3025eec07860cce14267fdcf6d4c42e2b0d54d08e3dfb8fe17bc6b
 
 ## Included
 
-- `docker-compose.yml`
-- `.env.example`
-- API, worker, web, admin, shared packages, scripts, migrations, WP plugin source, redacted reports, filelist, and review notes.
+- application code
+- migrations
+- scripts
+- WordPress plugin source
+- redacted reports
+- .env.example
+- docker-compose.yml
+- P61 runtime, daily business, blockers, launch, smoke, and policy trend reports
 
 ## Excluded
 
-- `.env`, `*.env`, mailbox passwords, private keys, raw secrets
-- `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`
-- `node_modules`, `.next`
-- runtime `storage`, `logs`, `backups`, exports, screenshots, visual QA PNG artifacts
+- .env and *.env secrets except .env.example
+- mailbox passwords and private keys
+- .venv, .pytest_cache, __pycache__, *.pyc
+- node_modules and .next
+- runtime storage, exports, logs, screenshots, PNG screenshots
 
-## Secret And Artifact Scan
+## Safety
 
-- secret scan: `PASS`
-- owner personal email scan: `PASS`
-- forbidden artifact scan: `PASS`
+- live outreach sent: 0
+- warmup sent manually in this pass: 0
+- FIRST_LIVE_SEND_FLAG remains false
+- OUTREACH_PAUSED remains true
+- AUTO_REPLIES_PAUSED remains true
+- non-Rescue projects touched: false
 
 ## Verification
 
-- targeted P60 tests: `36 passed`
-- full API tests: `308 passed`
-- smoke: `308 passed, ok`
-- Next production build: `PASS`
-- Huanshu P60: `PASS`
-- Playwright desktop/mobile + axe + pa11y P60: `PASS`
-
-## Runtime Safety
-
-- live outreach sent: `0`
-- warmup sent: `0`
-- mailer policy score: `100`
-- mailer policy history rows: `3`
-- policy regression guard: `PASS_NO_SEND`
-- non-Rescue projects touched: `no`
+- targeted tests: 46 passed
+- full API tests: 310 passed
+- smoke: 310 passed, ok
+- Huanshu adapter: PASS
+- services: api/web/worker/postgres/redis healthy
+- secret/artifact scan: clean for raw secrets and blocked artifacts; code-level env variable names are present only as configuration references
 
 ## Commit
 
-Recorded in the final operator output and available from branch `HEAD`. This file does not embed its own final commit SHA because changing the file changes the commit hash.
+The exact pushed commit SHA is reported in the final operator output after commit creation.

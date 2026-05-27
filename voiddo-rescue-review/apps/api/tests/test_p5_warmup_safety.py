@@ -7,10 +7,13 @@ from datetime import datetime, timedelta, timezone
 from app.config import Settings
 from app.db import execute, fetch_one
 from app.p0 import (
+    mailer_policy_trend_snapshot,
     parse_owner_command,
     record_mail_signal,
     run_deliverability_diagnostics,
     run_warmup_calendar_due,
+    write_blockers_report,
+    write_daily_business_report,
     write_runtime_state_report,
 )
 
@@ -131,9 +134,35 @@ def test_diagnostic_sends_no_more_than_one_per_minute(monkeypatch):
 def test_runtime_state_report_generated(tmp_path):
     path = tmp_path / "runtime_state_report.md"
     result = write_runtime_state_report(path, "head-test", "sha-test")
+    text = path.read_text()
     assert path.exists()
-    assert "Raw recipient addresses are intentionally omitted" in path.read_text()
+    assert "Raw recipient addresses are intentionally omitted" in text
+    assert "mailer_policy_score_trend_direction" in text
+    assert "mailer_policy_raw_recipients: false" in text
+    assert "mailer_policy_secrets: false" in text
     assert result["current_branch_head"] == "head-test"
+    assert result["mailer_policy_trend"]["raw_recipient_addresses_included"] is False
+    assert result["mailer_policy_trend"]["secrets_included"] is False
+
+
+def test_policy_trend_snapshot_is_redacted():
+    trend = mailer_policy_trend_snapshot()
+    assert "policy_score_trend_direction" in trend
+    assert trend["raw_recipient_addresses_included"] is False
+    assert trend["secrets_included"] is False
+
+
+def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
+    business = write_daily_business_report(tmp_path / "daily_business_report.md")
+    blockers = write_blockers_report(tmp_path / "blockers_report.md")
+    business_text = (tmp_path / "daily_business_report.md").read_text()
+    blockers_text = (tmp_path / "blockers_report.md").read_text()
+    assert business["send_mail"] is False
+    assert blockers["send_mail"] is False
+    assert "mailer_policy_score_trend_direction" in business_text
+    assert "mailer_policy_regression_guard_decision" in blockers_text
+    assert "No raw recipient addresses" in business_text
+    assert "No raw recipient addresses" in blockers_text
 
 
 def test_migration_manifest_exists():
