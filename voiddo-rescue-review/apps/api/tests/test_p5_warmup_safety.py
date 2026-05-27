@@ -13,10 +13,12 @@ from app.p0 import (
     run_deliverability_diagnostics,
     run_warmup_calendar_due,
     scout_campaign_quality_trend_snapshot,
+    scout_source_readiness_trend_snapshot,
     write_blockers_report,
     write_daily_business_report,
     write_runtime_state_report,
 )
+from app.scouts import create_scout_source, run_scout_source_readiness
 
 
 def _due_schedule(email: str | None = None) -> dict:
@@ -145,11 +147,14 @@ def test_runtime_state_report_generated(tmp_path):
     assert "mailer_business_kpi_latest_send_mail: false" in text
     assert "scout_campaign_quality_history_count" in text
     assert "scout_campaign_quality_latest_send_mail: false" in text
+    assert "scout_source_readiness_check_count" in text
+    assert "scout_source_readiness_latest_send_mail: false" in text
     assert result["current_branch_head"] == "head-test"
     assert result["mailer_policy_trend"]["raw_recipient_addresses_included"] is False
     assert result["mailer_policy_trend"]["secrets_included"] is False
     assert result["mailer_business_kpi"]["latest_send_mail"] is False
     assert result["scout_campaign_quality_trend"]["latest_send_mail"] is False
+    assert result["scout_source_readiness_trend"]["latest_send_mail"] is False
 
 
 def test_policy_trend_snapshot_is_redacted():
@@ -166,6 +171,35 @@ def test_scout_campaign_quality_trend_snapshot_is_redacted():
     assert trend["secrets_included"] is False
 
 
+def test_scout_source_readiness_trend_snapshot_is_redacted():
+    token = uuid.uuid4().hex[:8]
+    try:
+        source = create_scout_source(
+            {
+                "name": f"p75-readiness-{token}",
+                "source_type": "manual_csv_scout",
+                "country": "P75",
+                "niche": "dentists",
+                "config_json": {
+                    "csv": (
+                        "business_name,website_url,email,country,niche,source_url,confidence\n"
+                        f"P75,https://p75-{token}.example.test,owner@p75-{token}.example.test,P75,dentists,https://directory.example/{token},95\n"
+                    )
+                },
+            }
+        )
+        run_scout_source_readiness(str(source["id"]))
+        trend = scout_source_readiness_trend_snapshot()
+        assert trend["check_count"] >= 1
+        assert "blocked_source_trend_direction" in trend
+        assert trend["raw_recipient_addresses_included"] is False
+        assert trend["secrets_included"] is False
+        assert trend["latest_send_mail"] is False
+    finally:
+        execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"p75-readiness-{token}",))
+        execute("DELETE FROM scout_sources WHERE name LIKE %s", (f"p75-readiness-{token}",))
+
+
 def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
     business = write_daily_business_report(tmp_path / "daily_business_report.md")
     blockers = write_blockers_report(tmp_path / "blockers_report.md")
@@ -179,6 +213,8 @@ def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
     assert "mailer_business_kpi_latest_send_mail" in blockers_text
     assert "scout_campaign_quality_history_count" in business_text
     assert "scout_campaign_quality_regression_guard_decision" in blockers_text
+    assert "scout_source_readiness_check_count" in business_text
+    assert "scout_source_readiness_latest_status" in blockers_text
     assert "No raw recipient addresses" in business_text
     assert "No raw recipient addresses" in blockers_text
 

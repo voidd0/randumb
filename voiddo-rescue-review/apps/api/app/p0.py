@@ -1023,6 +1023,68 @@ def scout_campaign_quality_trend_snapshot(limit: int = 8) -> dict[str, Any]:
     }
 
 
+def scout_source_readiness_trend_snapshot(limit: int = 8) -> dict[str, Any]:
+    safe_limit = max(2, min(int(limit or 8), 30))
+    rows = fetch_all(
+        """
+        SELECT status, score, row_count, parseable_count, duplicate_domain_count,
+               excluded_niche_count, suppressed_email_count, invalid_email_count,
+               send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM scout_source_readiness_checks
+        ORDER BY created_at DESC, id DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    latest_by_source = fetch_all(
+        """
+        SELECT DISTINCT ON (source_id) source_id, status, score, row_count, parseable_count,
+               duplicate_domain_count, excluded_niche_count, suppressed_email_count,
+               invalid_email_count, send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM scout_source_readiness_checks
+        ORDER BY source_id, created_at DESC, id DESC
+        """
+    )
+    check_count = _count("SELECT count(*) FROM scout_source_readiness_checks")
+    latest = dict(rows[0]) if rows else {}
+    current_blocked = [
+        row
+        for row in latest_by_source
+        if row["status"] != "PASS_SOURCE_READY"
+        or any(bool(row.get(flag)) for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"])
+    ]
+    blocked_series = [1 if row.get("status") != "PASS_SOURCE_READY" else 0 for row in rows]
+    if len(blocked_series) < 2:
+        direction = "insufficient_history"
+    elif blocked_series[0] > blocked_series[-1]:
+        direction = "degrading"
+    elif blocked_series[0] < blocked_series[-1]:
+        direction = "improving"
+    else:
+        direction = "stable"
+    return {
+        "check_count": check_count,
+        "current_sources_checked": len(latest_by_source),
+        "current_sources_ready": len([row for row in latest_by_source if row["status"] == "PASS_SOURCE_READY"]),
+        "current_sources_blocked": len(current_blocked),
+        "latest_status": latest.get("status", "MISSING"),
+        "latest_score": latest.get("score"),
+        "latest_row_count": int(latest.get("row_count", 0) or 0),
+        "latest_parseable_count": int(latest.get("parseable_count", 0) or 0),
+        "latest_duplicate_domain_count": int(latest.get("duplicate_domain_count", 0) or 0),
+        "latest_excluded_niche_count": int(latest.get("excluded_niche_count", 0) or 0),
+        "latest_suppressed_email_count": int(latest.get("suppressed_email_count", 0) or 0),
+        "latest_invalid_email_count": int(latest.get("invalid_email_count", 0) or 0),
+        "blocked_source_trend_direction": direction,
+        "latest_send_mail": bool(latest.get("send_mail", False)),
+        "latest_live_outreach_allowed": bool(latest.get("live_outreach_allowed", False)),
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
 def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> dict[str, Any]:
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1044,6 +1106,7 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
         "mailer_policy_trend": mailer_policy_trend_snapshot(),
         "mailer_business_kpi": mailer_business_kpi_report_snapshot(),
         "scout_campaign_quality_trend": scout_campaign_quality_trend_snapshot(),
+        "scout_source_readiness_trend": scout_source_readiness_trend_snapshot(),
     }
 
 
@@ -1052,6 +1115,7 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
     policy_trend = snapshot["mailer_policy_trend"]
     business_kpi = snapshot["mailer_business_kpi"]
     scout_quality = snapshot["scout_campaign_quality_trend"]
+    scout_source_readiness = snapshot["scout_source_readiness_trend"]
     lines = [
         "# Vøiddo Rescue Runtime State",
         "",
@@ -1094,6 +1158,14 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
         f"- scout_campaign_quality_trend_direction: {scout_quality['failed_count_trend_direction']}",
         f"- scout_campaign_quality_regression_guard_decision: {scout_quality['regression_guard_decision']}",
         f"- scout_campaign_quality_latest_send_mail: {str(scout_quality['latest_send_mail']).lower()}",
+        f"- scout_source_readiness_check_count: {scout_source_readiness['check_count']}",
+        f"- scout_source_readiness_sources_checked: {scout_source_readiness['current_sources_checked']}",
+        f"- scout_source_readiness_sources_ready: {scout_source_readiness['current_sources_ready']}",
+        f"- scout_source_readiness_sources_blocked: {scout_source_readiness['current_sources_blocked']}",
+        f"- scout_source_readiness_latest_status: {scout_source_readiness['latest_status']}",
+        f"- scout_source_readiness_latest_score: {scout_source_readiness['latest_score']}",
+        f"- scout_source_readiness_trend_direction: {scout_source_readiness['blocked_source_trend_direction']}",
+        f"- scout_source_readiness_latest_send_mail: {str(scout_source_readiness['latest_send_mail']).lower()}",
         "",
         "Raw recipient addresses are intentionally omitted.",
     ]
@@ -1109,6 +1181,7 @@ def write_daily_business_report(path: str | Path | None = None) -> dict[str, Any
     policy_trend = snapshot["mailer_policy_trend"]
     business_kpi = snapshot["mailer_business_kpi"]
     scout_quality = snapshot["scout_campaign_quality_trend"]
+    scout_source_readiness = snapshot["scout_source_readiness_trend"]
     target = Path(path) if path else Path(get_settings().storage_root) / "reports" / "daily_business_report.md"
     lines = [
         "# Vøiddo Rescue Daily Business Report",
@@ -1143,6 +1216,12 @@ def write_daily_business_report(path: str | Path | None = None) -> dict[str, Any
         f"- scout_campaign_quality_latest_failed_count: {scout_quality['latest_failed_count']}",
         f"- scout_campaign_quality_trend_direction: {scout_quality['failed_count_trend_direction']}",
         f"- scout_campaign_quality_regression_guard_decision: {scout_quality['regression_guard_decision']}",
+        f"- scout_source_readiness_check_count: {scout_source_readiness['check_count']}",
+        f"- scout_source_readiness_sources_checked: {scout_source_readiness['current_sources_checked']}",
+        f"- scout_source_readiness_sources_ready: {scout_source_readiness['current_sources_ready']}",
+        f"- scout_source_readiness_sources_blocked: {scout_source_readiness['current_sources_blocked']}",
+        f"- scout_source_readiness_latest_status: {scout_source_readiness['latest_status']}",
+        f"- scout_source_readiness_trend_direction: {scout_source_readiness['blocked_source_trend_direction']}",
         f"- mailer_policy_raw_recipients: {str(policy_trend['raw_recipient_addresses_included']).lower()}",
         f"- mailer_policy_secrets: {str(policy_trend['secrets_included']).lower()}",
         "",
@@ -1158,6 +1237,7 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
     policy_trend = snapshot["mailer_policy_trend"]
     business_kpi = snapshot["mailer_business_kpi"]
     scout_quality = snapshot["scout_campaign_quality_trend"]
+    scout_source_readiness = snapshot["scout_source_readiness_trend"]
     blockers: list[str] = []
     if snapshot["bounce_count"] > 0:
         blockers.append("recent_bounce_or_dsn_signal")
@@ -1175,6 +1255,10 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
         blockers.append("scout_campaign_quality_regression_guard_not_pass")
     if scout_quality["latest_status"] not in {"PASS_NO_SEND", "MISSING"}:
         blockers.append("scout_campaign_quality_not_pass")
+    if scout_source_readiness["latest_status"] not in {"PASS_SOURCE_READY", "MISSING"}:
+        blockers.append("scout_source_readiness_not_pass")
+    if scout_source_readiness["latest_send_mail"] or scout_source_readiness["latest_live_outreach_allowed"]:
+        blockers.append("scout_source_readiness_send_state_not_safe")
     target = Path(path) if path else Path(get_settings().storage_root) / "reports" / "blockers_report.md"
     lines = [
         "# Vøiddo Rescue Blockers Report",
@@ -1199,6 +1283,12 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
         f"- scout_campaign_quality_latest_failed_count: {scout_quality['latest_failed_count']}",
         f"- scout_campaign_quality_trend_direction: {scout_quality['failed_count_trend_direction']}",
         f"- scout_campaign_quality_regression_guard_decision: {scout_quality['regression_guard_decision']}",
+        f"- scout_source_readiness_check_count: {scout_source_readiness['check_count']}",
+        f"- scout_source_readiness_sources_checked: {scout_source_readiness['current_sources_checked']}",
+        f"- scout_source_readiness_sources_ready: {scout_source_readiness['current_sources_ready']}",
+        f"- scout_source_readiness_sources_blocked: {scout_source_readiness['current_sources_blocked']}",
+        f"- scout_source_readiness_latest_status: {scout_source_readiness['latest_status']}",
+        f"- scout_source_readiness_trend_direction: {scout_source_readiness['blocked_source_trend_direction']}",
         f"- live_outreach_sent_count: {snapshot['live_outreach_sent_count']}",
         f"- warmup_sent_count: {snapshot['warmup_sent_count']}",
         "",
