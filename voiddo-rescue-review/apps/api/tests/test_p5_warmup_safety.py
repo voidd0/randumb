@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from app.config import Settings
 from app.db import execute, fetch_one
 from app.p0 import (
+    admin_metrics_from_db,
     mailer_policy_trend_snapshot,
     parse_owner_command,
     record_mail_signal,
@@ -227,6 +228,10 @@ def test_scout_source_queue_preview_snapshot_is_no_send():
         assert snapshot["send_mail"] is False
         assert snapshot["raw_recipient_addresses_included"] is False
         assert snapshot["secrets_included"] is False
+        metrics = admin_metrics_from_db()
+        assert metrics["scout_source_queue_candidates"] >= 1
+        assert metrics["scout_source_queue_created_scout_runs"] == 0
+        assert metrics["scout_source_queue_created_scanner_jobs"] == 0
     finally:
         execute("DELETE FROM scout_runs WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"p83-queue-{token}",))
         execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"p83-queue-{token}",))

@@ -280,6 +280,7 @@ def admin_metrics_from_db() -> dict[str, Any]:
         row = fetch_one(sql, params)
         return int(next(iter(row.values()))) if row else 0
 
+    source_queue = scout_source_queue_preview_snapshot()
     scan_rows = fetch_all("SELECT status, count(*) AS count FROM scanner_jobs GROUP BY status")
     email_rows = fetch_all("SELECT status, count(*) AS count FROM outreach_messages GROUP BY status")
     latest_mailer = fetch_one("SELECT status, next_safe_action FROM mailer_status_snapshots ORDER BY created_at DESC LIMIT 1")
@@ -339,6 +340,10 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "reply_action_plans": scalar("SELECT count(*) FROM reply_action_plans"),
         "scout_provenance_scores": scalar("SELECT count(*) FROM scout_provenance_scores"),
         "scout_source_readiness_checks": scalar("SELECT count(*) FROM scout_source_readiness_checks"),
+        "scout_source_queue_candidates": source_queue["candidate_count"],
+        "scout_source_queue_top_score": source_queue["top_score"],
+        "scout_source_queue_created_scout_runs": source_queue["created_scout_runs"],
+        "scout_source_queue_created_scanner_jobs": source_queue["created_scanner_jobs"],
         "scout_campaign_quality_history": scalar("SELECT count(*) FROM scout_campaign_quality_history"),
         "mail_clean_window_transitions": scalar("SELECT count(*) FROM mail_clean_window_transitions"),
         "mailbox_health_scores": scalar("SELECT count(*) FROM mailbox_health_scores"),
