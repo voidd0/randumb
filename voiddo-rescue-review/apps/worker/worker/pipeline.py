@@ -133,13 +133,20 @@ def persist_scan_result(job: dict[str, Any], result: dict[str, Any]) -> str:
                     """,
                     (audit_id, shot.get("type", "screenshot"), file_path, public_url, shot.get("viewport")),
                 )
+            persisted_result = dict(result)
+            if job_meta:
+                persisted_result["job_meta"] = job_meta
+            if lead_id:
+                persisted_result["lead_id"] = str(lead_id)
+            if job_meta.get("scout_lead_id"):
+                persisted_result["scout_lead_id"] = str(job_meta["scout_lead_id"])
             cur.execute(
                 """
                 UPDATE scanner_jobs
                 SET status = 'completed', audit_id = %s, result_json = %s, completed_at = now(), updated_at = now()
                 WHERE id = %s
                 """,
-                (audit_id, Jsonb(result), job["id"]),
+                (audit_id, Jsonb(persisted_result), job["id"]),
             )
         conn.commit()
     return str(audit_id)

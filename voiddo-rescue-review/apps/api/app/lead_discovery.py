@@ -30,6 +30,10 @@ CITY_AREAS: dict[tuple[str, str], str] = {
     ("EE", "tartu"): "Tartu",
     ("IL", "tel aviv"): "Tel Aviv-Yafo",
     ("IL", "jerusalem"): "Jerusalem",
+    ("AU", "gold coast"): "City of Gold Coast",
+    ("AU", "sunshine coast"): "Sunshine Coast Regional",
+    ("NZ", "tauranga"): "Tauranga City",
+    ("NZ", "hamilton"): "Hamilton City",
     ("CA", "st johns"): "St. John's",
 }
 
@@ -151,7 +155,10 @@ def _overpass_query(country: str, city: str, niche: str, limit: int) -> str:
     return f"""
 [out:json][timeout:25];
 area["ISO3166-1"="{country_code}"][admin_level=2]->.countryArea;
-area["name"="{area_name}"](area.countryArea)->.searchArea;
+(
+  area["name"="{area_name}"](area.countryArea);
+  area["name"="{area_name}"];
+)->.searchArea;
 (
   {body}
 );
