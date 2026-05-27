@@ -318,6 +318,7 @@ def admin_metrics_from_db() -> dict[str, Any]:
               AND COALESCE((result_json->>'scanner_retry_count')::int, 0) < 1
             """
         ),
+        "scanner_priority_runs": scalar("SELECT count(*) FROM scanner_priority_runs"),
         "emails": {
             "queued": sum(int(r["count"]) for r in email_rows if r["status"] == "queued"),
             "sent": sum(int(r["count"]) for r in email_rows if r["status"] == "sent"),

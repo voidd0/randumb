@@ -35,6 +35,7 @@ from .p0 import (
 from .outreach import outreach_allowed, render_template
 from .scanner import deterministic_safe_scan
 from .scanner_ops import retry_transient_scanner_failures, scanner_queue_health_snapshot
+from .scanner_priority import latest_scanner_priority_runs, prioritize_guided_scanner_jobs, scanner_guided_backlog
 from .security import verify_paddle_signature
 from .visual_quality import check_visual_publish_gate
 from .autonomous_agents import run_agent, run_daily_loop
@@ -160,6 +161,28 @@ async def scanner_retry_transient_run(request: Request):
         "ok": True,
         "scanner": retry_transient_scanner_failures(
             int(payload.get("limit", 5)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
+
+
+@app.get("/admin/scanner/guided-backlog", dependencies=[Depends(require_admin)])
+def scanner_guided_backlog_get(limit: int = 50):
+    return {"ok": True, "backlog": scanner_guided_backlog(limit)}
+
+
+@app.get("/admin/scanner/priority-runs", dependencies=[Depends(require_admin)])
+def scanner_priority_runs_get(limit: int = 10):
+    return {"ok": True, "runs": latest_scanner_priority_runs(limit)}
+
+
+@app.post("/admin/scanner/prioritize-guided", dependencies=[Depends(require_admin)])
+async def scanner_prioritize_guided_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "priority": prioritize_guided_scanner_jobs(
+            int(payload.get("limit", 25)),
             bool(payload.get("dry_run", True)),
         ),
     }
