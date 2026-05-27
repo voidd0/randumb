@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 03:47 IDT
+Generated: 2026-05-27 04:07 IDT
 
 ## Decision
 
@@ -27,8 +27,11 @@ Generated: 2026-05-27 03:47 IDT
 - Huanshu admin visual gate P56: `PASS`
 - mailer policy score: `100`
 - mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
-- tests: `297 passed`
-- smoke: `297 passed, ok`
+- mailer policy score agent: `PASS`
+- protected admin policy score evidence: `PASS`
+- Huanshu admin visual gate P58: `PASS`
+- tests: `299 passed`
+- smoke: `299 passed, ok`
 
 ## Current Runtime Counts
 
@@ -38,6 +41,7 @@ Generated: 2026-05-27 03:47 IDT
 - mailer retention history rows: `1`
 - mailer digest history rows: `1`
 - mailer digest trend guard agent runs: `1`
+- mailer policy score agent runs: `1`
 - mailer digest trend regressions: `0`
 - latest trend guard raw history rows included: `false`
 - mailer policy blockers: `0`

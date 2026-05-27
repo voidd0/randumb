@@ -1,59 +1,56 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 03:47 IDT
+Branch: `voiddo-rescue-mvp-review-20260526-files`
 
-## Package
+Folder: `voiddo-rescue-review/`
 
-- source path: `/opt/voiddo-rescue`
-- review folder: `voiddo-rescue-review/`
-- branch: `voiddo-rescue-mvp-review-20260526-files`
-- pass: `P57 mailer policy score`
+Pass: `P58 Mailer Policy Score Agent Admin Surface`
 
-## P57 Summary
+## Original Runtime Path
 
-- Added protected no-send mailer policy score.
-- New endpoint: `GET /admin/mailer/policy-score`.
-- Score combines trend guard, mail QA, recent mail signals, warmup state, queue hygiene, ledger hygiene, and resolver-audit hygiene.
-- Runtime score is `100` with decision `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`.
+`/opt/voiddo-rescue`
+
+## Export
+
+- ZIP path: pending generation
+- SHA256: see `ARCHIVE_SHA256.txt` and sidecar `.sha256` file generated after packaging
+
+## Included
+
+- `docker-compose.yml`
+- `.env.example`
+- API, worker, web, admin, shared packages, scripts, migrations, WP plugin source, redacted reports, filelist, and review notes.
+
+## Excluded
+
+- `.env`, `*.env`, mailbox passwords, private keys, raw secrets
+- `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`
+- `node_modules`, `.next`
+- runtime `storage`, `logs`, `backups`, exports, screenshots, visual QA PNG artifacts
+
+## Secret And Artifact Scan
+
+- secret scan: `PASS`
+- owner personal email scan: `PASS`
+- forbidden artifact scan: `PASS`
 
 ## Verification
 
-- targeted P57 tests: `43 passed`
-- full API tests: `297 passed`
-- smoke tests: `297 passed, ok`
-- runtime policy score: `100`
-- runtime policy blockers: `0`
-- send capability: `false`
+- targeted P58 tests: `45 passed`
+- full API tests: `299 passed`
+- smoke: `299 passed, ok`
+- Next production build: `PASS`
+- Huanshu P58: `PASS`
+- Playwright desktop/mobile + axe + pa11y P58: `PASS`
 
-## Runtime Counts
-
-- mailer ops retention history rows: `1`
-- mailer digest history rows: `1`
-- mailer digest trend guard agent runs: `1`
-- mailer action queue rows: `0`
-- send ledger rows: `0`
-- recipient resolver audit rows: `0`
-- warmup sent count: `0`
-- live outreach sent count: `0`
-
-## Exclusions
-
-Excluded from review/export:
-
-- `.env`, `*.env`
-- mailbox passwords, API keys, private keys
-- `.venv`, `venv`, `.pytest_cache`, `__pycache__`, `*.pyc`
-- `node_modules`, `.next`
-- runtime `storage`, `logs`, `backups`
-- visual screenshot artifacts and generated image files
-
-## Secret Scan Status
-
-No raw secrets, mailbox passwords, private keys, owner personal email, venv/cache directories, runtime storage, screenshots, or package-manager build artifacts are intentionally included.
-
-## Safety Confirmation
+## Runtime Safety
 
 - live outreach sent: `0`
-- warmup forced sends: `0`
-- customer-facing auto-replies enabled: `false`
-- non-Rescue projects touched: `false`
+- warmup sent: `0`
+- mailer policy score: `100`
+- mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
+- non-Rescue projects touched: `no`
+
+## Commit
+
+Recorded in the final operator output and available from branch `HEAD`. This file does not embed its own final commit SHA because changing the file changes the commit hash.

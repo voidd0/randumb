@@ -1,11 +1,11 @@
 # Runtime State Report
 
-Generated: 2026-05-27 03:47 IDT
+Generated: 2026-05-27 04:07 IDT
 
 ## Canonical Latest State
 
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- current branch head before P52 commit: `4a0efb0b52f02ccda2c920d04087c35bb8c411ee`
+- current branch head before P58 commit: `5599bfa8262bac89b30da20d6ef85529084f2644`
 - checkout status: `READY`
 - mail auth status: `PASS`
 - latest mail QA decision: `PASS`
@@ -35,6 +35,9 @@ Generated: 2026-05-27 03:47 IDT
 - mailer policy score: `100`
 - mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
 - mailer policy blockers: `0`
+- mailer policy score agent runs: `1`
+- protected admin surfaces policy score evidence: `true`
+- daily loop includes policy score agent after trend guard: `true`
 - daily loop surfaces retention history evidence: `true`
 - owner report includes retention history evidence: `true`
 - raw recipient addresses included: `false`
@@ -50,12 +53,12 @@ Generated: 2026-05-27 03:47 IDT
 
 ## Verification
 
-- targeted P57 mailer policy tests: `43 passed`
-- API tests: `297 passed`
-- smoke test: `297 passed, ok`
+- targeted P58 mailer policy/admin tests: `45 passed`
+- API tests: `299 passed`
+- smoke test: `299 passed, ok`
 - Next production build: `PASS`
-- Huanshu admin visual gate P56: `PASS`
-- Playwright desktop/mobile + axe + pa11y P56: `PASS`
+- Huanshu admin visual gate P58: `PASS`
+- Playwright desktop/mobile + axe + pa11y P58: `PASS`
 - API/web/worker/postgres/redis: healthy
 
 ## Next Allowed Action

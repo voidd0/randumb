@@ -1,6 +1,27 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-27 03:31 IDT
+Generated: 2026-05-27 04:07 IDT
+
+## P58 Admin Policy Score Surface
+
+- Huanshu local adapter: `PASS`
+- Playwright desktop: `PASS`
+- Playwright mobile: `PASS`
+- axe violations: `0`
+- pa11y issues: `0`
+- horizontal overflow: `false`
+- console errors: `0`
+- broken images: `0`
+- unresolved template vars: `false`
+- raw JSON visible: `false`
+- raw report paths visible: `false`
+- owner personal email visible: `false`
+- mailer policy score visible: `true`
+- mailer policy decision visible: `true`
+- policy score blocker count visible: `true`
+- policy score no-send/privacy/secrets flags visible: `true`
+- CTA/action above fold: `true`
+- screenshot artifacts: `reports/visual_qa_p58/admin-desktop.png`, `reports/visual_qa_p58/admin-mobile.png`
 
 ## P56 Admin Trend Guard Summary Surface
 

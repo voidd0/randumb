@@ -353,6 +353,37 @@ def test_mailer_policy_score_endpoint_requires_auth_and_is_no_send():
     assert score["secrets_included"] is False
 
 
+def test_mailer_policy_score_agent_exists_and_is_no_send():
+    _prepare_clean_policy_evidence()
+    run = run_agent("mailer_policy_score_agent")
+    result = run["result_json"]
+    assert run["status"] == "completed"
+    assert result["score"] >= 90
+    assert result["decision"] == "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW"
+    assert result["send_mail"] is False
+    assert result["smtp_called"] is False
+    assert result["live_outreach_allowed"] is False
+    assert result["raw_recipient_addresses_included"] is False
+    assert result["secrets_included"] is False
+
+
+def test_daily_loop_includes_mailer_policy_score_after_trend_guard():
+    result = run_daily_loop()
+    agents = [item["agent"] for item in result["runs"]]
+    assert "mailer_policy_score_agent" in agents
+    assert agents.index("mailer_digest_trend_guard_agent") < agents.index("mailer_policy_score_agent")
+    policy_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_agent"][0]
+    assert policy_run["result_json"]["send_mail"] is False
+    assert policy_run["result_json"]["smtp_called"] is False
+    assert policy_run["result_json"]["live_outreach_allowed"] is False
+    assert policy_run["result_json"]["raw_recipient_addresses_included"] is False
+    assert policy_run["result_json"]["secrets_included"] is False
+    assert result["live_outreach"] is False
+    digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
+    if digest_runs:
+        _cleanup(digest_runs[0]["result_json"]["owner_report_action"]["id"])
+
+
 def test_mailer_digest_retention_agent_does_not_touch_action_queue_or_send_ledger():
     action = execute(
         """
