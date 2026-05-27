@@ -41,6 +41,7 @@ from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 from .language_gate import check_no_ai_public_language
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
+from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
 from .scouts import cleanup_scout_source_readiness_checks, process_queued_scout_runs, process_scout_run_gated, ready_scout_source_queue_candidates, run_scout_source_readiness, scout_source_readiness_regression_guard, scout_source_readiness_summary
@@ -150,6 +151,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "launch_repair_plan_agent": lambda: launch_repair_plan(int(payload.get("limit", 25))),
         "launch_repair_executor_agent": lambda: execute_launch_repair_plan(int(payload.get("limit", 25)), dry_run=True),
         "launch_repair_cycle_agent": lambda: run_launch_repair_cycle(int(payload.get("limit", 25)), execute_safe_auto=False),
+        "launch_operating_lane_agent": lambda: launch_operating_lane_snapshot(int(payload.get("limit", 25))),
+        "launch_operating_lane_advance_agent": lambda: advance_launch_operating_lane(int(payload.get("limit", 25)), execute_safe_auto=False),
         "inbox_agent": lambda: {"dry_run": True, "status": "worker_polls_when_enabled"},
         "owner_command_agent": lambda: {"dry_run": True, "status": "owner_commands_are_gated"},
         "checkout_agent": lambda: {"dry_run": True, "status": "paddle_webhook_handlers_ready"},
@@ -218,6 +221,7 @@ def run_daily_loop() -> dict[str, Any]:
         "launch_readiness_scoreboard_agent",
         "launch_repair_plan_agent",
         "launch_repair_cycle_agent",
+        "launch_operating_lane_agent",
         "reporting_agent",
         "fix_task_agent",
         "monitoring_scheduler_agent",
