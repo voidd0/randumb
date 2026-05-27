@@ -43,7 +43,7 @@ def test_target_plan_prioritizes_first_tier_english_markets():
     countries = [target["country"] for target in plan["targets"]]
     assert plan["primary_tier"] == "US_UK_AU_NZ_CA_IE"
     assert plan["depth_strategy"] == "regional_and_secondary_cities_first"
-    assert plan["first_tier_market_count"] >= 50
+    assert plan["first_tier_market_count"] >= 100
     assert countries[:8] == ["US"] * 8
     assert {"US", "UK", "AU", "NZ", "CA", "IE"}.issubset(set(countries))
     assert plan["default_target"]["country"] == "US"
