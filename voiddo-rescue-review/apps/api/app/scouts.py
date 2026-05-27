@@ -244,6 +244,28 @@ def is_excluded_sensitive_target(business_name: str, domain: str, website: str =
     return _is_excluded_large_brand(business_name, domain, website)
 
 
+def _is_sensitive_health_or_public_target(business_name: str, domain: str, website: str = "") -> bool:
+    combined = re.sub(r"[^a-z0-9.]+", "", f"{business_name} {domain} {website}".lower())
+    return any(
+        token in combined
+        for token in [
+            "communityhealth",
+            "healthsystem",
+            "hopkinsmedicine",
+            "hospital",
+            "medicalcenter",
+            "medicalcentre",
+            "nhs",
+            "renown",
+        ]
+    )
+
+
+def _is_social_or_platform_profile(domain: str, website: str = "") -> bool:
+    normalized = normalize_domain(domain or website)
+    return normalized in {"facebook.com", "instagram.com", "linkedin.com", "twitter.com", "x.com"} or normalized.endswith(".business.site")
+
+
 def run_scout_source_readiness(source_id: str) -> dict[str, Any]:
     source = fetch_one("SELECT * FROM scout_sources WHERE id = %s", (source_id,))
     if not source:
@@ -653,8 +675,16 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
         rejection_reason = ""
         if not domain:
             rejection_reason = "missing_domain"
+        elif niche in EXCLUDED_NICHES:
+            rejection_reason = "excluded_niche"
+        elif _is_sensitive_health_or_public_target(business_name, domain, website):
+            rejection_reason = "excluded_sensitive_target"
+        elif _is_social_or_platform_profile(domain, website):
+            rejection_reason = "excluded_sensitive_target"
+        elif _is_excluded_large_brand(business_name, domain, website):
+            rejection_reason = "excluded_large_enterprise"
         elif is_excluded_sensitive_target(business_name, domain, website, niche):
-            rejection_reason = "excluded_niche" if niche in EXCLUDED_NICHES else "excluded_sensitive_target"
+            rejection_reason = "excluded_sensitive_target"
         elif fetch_one(
             """
             SELECT 1
@@ -665,8 +695,6 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
             (domain, email or ""),
         ):
             rejection_reason = "duplicate_scout_lead"
-        elif _is_excluded_large_brand(business_name, domain, website):
-            rejection_reason = "excluded_sensitive_target"
         elif fetch_one("SELECT 1 FROM businesses WHERE lower(domain) = lower(%s)", (domain,)):
             rejection_reason = "duplicate_domain"
         elif email and fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,)):

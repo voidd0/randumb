@@ -50,6 +50,7 @@ def test_warmup_blocked_if_recent_bounce_exists(monkeypatch):
     try:
         monkeypatch.setattr("app.p0.latest_mail_qa_decision", lambda: "PASS")
         monkeypatch.setattr("app.p0.effective_pause_state", lambda area, configured=False: False)
+        monkeypatch.setattr("app.p0.warmup_daily_cap", lambda: 999)
         record_mail_signal("bounce", "warning", "test_p5_bounce", recipient_email=schedule["recipient_email"])
         result = run_warmup_calendar_due(limit=1)
         row = fetch_one("SELECT status FROM warmup_schedule WHERE id = %s", (schedule["id"],))
@@ -65,6 +66,7 @@ def test_warmup_blocked_if_recent_rate_limit_exists(monkeypatch):
         monkeypatch.setattr("app.p0.latest_mail_qa_decision", lambda: "PASS")
         monkeypatch.setattr("app.p0.effective_pause_state", lambda area, configured=False: False)
         monkeypatch.setattr("app.p0.recent_mail_signal_count", lambda types, hours=24: 1 if "smtp_rate_limit" in types else 0)
+        monkeypatch.setattr("app.p0.warmup_daily_cap", lambda: 999)
         result = run_warmup_calendar_due(limit=1)
         row = fetch_one("SELECT status FROM warmup_schedule WHERE id = %s", (schedule["id"],))
         assert result["sent"] == 0
@@ -81,6 +83,7 @@ def test_warmup_skipped_if_recipient_suppressed(monkeypatch):
         monkeypatch.setattr("app.p0.latest_mail_qa_decision", lambda: "PASS")
         monkeypatch.setattr("app.p0.effective_pause_state", lambda area, configured=False: False)
         monkeypatch.setattr("app.p0.recent_mail_signal_count", lambda types, hours=24: 0)
+        monkeypatch.setattr("app.p0.warmup_daily_cap", lambda: 999)
         result = run_warmup_calendar_due(limit=1)
         row = fetch_one("SELECT status FROM warmup_schedule WHERE id = %s", (schedule["id"],))
         assert result["sent"] == 0
@@ -95,6 +98,7 @@ def test_warmup_blocked_if_mail_qa_not_pass(monkeypatch):
         monkeypatch.setattr("app.p0.latest_mail_qa_decision", lambda: "FAIL_BLOCK_LAUNCH")
         monkeypatch.setattr("app.p0.effective_pause_state", lambda area, configured=False: False)
         monkeypatch.setattr("app.p0.recent_mail_signal_count", lambda types, hours=24: 0)
+        monkeypatch.setattr("app.p0.warmup_daily_cap", lambda: 999)
         result = run_warmup_calendar_due(limit=1)
         row = fetch_one("SELECT status FROM warmup_schedule WHERE id = %s", (schedule["id"],))
         assert result["sent"] == 0
