@@ -1747,9 +1747,9 @@ def warmup_pre_send_gate(row: dict[str, Any], settings: Settings | None = None) 
         "sent_today": _count(
             """
             SELECT count(*)
-            FROM email_events
-            WHERE event_type = 'warmup_sent'
-              AND created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+            FROM warmup_schedule
+            WHERE status = 'sent'
+              AND sent_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
             """
         ),
     }
@@ -1775,9 +1775,9 @@ def run_warmup_calendar_due(limit: int = 2) -> dict[str, Any]:
     today_sent = fetch_one(
         """
         SELECT count(*) AS count
-        FROM email_events
-        WHERE event_type = 'warmup_sent'
-          AND created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+        FROM warmup_schedule
+        WHERE status = 'sent'
+          AND sent_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
         """
     )
     remaining = max(0, warmup_daily_cap() - int(today_sent["count"]))

@@ -107,6 +107,45 @@ def test_warmup_blocked_if_mail_qa_not_pass(monkeypatch):
         _cleanup(schedule["id"])
 
 
+def test_warmup_daily_cap_ignores_legacy_email_events(monkeypatch):
+    sent_messages = []
+
+    class FakeSMTP:
+        def __init__(self, *args, **kwargs): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def ehlo(self): pass
+        def starttls(self, context=None): pass
+        def login(self, user, password): pass
+        def send_message(self, msg):
+            sent_messages.append(msg["To"])
+            return {}
+
+    schedule = _due_schedule()
+    try:
+        execute(
+            """
+            INSERT INTO email_events(event_type, payload_json, mailbox, message_id)
+            VALUES ('warmup_sent', '{}'::jsonb, 'audit@voiddorescue.com', %s)
+            """,
+            (f"legacy-{uuid.uuid4().hex}",),
+        )
+        monkeypatch.setattr("app.p0.latest_mail_qa_decision", lambda: "PASS")
+        monkeypatch.setattr("app.p0.effective_pause_state", lambda area, configured=False: False)
+        monkeypatch.setattr("app.p0.recent_mail_signal_count", lambda types, hours=24: 0)
+        monkeypatch.setattr("app.p0.is_recipient_suppressed", lambda recipient: False)
+        monkeypatch.setattr("app.p0.smtp_credentials_for_sender", lambda settings, sender: ("user", "password", sender))
+        monkeypatch.setattr("app.p0.smtplib.SMTP", FakeSMTP)
+        monkeypatch.setattr("app.p0.warmup_daily_cap", lambda: 1)
+        result = run_warmup_calendar_due(limit=1)
+        row = fetch_one("SELECT status FROM warmup_schedule WHERE id = %s", (schedule["id"],))
+        assert result["sent"] == 1
+        assert row["status"] == "sent"
+        assert sent_messages == [schedule["recipient_email"]]
+    finally:
+        _cleanup(schedule["id"])
+
+
 def test_diagnostic_sends_no_more_than_one_per_minute(monkeypatch):
     sent_messages = []
 
