@@ -38,6 +38,8 @@ export default async function AdminPage() {
   const policyScoreHistoryData = await fetchJson("/admin/mailer/policy-score/history", authorization ? { Authorization: authorization } : {});
   const policyScoreRetentionData = await fetchJson("/admin/mailer/policy-score/retention", authorization ? { Authorization: authorization } : {});
   const policyScoreRegressionData = await fetchJson("/admin/mailer/policy-score/regression-guard/latest", authorization ? { Authorization: authorization } : {});
+  const scoutQualitySummaryData = await fetchJson("/admin/scouts/campaign-quality-summary", authorization ? { Authorization: authorization } : {});
+  const scoutQualityHistoryData = await fetchJson("/admin/scouts/campaign-quality-history", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
@@ -64,6 +66,14 @@ export default async function AdminPage() {
   const policyScoreHistory = policyScoreHistoryData?.history || digest.mailer_policy_score_history || {};
   const policyScoreRetention = policyScoreRetentionData?.retention || {};
   const policyScoreRegression = policyScoreRegressionData?.guard || {};
+  const scoutQualitySummary = scoutQualitySummaryData?.summary || {};
+  const scoutRunStatuses = scoutQualitySummary.scout_runs_by_status || {};
+  const scoutLatestSelfCheck = scoutQualitySummary.latest_self_check || {};
+  const scoutLatestProvenance = scoutQualitySummary.latest_provenance || {};
+  const scoutCampaignQuality = scoutQualitySummary.campaign_quality || {};
+  const scoutQualityHistory = scoutQualityHistoryData?.history || {};
+  const latestScoutQualityHistory = scoutQualityHistory.latest || {};
+  const latestScoutQualityCampaign = latestScoutQualityHistory.campaign_quality_json || {};
   const latestRealOpsAction = opsActions.latest_real || {};
   const opsRetentionAgent = opsActions.latest_retention_agent || {};
   const opsRetentionReport = opsActions.retention_agent_report || {};
@@ -123,6 +133,7 @@ export default async function AdminPage() {
     ["monitoring runs", metrics.monitoring_runs ?? 0],
     ["scout checks", metrics.scout_self_checks ?? 0],
     ["scout provenance", metrics.scout_provenance_scores ?? 0],
+    ["scout quality history", metrics.scout_campaign_quality_history ?? 0],
     ["audit strength", metrics.audit_strength_scores ?? 0],
     ["language gates", metrics.public_language_gate_runs ?? 0],
   ];
@@ -334,6 +345,29 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">review</span><span>policy score review task</span><span className="score">{policyScoreRegression.review_task_created ? "created" : "none"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in policy guard</span><span className="score">{policyScoreRegression.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">secret</span><span>secrets in policy guard</span><span className="score">{policyScoreRegression.secrets_included ? "blocked" : "omitted"}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Scout Quality Control</h2>
+            <div className="row"><span className="tag">quality</span><span>latest scout quality summary</span><span className="score">{scoutQualitySummary.status ?? "missing"}</span></div>
+            <div className="row"><span className="tag">runs</span><span>completed scout runs</span><span className="score">{scoutRunStatuses.completed ?? 0}</span></div>
+            <div className="row"><span className="tag">review</span><span>scout runs requiring review</span><span className="score">{scoutRunStatuses.review_required ?? 0}</span></div>
+            <div className="row"><span className="tag">self</span><span>latest scout self-check</span><span className="score">{scoutLatestSelfCheck.status ?? "missing"}</span></div>
+            <div className="row"><span className="tag">accepted</span><span>latest self-check accepted leads</span><span className="score">{scoutLatestSelfCheck.accepted_count ?? 0}</span></div>
+            <div className="row"><span className="tag">rejected</span><span>latest self-check rejected leads</span><span className="score">{scoutLatestSelfCheck.rejected_count ?? 0}</span></div>
+            <div className="row"><span className="tag">prov</span><span>latest provenance status</span><span className="score">{scoutLatestProvenance.status ?? "missing"}</span></div>
+            <div className="row"><span className="tag">score</span><span>latest provenance score</span><span className="score">{scoutLatestProvenance.score ?? 0}</span></div>
+            <div className="row"><span className="tag">source</span><span>source URL coverage</span><span className="score">{Math.round(Number(scoutLatestProvenance.source_url_coverage ?? 0) * 100)}%</span></div>
+            <div className="row"><span className="tag">campaign</span><span>campaign leads checked by scout gate</span><span className="score">{scoutCampaignQuality.latest_checked_count ?? 0}</span></div>
+            <div className="row"><span className="tag">passed</span><span>campaign scout-quality passes</span><span className="score">{scoutCampaignQuality.latest_passed_count ?? 0}</span></div>
+            <div className="row"><span className="tag">failed</span><span>campaign scout-quality failures</span><span className="score">{scoutCampaignQuality.latest_failed_count ?? 0}</span></div>
+            <div className="row"><span className="tag">history</span><span>persisted scout quality snapshots</span><span className="score">{scoutQualityHistory.count ?? 0}</span></div>
+            <div className="row"><span className="tag">latest</span><span>latest quality history status</span><span className="score">{latestScoutQualityHistory.status ?? "missing"}</span></div>
+            <div className="row"><span className="tag">blockers</span><span>latest quality history blockers</span><span className="score">{latestScoutQualityHistory.blocker_count ?? 0}</span></div>
+            <div className="row"><span className="tag">failed</span><span>latest quality history failed count</span><span className="score">{latestScoutQualityCampaign.latest_failed_count ?? 0}</span></div>
+            <div className="row"><span className="tag">send</span><span>scout quality SMTP capability</span><span className="score">{scoutQualitySummary.send_mail ? "armed" : "no-send"}</span></div>
+            <div className="row"><span className="tag">live</span><span>scout quality live outreach gate</span><span className="score">{scoutQualitySummary.live_outreach_allowed ? "armed" : "blocked"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in scout quality summary</span><span className="score">{scoutQualitySummary.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">secret</span><span>secrets in scout quality summary</span><span className="score">{scoutQualitySummary.secrets_included ? "blocked" : "omitted"}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>
