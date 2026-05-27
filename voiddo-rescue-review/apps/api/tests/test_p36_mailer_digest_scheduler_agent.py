@@ -13,6 +13,12 @@ def _cleanup(action_id: str | None = None) -> None:
     execute("DELETE FROM mailer_digest_reports WHERE report_path LIKE %s", ("%mailer_digest_agent_report.md%",))
 
 
+def _clean_trend_runtime() -> None:
+    execute("DELETE FROM mailer_send_ledger")
+    execute("DELETE FROM recipient_resolver_audit")
+    execute("DELETE FROM mailer_action_queue")
+
+
 def test_mailer_digest_agent_exists_and_generates_report():
     run = run_agent("mailer_digest_agent")
     result = run["result_json"]
@@ -165,6 +171,47 @@ def test_daily_loop_includes_mailer_digest_retention_agent():
     assert "mailer_digest_retention_agent" in agents
     retention_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_retention_agent"]
     assert retention_runs[0]["result_json"]["send_mail"] is False
+    assert result["live_outreach"] is False
+    digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
+    if digest_runs:
+        _cleanup(digest_runs[0]["result_json"]["owner_report_action"]["id"])
+
+
+def test_mailer_digest_trend_guard_agent_passes_clean_history():
+    _clean_trend_runtime()
+    run_agent("mailer_ops_retention_agent")
+    digest_run = run_agent("mailer_digest_agent")
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (digest_run["result_json"]["owner_report_action"]["id"],))
+    run = run_agent("mailer_digest_trend_guard_agent")
+    assert run["status"] == "completed"
+    assert run["result_json"]["decision"] == "PASS_NO_SEND"
+    assert run["result_json"]["send_mail"] is False
+    assert run["result_json"]["live_outreach_allowed"] is False
+    assert run["result_json"]["raw_recipient_addresses_included"] is False
+    assert run["result_json"]["secrets_included"] is False
+
+
+def test_mailer_digest_trend_guard_agent_blocks_queue_regression():
+    _clean_trend_runtime()
+    run_agent("mailer_ops_retention_agent")
+    digest_run = run_agent("mailer_digest_agent")
+    run = run_agent("mailer_digest_trend_guard_agent")
+    assert run["status"] == "completed"
+    assert run["result_json"]["decision"] == "FAIL_BLOCK_LAUNCH"
+    assert "mailer_action_queue_not_empty" in run["result_json"]["regressions"]
+    assert run["result_json"]["send_mail"] is False
+    _cleanup(digest_run["result_json"]["owner_report_action"]["id"])
+
+
+def test_daily_loop_includes_mailer_digest_trend_guard_agent_after_digest():
+    result = run_daily_loop()
+    agents = [item["agent"] for item in result["runs"]]
+    assert "mailer_digest_trend_guard_agent" in agents
+    assert agents.index("mailer_digest_agent") < agents.index("mailer_digest_trend_guard_agent")
+    assert agents.index("mailer_ops_retention_agent") < agents.index("mailer_digest_trend_guard_agent")
+    guard_run = [item for item in result["runs"] if item["agent"] == "mailer_digest_trend_guard_agent"][0]
+    assert guard_run["result_json"]["send_mail"] is False
+    assert guard_run["result_json"]["live_outreach_allowed"] is False
     assert result["live_outreach"] is False
     digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
     if digest_runs:

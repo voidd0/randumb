@@ -1,38 +1,39 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 02:49 IDT
+Generated: 2026-05-27 03:03 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - review folder: `voiddo-rescue-review/`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- pass: `P53 mailer digest trend guard`
+- pass: `P54 mailer digest trend guard agent`
 
-## P53 Summary
+## P54 Summary
 
-- Added a protected no-send mailer digest trend guard.
-- The guard compares recent digest history, ops-retention history, and queue hygiene.
-- It fails closed if digest history shows email/warmup/live-outreach sends, if retention history shows SMTP/live flags, if privacy/secret flags regress, or if queue/ledger/resolver rows are present.
+- Added `mailer_digest_trend_guard_agent`.
+- Wired it into the autonomous daily loop after ops-retention, digest, and digest-retention evidence.
+- The agent persists through `agent_runs` and returns no-send trend-guard evidence.
 
-## P52 Carry-Forward
+## P53 Carry-Forward
 
-- Protected admin Daily Digest Evidence displays sanitized ops-retention history evidence.
-- Huanshu and secondary visual QA passed for the admin surface in P52.
+- Protected `GET /admin/mailer/digest-trend-guard` remains available for direct admin/API inspection.
+- The guard fails closed on queue/ledger/resolver or send/privacy/secret regressions.
 
 ## Verification
 
-- targeted P53 tests: `39 passed`
-- full API tests: `287 passed`
-- smoke tests: `287 passed, ok`
-- P53 runtime endpoint decision: `PASS_NO_SEND`
-- P53 runtime regressions: `0`
+- targeted P54 tests: `36 passed`
+- full API tests: `290 passed`
+- smoke tests: `290 passed, ok`
+- P54 runtime agent decision: `PASS_NO_SEND`
+- P54 runtime regressions: `0`
 - latest Huanshu visual gate: `PASS` from P52 admin UI change
 
 ## Runtime Counts After Cleanup
 
 - mailer ops retention history rows: `1`
 - mailer digest history rows: `1`
+- mailer digest trend guard agent runs: `1`
 - mailer action queue rows: `0`
 - send ledger rows: `0`
 - recipient resolver audit rows: `0`
