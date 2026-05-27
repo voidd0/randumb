@@ -28,9 +28,28 @@ def _cleanup_token(token: str):
     execute("DELETE FROM campaign_leads WHERE preview_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM campaigns WHERE name LIKE %s", (f"%{token}%",))
     execute("DELETE FROM scanner_jobs WHERE url LIKE %s OR result_json::text LIKE %s", (f"%{token}%", f"%{token}%"))
-    execute("DELETE FROM lead_scores WHERE lead_id IN (SELECT id FROM leads WHERE source IN ('scout_agent', 'test_prod'))")
-    execute("DELETE FROM leads WHERE source IN ('scout_agent', 'test_prod')")
-    execute("DELETE FROM businesses WHERE domain LIKE %s OR source IN ('scout_agent', 'test_prod')", (f"%{token}%",))
+    execute(
+        """
+        DELETE FROM lead_scores
+        WHERE lead_id IN (
+          SELECT l.id
+          FROM leads l
+          JOIN businesses b ON b.id = l.business_id
+          WHERE b.domain LIKE %s OR l.email LIKE %s OR l.source = 'test_prod'
+        )
+        """,
+        (f"%{token}%", f"%{token}%"),
+    )
+    execute(
+        """
+        DELETE FROM leads
+        WHERE source = 'test_prod'
+           OR email LIKE %s
+           OR business_id IN (SELECT id FROM businesses WHERE domain LIKE %s)
+        """,
+        (f"%{token}%", f"%{token}%"),
+    )
+    execute("DELETE FROM businesses WHERE domain LIKE %s OR source = 'test_prod'", (f"%{token}%",))
     execute("DELETE FROM scout_provenance_scores WHERE scout_run_id IN (SELECT id FROM scout_runs WHERE result_json::text LIKE %s OR source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s))", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM scout_self_checks WHERE scout_run_id IN (SELECT id FROM scout_runs WHERE result_json::text LIKE %s OR source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s))", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"%{token}%",))
@@ -84,6 +103,21 @@ def test_scout_rejects_excluded_niche():
         _cleanup_token(token)
 
 
+def test_scout_rejects_excluded_large_enterprise_brand():
+    token = uuid.uuid4().hex[:8]
+    csv_text = f"business_name,website_url,email,country,niche\nChain Hotel,https://marriott-{token}.example.test,a@marriott-{token}.example.test,US,local tourism\n"
+    try:
+        source = create_scout_source({"name": f"largebrand-{token}", "source_type": "manual_csv_scout", "config_json": {"csv": csv_text}})
+        run = create_scout_run(str(source["id"]))
+        result = process_scout_run(str(run["id"]))
+        assert result["accepted"] == 0
+        assert result["rejected"] == 1
+        row = fetch_one("SELECT rejection_reason FROM scout_leads WHERE domain = %s", (f"marriott-{token}.example.test",))
+        assert row["rejection_reason"] == "excluded_large_enterprise"
+    finally:
+        _cleanup_token(token)
+
+
 def test_lead_scoring_explains_reasoning():
     token = uuid.uuid4().hex[:8]
     try:
@@ -94,6 +128,20 @@ def test_lead_scoring_explains_reasoning():
         result = score_lead(str(lead["id"]), str(audit["id"]))
         assert result["final_score"] >= 50
         assert "severity_counts" in result["reasoning_json"]
+    finally:
+        _cleanup_token(token)
+
+
+def test_lead_scoring_qualifies_email_lead_with_high_contact_path_issue():
+    token = uuid.uuid4().hex[:8]
+    try:
+        business = execute("INSERT INTO businesses(name, domain, source, niche, country, status) VALUES (%s, %s, 'test_prod', 'dentists', 'US', 'scouted') RETURNING id", (f"Contact Path {token}", f"contactpath-{token}.example.test"))
+        lead = execute("INSERT INTO leads(business_id, email, source, status, niche, country, language) VALUES (%s, %s, 'test_prod', 'scouted', 'dentists', 'US', 'en') RETURNING id", (business["id"], f"owner@contactpath-{token}.example.test"))
+        audit = execute("INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at) VALUES (%s, %s, %s, %s, 'completed', 55, 'Contact issue', %s, now()) RETURNING id", (business["id"], lead["id"], f"contactpath-{token}.example.test", f"https://contactpath-{token}.example.test", f"contactpath-{token}"))
+        execute("INSERT INTO audit_issues(audit_id, issue_type, severity, title, public_text) VALUES (%s, 'contact_path', 'high', 'No obvious enquiry path', 'No obvious enquiry path')", (audit["id"],))
+        result = score_lead(str(lead["id"]), str(audit["id"]))
+        assert result["final_score"] >= 70
+        assert result["reasoning_json"]["issue_types"] == ["contact_path"]
     finally:
         _cleanup_token(token)
 

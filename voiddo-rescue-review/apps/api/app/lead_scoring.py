@@ -17,7 +17,7 @@ HIGH_VALUE_NICHES = {
     "local tourism": 10,
     "private courses": 9,
 }
-HIGH_VALUE_COUNTRIES = {"US": 16, "UK": 14, "IE": 13, "IL": 12, "EE": 9, "DE": 13, "NL": 13}
+HIGH_VALUE_COUNTRIES = {"US": 16, "UK": 14, "AU": 14, "NZ": 13, "CA": 14, "IE": 13, "IL": 12, "EE": 9, "DE": 13, "NL": 13}
 ROLE_INBOX_PENALTY = {"info": -5, "hello": -3, "support": -8, "admin": -10, "noreply": -30}
 FREE_EMAIL_DOMAINS = {"gmail.com", "outlook.com", "hotmail.com", "yahoo.com", "icloud.com", "proton.me"}
 
@@ -54,6 +54,8 @@ def score_from_audit(audit: dict[str, Any] | None, lead: dict[str, Any]) -> Scor
     technical += severity_counts.get("low", 0) * 4
     if audit:
         technical += max(0, 100 - int(audit.get("score") or 0)) // 3
+    if {"contact_path", "availability", "https"} & issue_types:
+        technical += 10
 
     niche = (lead.get("niche") or "").lower()
     country = (lead.get("country") or "").upper()
@@ -65,9 +67,9 @@ def score_from_audit(audit: dict[str, Any] | None, lead: dict[str, Any]) -> Scor
 
     urgency = 10
     urgency += severity_counts.get("critical", 0) * 30
-    urgency += severity_counts.get("high", 0) * 18
+    urgency += severity_counts.get("high", 0) * 20
     if {"contact_path", "availability", "https"} & issue_types:
-        urgency += 22
+        urgency += 32
 
     value = 30 + HIGH_VALUE_NICHES.get(niche, 6) + HIGH_VALUE_COUNTRIES.get(country, 6)
     if niche in {"dentists", "clinics", "law firms", "contractors"}:
@@ -89,7 +91,7 @@ def score_from_audit(audit: dict[str, Any] | None, lead: dict[str, Any]) -> Scor
     urgency = clamp(urgency)
     value = clamp(value)
     deliverability = clamp(deliverability)
-    final = clamp(round((technical * 0.32) + (sales * 0.2) + (urgency * 0.22) + (value * 0.16) + (deliverability * 0.10)))
+    final = clamp(round((technical * 0.35) + (sales * 0.18) + (urgency * 0.25) + (value * 0.14) + (deliverability * 0.08)))
     reasoning = {
         "severity_counts": severity_counts,
         "issue_types": sorted(issue_types),
@@ -97,7 +99,7 @@ def score_from_audit(audit: dict[str, Any] | None, lead: dict[str, Any]) -> Scor
         "country": country,
         "email_domain": domain,
         "suppressed": bool(suppressed),
-        "weights": {"technical": 0.32, "sales": 0.2, "urgency": 0.22, "value": 0.16, "deliverability": 0.10},
+        "weights": {"technical": 0.35, "sales": 0.18, "urgency": 0.25, "value": 0.14, "deliverability": 0.08},
     }
     return ScoreResult(technical, sales, urgency, value, deliverability, final, reasoning)
 
@@ -134,4 +136,3 @@ def score_lead(lead_id: str, audit_id: str | None = None) -> dict[str, Any]:
     )
     execute("UPDATE leads SET score = %s, updated_at = now() WHERE id = %s", (result.final_score, lead_id))
     return dict(row)
-

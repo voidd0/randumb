@@ -27,7 +27,7 @@ def claim_scanner_job() -> dict[str, Any] | None:
                 SET status = 'running', started_at = now(), updated_at = now()
                 FROM picked
                 WHERE scanner_jobs.id = picked.id
-                RETURNING scanner_jobs.id, scanner_jobs.url, scanner_jobs.business_name, scanner_jobs.dry_run
+                RETURNING scanner_jobs.id, scanner_jobs.url, scanner_jobs.business_name, scanner_jobs.dry_run, scanner_jobs.result_json
                 """
             )
             row = cur.fetchone()
@@ -49,7 +49,29 @@ def persist_scan_result(job: dict[str, Any], result: dict[str, Any]) -> str:
     with connect() as conn:
         with conn.cursor() as cur:
             business_id = None
-            if job.get("business_name"):
+            lead_id = None
+            job_meta = job.get("result_json") or {}
+            if isinstance(job_meta, str):
+                try:
+                    job_meta = json.loads(job_meta)
+                except Exception:
+                    job_meta = {}
+            if job_meta.get("lead_id"):
+                cur.execute("SELECT id, business_id FROM leads WHERE id = %s", (job_meta["lead_id"],))
+                lead = cur.fetchone()
+                if lead:
+                    lead_id = lead["id"]
+                    business_id = lead["business_id"]
+            contact_emails = []
+            contact_evidence = result.get("contact_evidence") or {}
+            if isinstance(contact_evidence, dict):
+                contact_emails = [str(item).strip().lower() for item in contact_evidence.get("mailto_emails") or [] if "@" in str(item)]
+            discovered_email = contact_emails[0] if contact_emails else None
+            if discovered_email:
+                cur.execute("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (discovered_email,))
+                if cur.fetchone():
+                    discovered_email = None
+            if not business_id and job.get("business_name"):
                 cur.execute(
                     """
                     INSERT INTO businesses(name, website_url, domain, source, status)
@@ -61,18 +83,24 @@ def persist_scan_result(job: dict[str, Any], result: dict[str, Any]) -> str:
                 business_id = cur.fetchone()["id"]
             cur.execute(
                 """
-                INSERT INTO audits(business_id, domain, url, status, score, summary, public_slug, checked_at)
-                VALUES (%s, %s, %s, 'completed', %s, %s, %s, now())
+                INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+                VALUES (%s, %s, %s, %s, 'completed', %s, %s, %s, now())
                 ON CONFLICT (public_slug) DO UPDATE
                   SET status = 'completed',
+                      business_id = COALESCE(EXCLUDED.business_id, audits.business_id),
+                      lead_id = COALESCE(EXCLUDED.lead_id, audits.lead_id),
                       score = EXCLUDED.score,
                       summary = EXCLUDED.summary,
                       checked_at = now()
                 RETURNING id
                 """,
-                (business_id, result["domain"], result["url"], result["score"], _summary(result), result["public_slug"]),
+                (business_id, lead_id, result["domain"], result["url"], result["score"], _summary(result), result["public_slug"]),
             )
             audit_id = cur.fetchone()["id"]
+            if discovered_email and lead_id:
+                cur.execute("UPDATE leads SET email = COALESCE(email, %s), updated_at = now() WHERE id = %s", (discovered_email, lead_id))
+            if discovered_email and business_id:
+                cur.execute("UPDATE businesses SET email = COALESCE(email, %s), updated_at = now() WHERE id = %s", (discovered_email, business_id))
             cur.execute("DELETE FROM audit_issues WHERE audit_id = %s", (audit_id,))
             cur.execute("DELETE FROM screenshots WHERE audit_id = %s", (audit_id,))
             for issue in result.get("issues", []):

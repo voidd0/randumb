@@ -16,6 +16,20 @@ from .scout_quality import lead_scout_quality_gate, run_scout_quality_gate
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 
 EXCLUDED_NICHES = {"government", "banks", "bank", "hospitals", "hospital", "gambling", "adult", "crypto", "political"}
+EXCLUDED_LARGE_BRAND_TOKENS = {
+    "bestwestern",
+    "choicehotels",
+    "hilton",
+    "holidayinn",
+    "hyatt",
+    "ihg",
+    "lq.com",
+    "marriott",
+    "motel6",
+    "radissonhotels",
+    "super8",
+    "wyndhamhotels",
+}
 SUPPORTED_SCOUT_TYPES = {
     "manual_csv_scout",
     "sitemap/domain_list_scout",
@@ -186,6 +200,11 @@ def _source_row_confidence(row: dict[str, Any]) -> float:
     return raw / 100 if raw > 1 else raw
 
 
+def _is_excluded_large_brand(business_name: str, domain: str, website: str = "") -> bool:
+    combined = re.sub(r"[^a-z0-9.]+", "", f"{business_name} {domain} {website}".lower())
+    return any(token in combined for token in EXCLUDED_LARGE_BRAND_TOKENS)
+
+
 def run_scout_source_readiness(source_id: str) -> dict[str, Any]:
     source = fetch_one("SELECT * FROM scout_sources WHERE id = %s", (source_id,))
     if not source:
@@ -204,11 +223,16 @@ def run_scout_source_readiness(source_id: str) -> dict[str, Any]:
     suppressed = 0
     invalid_email = 0
     excluded = 0
+    excluded_large_brand = 0
     confidence_values: list[float] = []
     for row in rows:
         niche = str(row.get("niche") or source["niche"] or "").strip().lower()
+        domain = _source_row_domain(row)
+        business_name = str(row.get("business_name") or row.get("name") or "")
         if niche in EXCLUDED_NICHES:
             excluded += 1
+        if _is_excluded_large_brand(business_name, domain, str(row.get("website_url") or row.get("url") or row.get("domain") or "")):
+            excluded_large_brand += 1
         email = str(row.get("email") or "").strip().lower()
         if email and not EMAIL_RE.match(email):
             invalid_email += 1
@@ -231,6 +255,9 @@ def run_scout_source_readiness(source_id: str) -> dict[str, Any]:
         issues.append({"code": "duplicate_domains_in_source", "severity": "medium", "count": len(duplicate_domains)})
     if excluded:
         issues.append({"code": "excluded_niche_rows", "severity": "high", "count": excluded})
+    if excluded_large_brand:
+        severity = "high" if row_count and excluded_large_brand / row_count > 0.2 else "medium"
+        issues.append({"code": "excluded_large_brand_rows", "severity": severity, "count": excluded_large_brand})
     if suppressed:
         issues.append({"code": "suppressed_emails_in_source", "severity": "high", "count": suppressed})
     if invalid_email:
@@ -589,6 +616,22 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
             rejection_reason = "missing_domain"
         elif niche in EXCLUDED_NICHES:
             rejection_reason = "excluded_niche"
+        elif _is_excluded_large_brand(business_name, domain, website):
+            rejection_reason = "excluded_large_enterprise"
+        elif fetch_one(
+            """
+            SELECT 1
+            FROM scout_leads
+            WHERE lower(COALESCE(domain, '')) = lower(%s)
+              AND lower(COALESCE(email, '')) = lower(%s)
+              AND EXISTS (
+                SELECT 1 FROM businesses b
+                WHERE lower(b.domain) = lower(%s)
+              )
+            """,
+            (domain, email or "", domain),
+        ):
+            rejection_reason = "duplicate_scout_lead"
         elif fetch_one("SELECT 1 FROM businesses WHERE lower(domain) = lower(%s)", (domain,)):
             rejection_reason = "duplicate_domain"
         elif email and fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,)):
@@ -598,6 +641,8 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
             accepted += 1
         else:
             rejected += 1
+        if rejection_reason == "duplicate_scout_lead":
+            continue
         scout_lead = execute(
             """
             INSERT INTO scout_leads(scout_run_id, business_name, domain, website_url, email, phone, country, city,

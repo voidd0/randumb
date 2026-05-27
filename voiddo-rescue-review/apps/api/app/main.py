@@ -70,6 +70,7 @@ from .launch_operating_lane import advance_launch_operating_lane, launch_operati
 from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
+from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
@@ -1080,6 +1081,27 @@ async def source_adapter_directory(request: Request):
 async def source_adapter_directory_source(request: Request):
     payload = await request.json()
     return {"ok": True, "result": prepare_scout_source_from_adapter("directory", payload)}
+
+
+@app.post("/admin/lead-discovery/overpass", dependencies=[Depends(require_admin)])
+async def lead_discovery_overpass_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "discovery": overpass_lead_discovery(
+            payload.get("country", "US"),
+            payload.get("city", "Boise"),
+            payload.get("niche", "dentists"),
+            payload.get("language", "en"),
+            int(payload.get("limit", 50)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
+
+
+@app.get("/admin/lead-discovery/targets", dependencies=[Depends(require_admin)])
+def lead_discovery_targets(include_secondary: bool = False):
+    return {"ok": True, "plan": lead_discovery_target_plan(include_secondary)}
 
 
 @app.post("/admin/scouts/runs/{run_id}/self-check", dependencies=[Depends(require_admin)])

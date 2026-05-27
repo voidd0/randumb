@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 import hashlib
 import json
 import time
@@ -30,6 +30,20 @@ def _slug(url: str) -> str:
 def _issue_score(issues: list[SafeIssue]) -> int:
     weights = {"critical": 45, "high": 30, "medium": 15, "low": 5}
     return max(0, 100 - sum(weights.get(issue.severity, 5) for issue in issues))
+
+
+def _mailto_addresses(links: list[str]) -> list[str]:
+    addresses: list[str] = []
+    seen: set[str] = set()
+    for href in links:
+        if not href.startswith("mailto:"):
+            continue
+        address = unquote(href.split(":", 1)[1].split("?", 1)[0]).strip().lower()
+        if "@" not in address or address in seen:
+            continue
+        seen.add(address)
+        addresses.append(address)
+    return addresses[:5]
 
 
 def safe_public_scan(url: str, storage_root: str, timeout_ms: int = 15000) -> dict:
@@ -74,6 +88,7 @@ def safe_public_scan(url: str, storage_root: str, timeout_ms: int = 15000) -> di
             h1 = [node.get_text(" ", strip=True) for node in soup.find_all("h1")]
             links = [a.get("href") for a in soup.find_all("a") if a.get("href")]
             mailto = [href for href in links if href.startswith("mailto:")]
+            mailto_emails = _mailto_addresses(links)
             tel = [href for href in links if href.startswith("tel:")]
             whatsapp = [href for href in links if "wa.me/" in href or "whatsapp" in href.lower()]
             booking = [href for href in links if any(word in href.lower() for word in ["book", "calendly", "appointment"])]
@@ -111,6 +126,13 @@ def safe_public_scan(url: str, storage_root: str, timeout_ms: int = 15000) -> di
                     "tel": len(tel),
                     "whatsapp": len(whatsapp),
                     "booking": len(booking),
+                },
+                "contact_evidence": {
+                    "mailto_emails": mailto_emails,
+                    "has_phone_link": bool(tel),
+                    "has_whatsapp_link": bool(whatsapp),
+                    "has_booking_link": bool(booking),
+                    "has_form": bool(forms),
                 },
                 "public_slug": slug,
                 "score": _issue_score(issues),
