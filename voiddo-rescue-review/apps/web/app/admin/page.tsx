@@ -40,6 +40,8 @@ export default async function AdminPage() {
   const policyScoreRegressionData = await fetchJson("/admin/mailer/policy-score/regression-guard/latest", authorization ? { Authorization: authorization } : {});
   const scoutQualitySummaryData = await fetchJson("/admin/scouts/campaign-quality-summary", authorization ? { Authorization: authorization } : {});
   const scoutQualityHistoryData = await fetchJson("/admin/scouts/campaign-quality-history", authorization ? { Authorization: authorization } : {});
+  const scoutSourceReadinessData = await fetchJson("/admin/scouts/source-readiness-summary", authorization ? { Authorization: authorization } : {});
+  const scoutSourceReadinessGuardData = await fetchJson("/admin/scouts/source-readiness-regression-guard/latest", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
@@ -74,6 +76,9 @@ export default async function AdminPage() {
   const scoutQualityHistory = scoutQualityHistoryData?.history || {};
   const latestScoutQualityHistory = scoutQualityHistory.latest || {};
   const latestScoutQualityCampaign = latestScoutQualityHistory.campaign_quality_json || {};
+  const scoutSourceReadiness = scoutSourceReadinessData?.summary || {};
+  const scoutSourceReadinessLatest = Array.isArray(scoutSourceReadiness.latest) ? scoutSourceReadiness.latest[0] || {} : {};
+  const scoutSourceReadinessGuard = scoutSourceReadinessGuardData?.guard || scoutSourceReadiness.regression_guard || {};
   const latestRealOpsAction = opsActions.latest_real || {};
   const opsRetentionAgent = opsActions.latest_retention_agent || {};
   const opsRetentionReport = opsActions.retention_agent_report || {};
@@ -368,6 +373,27 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">live</span><span>scout quality live outreach gate</span><span className="score">{scoutQualitySummary.live_outreach_allowed ? "armed" : "blocked"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in scout quality summary</span><span className="score">{scoutQualitySummary.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">secret</span><span>secrets in scout quality summary</span><span className="score">{scoutQualitySummary.secrets_included ? "blocked" : "omitted"}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Source Readiness Control</h2>
+            <div className="row"><span className="tag">source</span><span>latest source readiness summary</span><span className="score">{scoutSourceReadiness.status ?? "missing"}</span></div>
+            <div className="row"><span className="tag">checks</span><span>persisted source readiness checks</span><span className="score">{metrics.scout_source_readiness_checks ?? 0}</span></div>
+            <div className="row"><span className="tag">sources</span><span>sources checked by latest readiness state</span><span className="score">{scoutSourceReadiness.sources_checked ?? 0}</span></div>
+            <div className="row"><span className="tag">ready</span><span>sources ready for gated scout runs</span><span className="score">{scoutSourceReadiness.sources_ready ?? 0}</span></div>
+            <div className="row"><span className="tag">blocked</span><span>sources held for review</span><span className="score">{scoutSourceReadiness.sources_blocked ?? 0}</span></div>
+            <div className="row"><span className="tag">latest</span><span>latest source readiness status</span><span className="score">{scoutSourceReadinessLatest.status ?? "missing"}</span></div>
+            <div className="row"><span className="tag">score</span><span>latest source readiness score</span><span className="score">{scoutSourceReadinessLatest.score ?? 0}</span></div>
+            <div className="row"><span className="tag">rows</span><span>latest parseable input rows</span><span className="score">{scoutSourceReadinessLatest.parseable_count ?? 0}/{scoutSourceReadinessLatest.row_count ?? 0}</span></div>
+            <div className="row"><span className="tag">dupes</span><span>latest duplicate domains</span><span className="score">{scoutSourceReadinessLatest.duplicate_domain_count ?? 0}</span></div>
+            <div className="row"><span className="tag">excluded</span><span>latest excluded niches</span><span className="score">{scoutSourceReadinessLatest.excluded_niche_count ?? 0}</span></div>
+            <div className="row"><span className="tag">invalid</span><span>latest invalid emails</span><span className="score">{scoutSourceReadinessLatest.invalid_email_count ?? 0}</span></div>
+            <div className="row"><span className="tag">guard</span><span>source readiness regression guard</span><span className="score">{scoutSourceReadinessGuard.decision ?? "missing"}</span></div>
+            <div className="row"><span className="tag">guard</span><span>source readiness regression count</span><span className="score">{scoutSourceReadinessGuard.regression_count ?? 0}</span></div>
+            <div className="row"><span className="tag">review</span><span>source readiness review task</span><span className="score">{scoutSourceReadinessGuard.review_task_created ? "created" : "none"}</span></div>
+            <div className="row"><span className="tag">send</span><span>source readiness SMTP capability</span><span className="score">{scoutSourceReadiness.send_mail || scoutSourceReadinessGuard.send_mail ? "armed" : "no-send"}</span></div>
+            <div className="row"><span className="tag">live</span><span>source readiness live outreach gate</span><span className="score">{scoutSourceReadiness.live_outreach_allowed || scoutSourceReadinessGuard.live_outreach_allowed ? "armed" : "blocked"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw recipients in source readiness payload</span><span className="score">{scoutSourceReadiness.raw_recipient_addresses_included || scoutSourceReadinessGuard.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">secret</span><span>secrets in source readiness payload</span><span className="score">{scoutSourceReadiness.secrets_included || scoutSourceReadinessGuard.secrets_included ? "blocked" : "omitted"}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>

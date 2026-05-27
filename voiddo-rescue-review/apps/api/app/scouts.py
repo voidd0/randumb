@@ -288,6 +288,7 @@ def scout_source_readiness_summary() -> dict[str, Any]:
         ORDER BY source_id, created_at DESC
         """
     )
+    guard = latest_scout_source_readiness_regression_guard_summary()
     blockers = [
         row
         for row in latest
@@ -300,11 +301,60 @@ def scout_source_readiness_summary() -> dict[str, Any]:
         "sources_ready": len([row for row in latest if row["status"] == "PASS_SOURCE_READY"]),
         "sources_blocked": len(blockers),
         "latest": [_json_safe(dict(row)) for row in latest[:20]],
+        "regression_guard": guard,
         "send_mail": False,
         "smtp_called": False,
         "live_outreach_allowed": False,
         "raw_recipient_addresses_included": False,
         "secrets_included": False,
+    }
+
+
+def latest_scout_source_readiness_regression_guard_summary() -> dict[str, Any]:
+    row = fetch_one(
+        """
+        SELECT id, status, result_json, error, started_at, completed_at, created_at
+        FROM agent_runs
+        WHERE agent = 'scout_source_readiness_regression_guard_agent'
+        ORDER BY completed_at DESC NULLS LAST, started_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        """
+    )
+    if not row:
+        return {
+            "decision": "MISSING_NO_SEND",
+            "regressions": ["missing_source_readiness_regression_guard_run"],
+            "regression_count": 1,
+            "review_task_created": False,
+            "agent_status": "missing",
+            "latest_run_id": None,
+            "latest_run_completed_at": None,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+            "raw_history_rows_included": False,
+        }
+    result = dict(row["result_json"]) if isinstance(row.get("result_json"), dict) else {}
+    regressions = result.get("regressions") if isinstance(result.get("regressions"), list) else []
+    return {
+        "decision": result.get("decision", "MISSING_NO_SEND"),
+        "regressions": regressions,
+        "regression_count": len(regressions),
+        "rows_checked": result.get("rows_checked"),
+        "latest_score": result.get("latest_score"),
+        "baseline_score": result.get("baseline_score"),
+        "review_task_created": bool(result.get("review_task_created", False)),
+        "agent_status": row["status"],
+        "latest_run_id": str(row["id"]),
+        "latest_run_completed_at": row["completed_at"].isoformat() if row.get("completed_at") else None,
+        "send_mail": bool(result.get("send_mail", False)),
+        "smtp_called": bool(result.get("smtp_called", False)),
+        "live_outreach_allowed": bool(result.get("live_outreach_allowed", False)),
+        "raw_recipient_addresses_included": bool(result.get("raw_recipient_addresses_included", False)),
+        "secrets_included": bool(result.get("secrets_included", False)),
+        "raw_history_rows_included": bool(result.get("raw_history_rows_included", False)),
     }
 
 

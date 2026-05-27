@@ -13,7 +13,7 @@ from app.mailer_control import evaluate_outbound_message
 from app.main import app
 from app.reply_actions import plan_reply_action
 from app.scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, run_scout_quality_gate, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
-from app.scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, latest_scout_source_readiness, prepare_campaign, process_scout_run, run_scout_source_readiness, scout_source_readiness_regression_guard, scout_source_readiness_summary
+from app.scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, latest_scout_source_readiness, latest_scout_source_readiness_regression_guard_summary, prepare_campaign, process_scout_run, run_scout_source_readiness, scout_source_readiness_regression_guard, scout_source_readiness_summary
 
 
 client = TestClient(app)
@@ -214,6 +214,11 @@ def test_scout_source_readiness_retention_and_regression_are_no_send():
         assert retention_agent["status"] == "completed"
         assert regression_agent["status"] == "completed"
         assert regression_agent["result_json"]["send_mail"] is False
+        latest_guard = latest_scout_source_readiness_regression_guard_summary()
+        assert latest_guard["decision"] == "FAIL_REVIEW_REQUIRED_NO_SEND"
+        assert latest_guard["send_mail"] is False
+        assert latest_guard["raw_recipient_addresses_included"] is False
+        assert scout_source_readiness_summary()["regression_guard"]["decision"] == "FAIL_REVIEW_REQUIRED_NO_SEND"
     finally:
         execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (source["id"],))
         execute("DELETE FROM scout_sources WHERE id = %s", (source["id"],))
@@ -229,6 +234,10 @@ def test_p9_admin_endpoints_require_auth_and_work():
     assert client.get("/admin/scouts/campaign-quality-history", headers=admin_headers()).status_code == 200
     assert client.get("/admin/scouts/source-readiness-summary").status_code == 401
     assert client.get("/admin/scouts/source-readiness-summary", headers=admin_headers()).status_code == 200
+    assert client.get("/admin/scouts/source-readiness-regression-guard/latest").status_code == 401
+    guard_response = client.get("/admin/scouts/source-readiness-regression-guard/latest", headers=admin_headers())
+    assert guard_response.status_code == 200
+    assert guard_response.json()["guard"]["send_mail"] is False
     assert client.post("/admin/scouts/source-readiness-retention", headers=admin_headers()).status_code == 200
     assert client.post("/admin/scouts/source-readiness-regression-guard", headers=admin_headers()).status_code == 200
     assert client.post("/admin/scouts/campaign-quality-regression-guard", headers=admin_headers()).status_code == 200
