@@ -34,6 +34,7 @@ from .p0 import (
 )
 from .quality_plugins import latest_quality_summary
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
+from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
 from .revenue_simulation import run_synthetic_lead_simulation
@@ -142,6 +143,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "campaign_agent": lambda: prepare_outreach_preview(int(payload.get("limit", 20))),
         "campaign_control_room_agent": lambda: campaign_control_room_snapshot(int(payload.get("limit", 100))),
         "campaign_control_room_prepare_agent": lambda: prepare_campaign_control_room(int(payload.get("limit", 100)), dry_run=True),
+        "campaign_pipeline_gap_agent": lambda: campaign_pipeline_gap_snapshot(int(payload.get("limit", 100))),
+        "campaign_pipeline_repair_agent": lambda: repair_campaign_pipeline(int(payload.get("limit", 100)), dry_run=True),
         "campaign_preview_quality_agent": campaign_preview_quality_agent,
         "buyer_journey_scoreboard_agent": lambda: buyer_journey_readiness_scoreboard(),
         "buyer_journey_scenario_agent": lambda: run_buyer_journey_scenario(cleanup=True),
@@ -214,6 +217,7 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_agent",
         "campaign_control_room_agent",
         "campaign_control_room_prepare_agent",
+        "campaign_pipeline_gap_agent",
         "campaign_preview_quality_agent",
         "buyer_journey_scoreboard_agent",
         "source_campaign_operator_agent",
