@@ -9,6 +9,39 @@ from .campaign_economics import run_campaign_economics_check
 from .db import execute, fetch_all, fetch_one
 from .p0 import latest_decision, mail_signal_summary
 from .scout_quality import lead_scout_quality_gate
+from .scouts import scout_source_readiness_gate
+
+
+def _lead_scout_source_readiness_gate(lead_id: str) -> dict[str, Any]:
+    lead = fetch_one("SELECT source FROM leads WHERE id = %s", (lead_id,))
+    if not lead:
+        return {"allowed": False, "decision": "FAIL_REVIEW_REQUIRED", "blockers": [{"code": "lead_not_found", "severity": "high"}], "send_mail": False, "live_outreach_allowed": False}
+    if lead["source"] != "scout_agent":
+        return {"allowed": True, "decision": "NOT_SCOUT_AGENT", "blockers": [], "send_mail": False, "live_outreach_allowed": False}
+    row = fetch_one(
+        """
+        SELECT sr.id AS scout_run_id, sr.source_id
+        FROM scanner_jobs sj
+        JOIN scout_leads sl ON sl.id::text = sj.result_json->>'scout_lead_id'
+        JOIN scout_runs sr ON sr.id = sl.scout_run_id
+        WHERE sj.result_json->>'lead_id' = %s
+        ORDER BY sj.queued_at DESC
+        LIMIT 1
+        """,
+        (lead_id,),
+    )
+    if not row:
+        return {
+            "allowed": False,
+            "decision": "FAIL_REVIEW_REQUIRED",
+            "blockers": [{"code": "missing_scout_source_readiness_link", "severity": "high"}],
+            "send_mail": False,
+            "live_outreach_allowed": False,
+        }
+    gate = scout_source_readiness_gate(str(row["source_id"]))
+    gate["scout_run_id"] = str(row["scout_run_id"])
+    gate["source_id"] = str(row["source_id"])
+    return gate
 
 
 def campaign_readiness_snapshot(campaign_id: str) -> dict[str, Any]:
@@ -18,8 +51,11 @@ def campaign_readiness_snapshot(campaign_id: str) -> dict[str, Any]:
     leads = fetch_all("SELECT lead_id, audit_id, score FROM campaign_leads WHERE campaign_id = %s", (campaign_id,))
     strengths = [int(score_audit_strength(str(lead["audit_id"]))["final_score"]) for lead in leads if lead.get("audit_id")]
     quality_gates = [lead_scout_quality_gate(str(lead["lead_id"])) for lead in leads if lead.get("lead_id")]
+    source_readiness_gates = [_lead_scout_source_readiness_gate(str(lead["lead_id"])) for lead in leads if lead.get("lead_id")]
     scout_quality_failed = [gate for gate in quality_gates if not gate.get("allowed_for_campaign_preview")]
     scout_quality_passed = [gate for gate in quality_gates if gate.get("allowed_for_campaign_preview")]
+    source_readiness_failed = [gate for gate in source_readiness_gates if not gate.get("allowed")]
+    source_readiness_passed = [gate for gate in source_readiness_gates if gate.get("allowed")]
     min_strength = min(strengths) if strengths else 0
     qualified = len([lead for lead in leads if int(lead.get("score") or 0) >= 70])
     economics = run_campaign_economics_check(campaign_id, campaign.get("offer_key") or "contact_form_repair", 0.02)
@@ -36,6 +72,15 @@ def campaign_readiness_snapshot(campaign_id: str) -> dict[str, Any]:
                 "severity": "high",
                 "failed_count": len(scout_quality_failed),
                 "decisions": sorted({gate.get("decision", "unknown") for gate in scout_quality_failed}),
+            }
+        )
+    if source_readiness_failed:
+        blockers.append(
+            {
+                "code": "scout_source_readiness_not_pass",
+                "severity": "high",
+                "failed_count": len(source_readiness_failed),
+                "decisions": sorted({gate.get("readiness", {}).get("status", gate.get("decision", "unknown")) for gate in source_readiness_failed}),
             }
         )
     if min_strength < 70:
@@ -78,6 +123,15 @@ def campaign_readiness_snapshot(campaign_id: str) -> dict[str, Any]:
                         "checked_count": len(quality_gates),
                         "passed_count": len(scout_quality_passed),
                         "failed_count": len(scout_quality_failed),
+                        "send_mail": False,
+                        "live_outreach_allowed": False,
+                        "raw_recipient_addresses_included": False,
+                        "secrets_included": False,
+                    },
+                    "scout_source_readiness": {
+                        "checked_count": len(source_readiness_gates),
+                        "passed_count": len(source_readiness_passed),
+                        "failed_count": len(source_readiness_failed),
                         "send_mail": False,
                         "live_outreach_allowed": False,
                         "raw_recipient_addresses_included": False,

@@ -91,7 +91,9 @@ def test_campaign_readiness_blocks_stale_scout_lead_without_quality_pass():
     snapshot = campaign_readiness_snapshot(str(campaign["id"]))
     assert snapshot["status"] == "blocked"
     assert snapshot["summary_json"]["scout_quality"]["failed_count"] == 1
+    assert snapshot["summary_json"]["scout_source_readiness"]["failed_count"] == 1
     assert any(blocker["code"] == "scout_quality_not_pass" for blocker in snapshot["blockers_json"])
+    assert any(blocker["code"] == "scout_source_readiness_not_pass" for blocker in snapshot["blockers_json"])
 
 
 def test_outbound_message_decision_blocks_and_hashes_recipient():
