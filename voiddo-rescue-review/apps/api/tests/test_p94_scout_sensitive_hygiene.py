@@ -45,6 +45,7 @@ def test_scout_run_rejects_hospital_and_large_enterprise_targets_without_send():
     csv_text = (
         "business_name,website_url,email,country,city,language,niche,source_url,confidence\n"
         f"Renown Medical Center {token},https://renown-{token}.org,hello@renown-{token}.org,US,Reno,en,clinics,https://source.test/{token},90\n"
+        f"Social Profile {token},https://facebook.com/local-{token},hello@local-{token}.com,US,Reno,en,law firms,https://source.test/{token}/social,90\n"
         f"Local Dental {token},https://local-{token}.clinic,hello@local-{token}.clinic,US,Reno,en,dentists,https://source.test/{token}/2,90\n"
     )
     try:
@@ -52,10 +53,13 @@ def test_scout_run_rejects_hospital_and_large_enterprise_targets_without_send():
         run = create_scout_run(str(source["id"]))
         result = process_scout_run(str(run["id"]))
         assert result["accepted"] == 1
-        assert result["rejected"] == 1
+        assert result["rejected"] == 2
         sensitive = fetch_one("SELECT status, rejection_reason FROM scout_leads WHERE domain = %s", (f"renown-{token}.org",))
         assert sensitive["status"] == "rejected"
         assert sensitive["rejection_reason"] == "excluded_sensitive_target"
+        social = fetch_one("SELECT status, rejection_reason FROM scout_leads WHERE domain = 'facebook.com' AND email = %s", (f"hello@local-{token}.com",))
+        assert social["status"] == "rejected"
+        assert social["rejection_reason"] == "excluded_sensitive_target"
         assert result.get("send_mail") is None or result.get("send_mail") is False
     finally:
         _cleanup(token)
@@ -112,6 +116,10 @@ def test_sensitive_hygiene_archives_existing_preview_and_keeps_campaign_candidat
             "INSERT INTO campaign_leads(campaign_id, lead_id, audit_id, status, score, preview_json) VALUES (%s, %s, %s, 'preview', 91, %s) RETURNING id",
             (campaign["id"], lead["id"], audit["id"], Jsonb({"token": token, "scout_lead_id": str(scout_lead["id"])})),
         )
+        scanner_job = execute(
+            "INSERT INTO scanner_jobs(url, business_name, dry_run, status, result_json) VALUES (%s, %s, false, 'queued', %s) RETURNING id",
+            (f"https://{domain}", f"Hopkins Medical Center {token}", Jsonb({"token": token, "lead_id": str(lead["id"]), "scout_lead_id": str(scout_lead["id"])})),
+        )
 
         snapshot = scout_sensitive_target_snapshot(50)
         assert snapshot["candidate_count"] >= 1
@@ -121,6 +129,7 @@ def test_sensitive_hygiene_archives_existing_preview_and_keeps_campaign_candidat
         assert result["raw_recipient_addresses_included"] is False
         assert fetch_one("SELECT status FROM campaign_leads WHERE id = %s", (preview["id"],))["status"] == "archived_sensitive_target"
         assert fetch_one("SELECT status FROM leads WHERE id = %s", (lead["id"],))["status"] == "excluded_sensitive_target"
+        assert fetch_one("SELECT status FROM scanner_jobs WHERE id = %s", (scanner_job["id"],))["status"] == "archived_sensitive_target"
         candidates = qualified_campaign_lead_candidates(100, 70)
         assert all(item["lead_id"] != str(lead["id"]) for item in candidates["candidates"])
     finally:
@@ -138,3 +147,26 @@ def test_sensitive_hygiene_endpoint_and_agents_are_admin_gated_no_send():
     agent = run_agent("scout_sensitive_hygiene_snapshot_agent", {"limit": 5})
     assert agent["status"] == "completed"
     assert agent["result_json"]["raw_recipient_addresses_included"] is False
+
+
+def test_sensitive_hygiene_archives_queued_scanner_jobs_for_already_excluded_leads():
+    token = uuid.uuid4().hex[:8]
+    domain = f"facebook-{token}.com"
+    try:
+        business = execute(
+            "INSERT INTO businesses(name, domain, source, status) VALUES (%s, %s, 'scout_agent', 'excluded_sensitive_target') RETURNING id",
+            (f"Excluded {token}", domain),
+        )
+        lead = execute(
+            "INSERT INTO leads(business_id, email, source, status, score, language, country, niche) VALUES (%s, %s, 'scout_agent', 'excluded_sensitive_target', 0, 'en', 'US', 'law firms') RETURNING id",
+            (business["id"], f"hello@{domain}"),
+        )
+        job = execute(
+            "INSERT INTO scanner_jobs(url, business_name, dry_run, status, result_json) VALUES (%s, %s, false, 'queued', %s) RETURNING id",
+            (f"https://{domain}", f"Excluded {token}", Jsonb({"token": token, "lead_id": str(lead["id"])})),
+        )
+        result = archive_sensitive_scout_targets(50, apply=True)
+        assert result["archived_scanner_jobs_count"] >= 1
+        assert fetch_one("SELECT status FROM scanner_jobs WHERE id = %s", (job["id"],))["status"] == "archived_sensitive_target"
+    finally:
+        _cleanup(token)

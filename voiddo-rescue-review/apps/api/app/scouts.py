@@ -26,7 +26,9 @@ EXCLUDED_LARGE_BRAND_TOKENS = {
     "department",
     "dept",
     "enterprise",
+    "facebook",
     "gov",
+    "gov.uk",
     "healthsystem",
     "hilton",
     "holidayinn",
@@ -34,18 +36,23 @@ EXCLUDED_LARGE_BRAND_TOKENS = {
     "hospital",
     "hyatt",
     "ihg",
+    "instagram",
+    "linkedin",
     "lq.com",
     "marriott",
     "medicalcenter",
     "motel6",
+    "mydentist",
     "radissonhotels",
     "renown",
     "ryancompanies",
     "schooldistrict",
     "super8",
+    "twitter",
     "university",
     "wyndham",
     "wyndhamhotels",
+    "x.com",
 }
 SUPPORTED_SCOUT_TYPES = {
     "manual_csv_scout",
@@ -219,7 +226,10 @@ def _source_row_confidence(row: dict[str, Any]) -> float:
 
 def _is_excluded_large_brand(business_name: str, domain: str, website: str = "") -> bool:
     combined = re.sub(r"[^a-z0-9.]+", "", f"{business_name} {domain} {website}".lower())
-    return any(token in combined for token in EXCLUDED_LARGE_BRAND_TOKENS)
+    if any(token in combined for token in EXCLUDED_LARGE_BRAND_TOKENS):
+        return True
+    normalized_domain = normalize_domain(domain or website)
+    return normalized_domain in {"facebook.com", "instagram.com", "linkedin.com", "twitter.com", "x.com"} or normalized_domain.endswith(".business.site")
 
 
 def is_excluded_sensitive_target(business_name: str, domain: str, website: str = "", niche: str = "") -> bool:

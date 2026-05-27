@@ -9,7 +9,7 @@ from app.autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run
 from app.db import fetch_one
 from app.economics import calculate_unit_economics, run_economics_audit
 from app.main import app
-from app.quality_plugins import quality_plugin_manifest, record_quality_plugin_run
+from app.quality_plugins import normalize_quality_tool, quality_plugin_manifest, record_quality_plugin_run
 from app.self_operating import queue_self_build, record_learning, run_self_audit, self_operating_summary
 
 
@@ -68,6 +68,9 @@ def test_quality_plugin_manifest_has_huanshu_plus_four_plugins():
     assert len(manifest["additional_plugins"]) >= 4
     run = record_quality_plugin_run("axe-core-playwright", "/", "PASS", 100, [])
     assert run["tool"] == "axe-core-playwright"
+    assert normalize_quality_tool("huanshu-local-adapter") == "huanshu"
+    huanshu_run = record_quality_plugin_run("huashu-design", "/r/demo", "PASS", 100, [])
+    assert huanshu_run["tool"] == "huanshu"
 
 
 def test_new_agents_record_self_operating_results():

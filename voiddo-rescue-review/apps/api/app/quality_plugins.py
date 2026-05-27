@@ -8,11 +8,29 @@ from .db import execute, fetch_all
 
 
 TOOLS = ["huanshu", "axe-core-playwright", "pa11y", "lighthouse-ci", "pixelmatch"]
+TOOL_ALIASES = {
+    "huanshu-local": "huanshu",
+    "huanshu-local-adapter": "huanshu",
+    "huashu": "huanshu",
+    "huashu-design": "huanshu",
+    "huashu-design-plugin": "huanshu",
+    "@axe-core/playwright": "axe-core-playwright",
+    "axe": "axe-core-playwright",
+    "@lhci/cli": "lighthouse-ci",
+    "lhci": "lighthouse-ci",
+}
+
+
+def normalize_quality_tool(tool: str) -> str:
+    raw = (tool or "huanshu").strip().lower()
+    normalized = TOOL_ALIASES.get(raw, raw)
+    if normalized not in TOOLS:
+        raise ValueError("unknown_quality_tool")
+    return normalized
 
 
 def record_quality_plugin_run(tool: str, target: str, status: str, score: int = 0, issues: list[dict[str, Any]] | None = None, artifact_path: str = "") -> dict[str, Any]:
-    if tool not in TOOLS:
-        raise ValueError("unknown_quality_tool")
+    tool = normalize_quality_tool(tool)
     row = execute(
         """
         INSERT INTO quality_plugin_runs(tool, target, status, score, issues_json, artifact_path)

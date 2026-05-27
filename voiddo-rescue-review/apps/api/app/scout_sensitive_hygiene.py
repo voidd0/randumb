@@ -74,6 +74,7 @@ def scout_sensitive_target_snapshot(limit: int = 200) -> dict[str, Any]:
 def archive_sensitive_scout_targets(limit: int = 200, apply: bool = False) -> dict[str, Any]:
     snapshot = scout_sensitive_target_snapshot(limit)
     archived = []
+    archived_scanner_jobs = 0
     if apply:
         for item in snapshot["candidates"]:
             reason = item["reason"]
@@ -93,6 +94,17 @@ def archive_sensitive_scout_targets(limit: int = 200, apply: bool = False) -> di
                 execute("UPDATE leads SET status = 'excluded_sensitive_target', score = 0, updated_at = now() WHERE id = %s", (lead_id,))
                 execute(
                     """
+                    UPDATE scanner_jobs
+                    SET status = 'archived_sensitive_target',
+                        result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb,
+                        updated_at = now()
+                    WHERE status = 'queued'
+                      AND result_json->>'lead_id' = %s
+                    """,
+                    (Jsonb({"scout_sensitive_hygiene": {**SAFE_FLAGS, "reason": reason}}), lead_id),
+                )
+                execute(
+                    """
                     UPDATE campaign_leads
                     SET status = 'archived_sensitive_target',
                         preview_json = COALESCE(preview_json, '{}'::jsonb) || %s::jsonb,
@@ -102,9 +114,48 @@ def archive_sensitive_scout_targets(limit: int = 200, apply: bool = False) -> di
                     """,
                     (Jsonb({"scout_sensitive_hygiene": {**SAFE_FLAGS, "reason": reason}}), lead_id),
                 )
+            execute(
+                """
+                UPDATE scanner_jobs
+                SET status = 'archived_sensitive_target',
+                    result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb,
+                    updated_at = now()
+                WHERE status = 'queued'
+                  AND result_json->>'scout_lead_id' = %s
+                """,
+                (Jsonb({"scout_sensitive_hygiene": {**SAFE_FLAGS, "reason": reason}}), scout_lead_id),
+            )
             if business_id:
                 execute("UPDATE businesses SET status = 'excluded_sensitive_target', updated_at = now() WHERE id = %s", (business_id,))
             archived.append(item)
+        scanner_row = execute(
+            """
+            WITH candidates AS (
+              SELECT sj.id
+              FROM scanner_jobs sj
+              LEFT JOIN leads l ON l.id::text = sj.result_json->>'lead_id'
+              LEFT JOIN scout_leads sl ON sl.id::text = sj.result_json->>'scout_lead_id'
+              WHERE sj.status = 'queued'
+                AND (
+                  l.status = 'excluded_sensitive_target'
+                  OR sl.rejection_reason = 'excluded_sensitive_target'
+                  OR sl.rejection_reason = 'excluded_large_enterprise'
+                )
+            ),
+            updated AS (
+              UPDATE scanner_jobs sj
+              SET status = 'archived_sensitive_target',
+                  result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb,
+                  updated_at = now()
+              FROM candidates
+              WHERE sj.id = candidates.id
+              RETURNING sj.id
+            )
+            SELECT count(*) AS count FROM updated
+            """,
+            (Jsonb({"scout_sensitive_hygiene": {**SAFE_FLAGS, "reason": "existing_excluded_sensitive_target"}}),),
+        )
+        archived_scanner_jobs = int(scanner_row["count"] or 0) if scanner_row else 0
     execute(
         """
         INSERT INTO system_events(type, severity, message, payload_json)
@@ -118,6 +169,7 @@ def archive_sensitive_scout_targets(limit: int = 200, apply: bool = False) -> di
             "apply": apply,
             "candidate_count": snapshot["candidate_count"],
             "archived_count": len(archived),
+            "archived_scanner_jobs_count": archived_scanner_jobs,
             "archived": archived,
             **SAFE_FLAGS,
         }
