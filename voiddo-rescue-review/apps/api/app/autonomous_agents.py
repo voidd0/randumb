@@ -7,6 +7,7 @@ from typing import Any, Callable
 from psycopg.types.json import Jsonb
 
 from .clean_window_recheck import clean_window_recheck, post_window_recheck_scheduler
+from .contact_enrichment import contact_enrichment_candidates, run_hunter_contact_enrichment
 from .db import execute, fetch_one
 from .email_templates import render_all_samples
 from .economics import run_economics_audit
@@ -201,6 +202,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             source_id=payload.get("source_id"),
         ),
         "post_scan_lead_scoring_agent": lambda: backfill_post_scan_lead_scores(int(payload.get("limit", 50)), dry_run=bool(payload.get("dry_run", False))),
+        "contact_enrichment_candidates_agent": lambda: contact_enrichment_candidates(int(payload.get("limit", 25))),
+        "contact_enrichment_agent": lambda: run_hunter_contact_enrichment(int(payload.get("limit", 10)), dry_run=bool(payload.get("dry_run", True))),
         "lead_quality_diagnostics_agent": lambda: record_lead_quality_diagnostics(int(payload.get("limit", 50))),
         "scout_source_feedback_agent": lambda: apply_scout_source_feedback(int(payload.get("limit", 50)), dry_run=bool(payload.get("dry_run", True))),
         "scout_run_recovery_agent": lambda: recover_stale_scout_runs(
@@ -405,6 +408,8 @@ def run_daily_loop() -> dict[str, Any]:
         "source_scanner_backlog_agent",
         "source_scanner_queue_agent",
         "post_scan_lead_scoring_agent",
+        "contact_enrichment_candidates_agent",
+        "contact_enrichment_agent",
         "lead_quality_diagnostics_agent",
         "scout_source_feedback_agent",
         "scout_run_recovery_agent",

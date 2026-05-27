@@ -69,6 +69,7 @@ from .campaign_preview_quality import campaign_preview_quality_pack
 from .studio_mail_monitor import ingest_studio_mail_messages, latest_studio_mail_messages, latest_studio_mail_runs
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
 from .clean_window_recheck import clean_window_recheck, clean_window_recheck_summary, post_window_recheck_scheduler, post_window_recheck_summary
+from .contact_enrichment import contact_enrichment_candidates, run_hunter_contact_enrichment
 from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
 from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
@@ -668,6 +669,23 @@ async def lead_quality_diagnostics_record(request: Request):
 @app.get("/admin/leads/quality-diagnostics/history", dependencies=[Depends(require_admin)])
 def lead_quality_diagnostics_history_get(limit: int = 10):
     return {"ok": True, "history": latest_lead_quality_diagnostics_history(limit)}
+
+
+@app.get("/admin/leads/contact-enrichment/candidates", dependencies=[Depends(require_admin)])
+def lead_contact_enrichment_candidates_get(limit: int = 25):
+    return {"ok": True, "enrichment": contact_enrichment_candidates(limit)}
+
+
+@app.post("/admin/leads/contact-enrichment/run", dependencies=[Depends(require_admin)])
+async def lead_contact_enrichment_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "enrichment": run_hunter_contact_enrichment(
+            int(payload.get("limit", 10)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
 
 
 @app.post("/admin/scouts/source-feedback", dependencies=[Depends(require_admin)])

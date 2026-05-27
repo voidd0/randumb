@@ -70,6 +70,7 @@ class Settings(BaseSettings):
     warmup_recipient_pool: str = ""
     warmup_min_clean_sends_before_outreach: int = 5
     huanshu_cli: str = ""
+    hunter_api_key: str = ""
 
 
 @lru_cache

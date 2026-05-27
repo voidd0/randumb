@@ -1,0 +1,231 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from typing import Any
+from urllib.error import HTTPError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+
+from psycopg.types.json import Jsonb
+
+from .config import get_settings
+from .db import execute, fetch_all, fetch_one
+from .lead_scoring import score_lead
+from .p0 import json_safe
+from .scouts import is_excluded_sensitive_target, normalize_domain
+
+
+SAFE_FLAGS = {
+    "send_mail": False,
+    "smtp_called": False,
+    "live_outreach_allowed": False,
+    "raw_recipient_addresses_included": False,
+    "secrets_included": False,
+}
+ROLE_LOCALS = {
+    "info",
+    "contact",
+    "hello",
+    "office",
+    "admin",
+    "enquiries",
+    "enquiry",
+    "reception",
+    "support",
+    "booking",
+    "bookings",
+    "appointments",
+    "webmaster",
+}
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _hash(value: str) -> str:
+    return hashlib.sha256((value or "").strip().lower().encode("utf-8")).hexdigest()[:12]
+
+
+def contact_enrichment_candidates(limit: int = 25) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 25), 100))
+    rows = fetch_all(
+        """
+        SELECT l.id AS lead_id, b.id AS business_id, b.name AS business_name, b.domain,
+               b.website_url, l.country, l.city, l.language, l.niche,
+               a.id AS audit_id, a.public_slug, COALESCE(ls.final_score, l.score, 0) AS final_score
+        FROM leads l
+        JOIN businesses b ON b.id = l.business_id
+        JOIN LATERAL (
+          SELECT *
+          FROM audits a
+          WHERE a.lead_id = l.id
+            AND a.status = 'completed'
+          ORDER BY a.checked_at DESC NULLS LAST, a.created_at DESC
+          LIMIT 1
+        ) a ON true
+        LEFT JOIN LATERAL (
+          SELECT final_score
+          FROM lead_scores
+          WHERE lead_id = l.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) ls ON true
+        WHERE l.source = 'scout_agent'
+          AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
+          AND COALESCE(b.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
+          AND (l.email IS NULL OR l.email = '')
+          AND COALESCE(b.domain, '') <> ''
+          AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(COALESCE(s.domain, '')) = lower(COALESCE(b.domain, '')))
+        ORDER BY COALESCE(ls.final_score, l.score, 0) DESC, a.checked_at DESC NULLS LAST
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    candidates: list[dict[str, Any]] = []
+    for row in rows:
+        payload = dict(row)
+        domain = normalize_domain(str(payload.get("domain") or payload.get("website_url") or ""))
+        if not domain:
+            continue
+        if is_excluded_sensitive_target(
+            str(payload.get("business_name") or ""),
+            domain,
+            str(payload.get("website_url") or ""),
+            str(payload.get("niche") or ""),
+        ):
+            continue
+        candidates.append(
+            {
+                "lead_id": str(payload["lead_id"]),
+                "business_id": str(payload["business_id"]),
+                "audit_id": str(payload["audit_id"]),
+                "public_slug": payload.get("public_slug"),
+                "domain": domain,
+                "domain_hash": _hash(domain),
+                "country": payload.get("country"),
+                "language": payload.get("language"),
+                "niche": payload.get("niche"),
+                "final_score": int(payload.get("final_score") or 0),
+            }
+        )
+    return json_safe({"status": "ready" if candidates else "idle", "candidate_count": len(candidates), "candidates": candidates, **SAFE_FLAGS})
+
+
+def hunter_domain_search(domain: str, api_key: str, limit: int = 10) -> dict[str, Any]:
+    params = urlencode({"domain": domain, "api_key": api_key, "limit": max(1, min(int(limit or 10), 20))})
+    request = Request(
+        f"https://api.hunter.io/v2/domain-search?{params}",
+        headers={"User-Agent": "VoiddoRescue/1.0 contact-enrichment"},
+    )
+    with urlopen(request, timeout=25) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _candidate_email(domain: str, hunter_payload: dict[str, Any]) -> tuple[str | None, dict[str, Any]]:
+    emails = ((hunter_payload.get("data") or {}).get("emails") or []) if isinstance(hunter_payload, dict) else []
+    normalized_domain = normalize_domain(domain)
+    choices: list[dict[str, Any]] = []
+    for item in emails:
+        value = str(item.get("value") or "").strip().lower()
+        if not EMAIL_RE.match(value):
+            continue
+        local, email_domain = value.split("@", 1)
+        if normalize_domain(email_domain) != normalized_domain:
+            continue
+        if fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (value,)):
+            continue
+        confidence = int(item.get("confidence") or 0)
+        role_bonus = 100 if local in ROLE_LOCALS else 0
+        choices.append({"email": value, "local": local, "confidence": confidence, "rank": role_bonus + confidence})
+    choices.sort(key=lambda row: row["rank"], reverse=True)
+    role_choice = next((row for row in choices if row["local"] in ROLE_LOCALS), None)
+    selected = role_choice or (choices[0] if choices and choices[0]["confidence"] >= 90 else None)
+    return (selected["email"] if selected else None), {
+        "email_count": len(choices),
+        "selected_role": bool(selected and selected["local"] in ROLE_LOCALS),
+        "selected_hash": _hash(selected["email"]) if selected else None,
+        "selected_confidence": selected["confidence"] if selected else None,
+    }
+
+
+def run_hunter_contact_enrichment(limit: int = 10, dry_run: bool = True) -> dict[str, Any]:
+    settings = get_settings()
+    safe_limit = max(1, min(int(limit or 10), 25))
+    candidates = contact_enrichment_candidates(safe_limit)["candidates"]
+    if not settings.hunter_api_key:
+        status = "blocked_missing_hunter_api_key"
+        row = execute(
+            """
+            INSERT INTO contact_enrichment_runs(provider, status, scanned_count, enriched_count, skipped_count, result_json)
+            VALUES ('hunter', %s, 0, 0, %s, %s)
+            RETURNING id
+            """,
+            (status, len(candidates), Jsonb({"reason": status, **SAFE_FLAGS})),
+        )
+        return json_safe({"status": status, "run_id": str(row["id"]), "candidate_count": len(candidates), "enriched_count": 0, **SAFE_FLAGS})
+
+    scanned = 0
+    enriched = 0
+    skipped = 0
+    results: list[dict[str, Any]] = []
+    for item in candidates:
+        scanned += 1
+        domain = item["domain"]
+        try:
+            payload = hunter_domain_search(domain, settings.hunter_api_key, 10)
+            selected, evidence = _candidate_email(domain, payload)
+        except Exception as exc:
+            skipped += 1
+            if isinstance(exc, HTTPError) and exc.code == 429:
+                results.append({"domain_hash": item["domain_hash"], "status": "provider_rate_limited", "http_status": 429})
+                break
+            results.append(
+                {
+                    "domain_hash": item["domain_hash"],
+                    "status": "provider_error",
+                    "error": type(exc).__name__,
+                    "http_status": exc.code if isinstance(exc, HTTPError) else None,
+                }
+            )
+            continue
+        if not selected:
+            skipped += 1
+            results.append({"domain_hash": item["domain_hash"], "status": "no_safe_role_email", **evidence})
+            continue
+        if not dry_run:
+            execute("UPDATE leads SET email = COALESCE(email, %s), updated_at = now() WHERE id = %s", (selected, item["lead_id"]))
+            execute("UPDATE businesses SET email = COALESCE(email, %s), updated_at = now() WHERE id = %s", (selected, item["business_id"]))
+            score_lead(item["lead_id"], item["audit_id"])
+        enriched += 1
+        results.append({"domain_hash": item["domain_hash"], "status": "would_enrich" if dry_run else "enriched", **evidence})
+
+    rate_limited = any(item.get("status") == "provider_rate_limited" for item in results)
+    status = "dry_run" if dry_run else ("provider_rate_limited" if rate_limited else ("enriched" if enriched else "no_safe_enrichment"))
+    row = execute(
+        """
+        INSERT INTO contact_enrichment_runs(provider, status, scanned_count, enriched_count, skipped_count, result_json)
+        VALUES ('hunter', %s, %s, %s, %s, %s)
+        RETURNING id, created_at
+        """,
+        (
+            status,
+            scanned,
+            enriched,
+            skipped,
+            Jsonb({"results": results, "dry_run": dry_run, **SAFE_FLAGS}),
+        ),
+    )
+    return json_safe(
+        {
+            "status": status,
+            "run_id": str(row["id"]),
+            "created_at": row["created_at"],
+            "candidate_count": len(candidates),
+            "scanned_count": scanned,
+            "enriched_count": enriched,
+            "skipped_count": skipped,
+            "results": results,
+            "dry_run": dry_run,
+            **SAFE_FLAGS,
+        }
+    )
