@@ -34,6 +34,7 @@ from .p0 import (
 )
 from .quality_plugins import latest_quality_summary
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
+from .campaign_preview_quality import campaign_preview_quality_pack
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
@@ -107,6 +108,15 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             return {"status": "idle", "reason": "no_active_scout_sources", "send_mail": False, "live_outreach_allowed": False}
         return run_scout_source_readiness(str(row["id"]))
 
+    def campaign_preview_quality_agent():
+        campaign_id = payload.get("campaign_id")
+        if not campaign_id:
+            row = fetch_one("SELECT id FROM campaigns WHERE status = 'preview_ready' ORDER BY updated_at DESC, created_at DESC LIMIT 1")
+            if not row:
+                return {"status": "idle", "reason": "no_preview_ready_campaign", "send_mail": False, "live_outreach_allowed": False}
+            campaign_id = str(row["id"])
+        return campaign_preview_quality_pack(str(campaign_id), int(payload.get("limit", 20)))
+
     agents: dict[str, Callable[[], dict[str, Any]]] = {
         "scout_agent": scout_agent,
         "scout_quality_agent": scout_quality_agent,
@@ -127,6 +137,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "campaign_agent": lambda: prepare_outreach_preview(int(payload.get("limit", 20))),
         "campaign_control_room_agent": lambda: campaign_control_room_snapshot(int(payload.get("limit", 100))),
         "campaign_control_room_prepare_agent": lambda: prepare_campaign_control_room(int(payload.get("limit", 100)), dry_run=True),
+        "campaign_preview_quality_agent": campaign_preview_quality_agent,
         "source_campaign_operator_agent": lambda: source_campaign_operator_snapshot(int(payload.get("limit", 25)), payload.get("source_id")),
         "source_campaign_operator_advance_agent": lambda: advance_source_to_campaign(payload.get("source_id"), int(payload.get("limit", 25)), dry_run=True),
         "inbox_agent": lambda: {"dry_run": True, "status": "worker_polls_when_enabled"},
@@ -190,6 +201,7 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_agent",
         "campaign_control_room_agent",
         "campaign_control_room_prepare_agent",
+        "campaign_preview_quality_agent",
         "source_campaign_operator_agent",
         "source_campaign_operator_advance_agent",
         "reporting_agent",
