@@ -10,6 +10,7 @@ from .db import execute, fetch_one
 from .email_templates import render_all_samples
 from .economics import run_economics_audit
 from .audit_evidence_remediation import audit_evidence_candidates, audit_evidence_remediation
+from .audit_refresh_completion import audit_refresh_completion_watch
 from .audit_refresh_drain import audit_refresh_drain_snapshot, prioritize_audit_refresh_jobs
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
@@ -200,6 +201,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             dry_run=bool(payload.get("dry_run", True)),
             priority=int(payload.get("priority", 220)),
         ),
+        "audit_refresh_completion_watch_agent": lambda: audit_refresh_completion_watch(
+            int(payload.get("limit", 25)),
+            int(payload.get("min_new_completed", 1)),
+            dry_run=bool(payload.get("dry_run", True)),
+        ),
         "visual_qa_agent": lambda: {"dry_run": True, "status": "huanshu_required", "routes": ["/", "/r/demo", "/admin", "/customer", "/status"]},
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
         "deliverability_agent": lambda: {"dry_run": True, "signals": mail_signal_summary()},
@@ -331,6 +337,7 @@ def run_daily_loop() -> dict[str, Any]:
         "audit_evidence_remediation_agent",
         "audit_refresh_drain_agent",
         "audit_refresh_prioritize_agent",
+        "audit_refresh_completion_watch_agent",
         "post_scan_campaign_cycle_agent",
         "campaign_preview_quality_agent",
         "buyer_journey_scoreboard_agent",
