@@ -1,0 +1,12 @@
+[Unit]
+Description=Vøiddo Rescue fast no-send autonomous core lane
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/voiddo-rescue
+ExecStart=/usr/bin/python3 /opt/voiddo-rescue/scripts/rescue_autonomous_loop.py --mode core --lock /tmp/voiddo-rescue-autonomous-core.lock --timeout 420
+TimeoutStartSec=600
+Nice=7

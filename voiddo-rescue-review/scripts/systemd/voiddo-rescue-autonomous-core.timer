@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Vøiddo Rescue fast no-send autonomous core lane
+
+[Timer]
+OnBootSec=8min
+OnUnitActiveSec=20min
+AccuracySec=2min
+Persistent=true
+Unit=voiddo-rescue-autonomous-core.service
+
+[Install]
+WantedBy=timers.target

@@ -80,3 +80,20 @@ def test_autonomous_loop_blocks_agent_failures_by_default():
         assert str(exc) == "daily_loop_agent_failures"
     else:
         raise AssertionError("agent failures must fail the scheduler safety gate")
+
+
+def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
+    calls: list[tuple[str, dict]] = []
+
+    def fake_run_agent(api_base, token, agent, payload, timeout):
+        calls.append((agent, payload))
+        return {"agent": agent, "status": "completed", "result_json": {"send_mail": False, "live_outreach_allowed": False}}
+
+    monkeypatch.setattr(loop_script, "run_agent", fake_run_agent)
+    result = loop_script.run_core_loop("http://api.local", "token", 60)
+    summary = loop_script.build_summary(result)
+    loop_script.assert_safe(summary)
+    assert result["loop"]["mode"] == "core"
+    assert len(calls) == len(loop_script.CORE_AGENTS)
+    assert calls[0][0] == "mail_throttle_agent"
+    assert calls[-1][0] == "mailer_policy_score_agent"

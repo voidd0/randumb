@@ -14,6 +14,22 @@ from urllib.request import Request, urlopen
 DEFAULT_ENV = Path("/opt/voiddo-rescue/.env")
 DEFAULT_LOCK = Path("/tmp/voiddo-rescue-autonomous-loop.lock")
 
+CORE_AGENTS: tuple[tuple[str, dict], ...] = (
+    ("mail_throttle_agent", {}),
+    ("mail_qa_agent", {}),
+    ("mailer_status_agent", {}),
+    ("mail_signal_learning_agent", {}),
+    ("clean_window_recheck_agent", {}),
+    ("post_window_recheck_agent", {}),
+    ("warmup_block_recovery_snapshot_agent", {"limit": 50}),
+    ("warmup_post_send_observer_agent", {"limit": 10}),
+    ("campaign_preflight_agent", {"limit": 20}),
+    ("launch_readiness_scoreboard_agent", {"limit": 25}),
+    ("reporting_agent", {}),
+    ("mailer_digest_trend_guard_agent", {}),
+    ("mailer_policy_score_agent", {}),
+)
+
 
 def load_env(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
@@ -95,11 +111,30 @@ def run_loop(api_base: str, token: str, timeout: int) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
+def run_agent(api_base: str, token: str, agent: str, payload: dict, timeout: int) -> dict:
+    request = Request(
+        f"{api_base.rstrip('/')}/admin/agents/{agent}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "X-Admin-Token": token},
+        method="POST",
+    )
+    with urlopen(request, timeout=timeout) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    return result.get("run", {}) if isinstance(result, dict) else {}
+
+
+def run_core_loop(api_base: str, token: str, timeout: int) -> dict:
+    per_agent_timeout = max(20, min(timeout, 180))
+    runs = [run_agent(api_base, token, agent, payload, per_agent_timeout) for agent, payload in CORE_AGENTS]
+    return {"ok": True, "loop": {"agents": len(runs), "runs": runs, "live_outreach": False, "mode": "core"}}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the Vøiddo Rescue no-send autonomous operating loop.")
     parser.add_argument("--api-base", default="http://127.0.0.1:18082")
     parser.add_argument("--env", default=str(DEFAULT_ENV))
     parser.add_argument("--lock", default=str(DEFAULT_LOCK))
+    parser.add_argument("--mode", choices=["core", "full"], default="full")
     parser.add_argument("--timeout", type=int, default=1200)
     parser.add_argument("--allow-agent-failures", action="store_true")
     args = parser.parse_args()
@@ -128,8 +163,12 @@ def main() -> int:
                 )
             )
             return 0
-        result = run_loop(args.api_base, token, max(30, args.timeout))
+        if args.mode == "core":
+            result = run_core_loop(args.api_base, token, max(30, args.timeout))
+        else:
+            result = run_loop(args.api_base, token, max(30, args.timeout))
         summary = build_summary(result)
+        summary["mode"] = args.mode
         if args.allow_agent_failures and int(summary.get("failed", 0)) > 0:
             summary["agent_failures_allowed"] = True
         else:
