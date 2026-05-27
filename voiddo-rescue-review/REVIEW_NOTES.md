@@ -1,31 +1,33 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 03:16 IDT
+Generated: 2026-05-27 03:31 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - review folder: `voiddo-rescue-review/`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- pass: `P55 latest trend guard summary`
+- pass: `P56 admin trend guard summary surface`
 
-## P55 Summary
+## P56 Summary
 
-- Added compact protected latest trend-guard summary.
-- New endpoint: `GET /admin/mailer/digest-trend-guard/latest`.
-- The endpoint returns only latest decision, regression count, queue/ledger/resolver counts, timestamps, and no-send/privacy/secret flags.
-- It fails closed if no trend guard agent run exists.
+- Protected admin Daily Digest Evidence now shows the compact latest trend-guard summary.
+- The panel displays decision, regression count, queue/ledger/resolver zero-state, latest run time, no-send state, raw-history omission, and secret omission.
+- It does not display raw history rows, report paths, raw JSON, recipient data, owner personal email, or secrets.
 
 ## Verification
 
-- targeted P55 tests: `39 passed`
+- targeted P56 tests: `39 passed`
 - full API tests: `293 passed`
 - smoke tests: `293 passed, ok`
+- Next production build: `PASS`
+- Huanshu visual gate: `PASS`
+- Playwright desktop/mobile: `PASS`
+- axe violations: `0`
+- pa11y issues: `0`
 - runtime latest summary decision: `PASS_NO_SEND`
-- runtime latest summary regression count: `0`
-- raw history rows included: `false`
 
-## Runtime Counts After Cleanup
+## Runtime Counts
 
 - mailer ops retention history rows: `1`
 - mailer digest history rows: `1`

@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 03:16 IDT
+Generated: 2026-05-27 03:31 IDT
 
 ## Decision
 
@@ -23,6 +23,8 @@ Generated: 2026-05-27 03:16 IDT
 - mailer digest trend guard: `PASS_NO_SEND`
 - mailer digest trend guard agent: `PASS`
 - latest trend guard compact summary: `PASS_NO_SEND`
+- protected admin trend guard summary: `PASS`
+- Huanshu admin visual gate P56: `PASS`
 - tests: `293 passed`
 - smoke: `293 passed, ok`
 

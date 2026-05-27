@@ -1,6 +1,27 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-27 02:31 IDT
+Generated: 2026-05-27 03:31 IDT
+
+## P56 Admin Trend Guard Summary Surface
+
+- Huanshu local adapter: `PASS`
+- Playwright desktop: `PASS`
+- Playwright mobile: `PASS`
+- axe violations: `0`
+- pa11y issues: `0`
+- horizontal overflow: `false`
+- console errors: `0`
+- broken images: `0`
+- unresolved template vars: `false`
+- raw JSON visible: `false`
+- raw report paths visible: `false`
+- owner personal email visible: `false`
+- latest trend guard decision visible: `true`
+- latest trend guard regressions visible: `true`
+- trend guard queue/ledger/resolver zero-state visible: `true`
+- trend guard no-send/privacy/secrets flags visible: `true`
+- CTA/action above fold: `true`
+- screenshot artifacts: `reports/visual_qa_p56/admin-desktop.png`, `reports/visual_qa_p56/admin-mobile.png`
 
 ## P52 Admin Digest Retention-History Surface
 

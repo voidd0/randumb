@@ -33,6 +33,7 @@ export default async function AdminPage() {
   const opsActionData = await fetchJson("/admin/mailer/ops-actions", authorization ? { Authorization: authorization } : {});
   const opsRetentionHistoryData = await fetchJson("/admin/mailer/ops-retention-history", authorization ? { Authorization: authorization } : {});
   const digestData = await fetchJson("/admin/mailer/digest-summary", authorization ? { Authorization: authorization } : {});
+  const trendGuardData = await fetchJson("/admin/mailer/digest-trend-guard/latest", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
@@ -52,6 +53,8 @@ export default async function AdminPage() {
   const latestDigestHistory = digestHistory.latest || {};
   const digestOpsRetentionHistory = digest.mailer_ops_retention_history || {};
   const latestDigestOpsRetentionHistory = digestOpsRetentionHistory.latest || {};
+  const trendGuard = trendGuardData?.trend_guard || {};
+  const trendQueue = trendGuard.queue_hygiene || {};
   const latestRealOpsAction = opsActions.latest_real || {};
   const opsRetentionAgent = opsActions.latest_retention_agent || {};
   const opsRetentionReport = opsActions.retention_agent_report || {};
@@ -290,6 +293,15 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">privacy</span><span>raw recipients in digest history</span><span className="score">{digestHistory.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw recipients in ops retention history</span><span className="score">{digestOpsRetentionHistory.raw_recipient_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">secret</span><span>secrets in ops retention history</span><span className="score">{digestOpsRetentionHistory.secrets_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">guard</span><span>latest trend guard decision</span><span className="score">{trendGuard.decision ?? "unknown"}</span></div>
+            <div className="row"><span className="tag">guard</span><span>latest trend guard regressions</span><span className="score">{trendGuard.regression_count ?? 0}</span></div>
+            <div className="row"><span className="tag">queue</span><span>trend guard action queue rows</span><span className="score">{trendQueue.mailer_action_queue_rows ?? 0}</span></div>
+            <div className="row"><span className="tag">ledger</span><span>trend guard send ledger rows</span><span className="score">{trendQueue.mailer_send_ledger_rows ?? 0}</span></div>
+            <div className="row"><span className="tag">resolver</span><span>trend guard resolver audit rows</span><span className="score">{trendQueue.recipient_resolver_audit_rows ?? 0}</span></div>
+            <div className="row"><span className="tag">time</span><span>trend guard latest run</span><span className="score">{trendGuard.latest_run_completed_at ? new Date(trendGuard.latest_run_completed_at).toLocaleString("en-GB") : "not yet"}</span></div>
+            <div className="row"><span className="tag">send</span><span>trend guard SMTP capability</span><span className="score">{trendGuard.send_mail ? "armed" : "no-send"}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw history rows in trend guard</span><span className="score">{trendGuard.raw_history_rows_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">secret</span><span>secrets in trend guard summary</span><span className="score">{trendGuard.secrets_included ? "blocked" : "omitted"}</span></div>
           </div>
           <div className="panel">
             <h2>Clean Window Recheck</h2>

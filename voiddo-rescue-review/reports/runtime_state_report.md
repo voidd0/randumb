@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-27 03:16 IDT
+Generated: 2026-05-27 03:31 IDT
 
 ## Canonical Latest State
 
@@ -30,6 +30,7 @@ Generated: 2026-05-27 03:16 IDT
 - mailer digest trend guard agent runs: `1`
 - latest trend guard compact summary: `PASS_NO_SEND`
 - latest trend guard raw history rows included: `false`
+- protected admin surfaces compact trend guard summary: `true`
 - daily loop includes trend guard agent: `true`
 - daily loop surfaces retention history evidence: `true`
 - owner report includes retention history evidence: `true`
@@ -46,12 +47,12 @@ Generated: 2026-05-27 03:16 IDT
 
 ## Verification
 
-- targeted P55 digest/agent/latest-summary tests: `39 passed`
+- targeted P56 digest/agent/latest-summary tests: `39 passed`
 - API tests: `293 passed`
 - smoke test: `293 passed, ok`
 - Next production build: `PASS`
-- Huanshu admin visual gate: `PASS`
-- Playwright desktop/mobile + axe + pa11y: `PASS`
+- Huanshu admin visual gate P56: `PASS`
+- Playwright desktop/mobile + axe + pa11y P56: `PASS`
 - API/web/worker/postgres/redis: healthy
 
 ## Next Allowed Action
