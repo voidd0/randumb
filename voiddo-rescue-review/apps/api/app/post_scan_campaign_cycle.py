@@ -41,13 +41,13 @@ def post_scan_campaign_cycle(limit: int = 100, dry_run: bool = True) -> dict[str
 
     backfill = backfill_post_scan_lead_scores(safe_limit, dry_run=dry_run)
     source_perf = scout_source_performance(safe_limit, store=not dry_run)
-    pipeline = repair_campaign_pipeline(safe_limit, dry_run=dry_run)
+    pipeline = repair_campaign_pipeline(safe_limit, dry_run=dry_run, prepare_previews=False)
     prepared = (
         prepare_campaign_control_room(safe_limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=8)
         if not dry_run
         else {"status": "dry_run", "campaign_previews_prepared": 0, **SAFE_FLAGS}
     )
-    operator = run_campaign_operator_cycle(min(safe_limit, 50)) if not dry_run else {"status": "dry_run", **SAFE_FLAGS}
+    operator = run_campaign_operator_cycle(min(safe_limit, 50), refresh_previews=False) if not dry_run else {"status": "dry_run", **SAFE_FLAGS}
     after_campaign = campaign_control_room_snapshot(safe_limit, 70)
     after_scanner = scanner_queue_health_snapshot(20)
     preview_after = _preview_count()

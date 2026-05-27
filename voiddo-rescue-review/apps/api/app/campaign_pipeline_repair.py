@@ -114,10 +114,19 @@ def _score_linked_leads(limit: int) -> list[dict[str, Any]]:
         SELECT DISTINCT ON (l.id) l.id AS lead_id, a.id AS audit_id
         FROM leads l
         JOIN audits a ON a.lead_id = l.id OR a.business_id = l.business_id
+        LEFT JOIN LATERAL (
+          SELECT audit_id, created_at
+          FROM lead_scores
+          WHERE lead_id = l.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) latest_score ON true
         WHERE a.status = 'completed'
           AND l.email IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM lead_scores ls WHERE ls.lead_id = l.id AND (ls.audit_id = a.id OR ls.audit_id IS NULL)
+          AND (
+            latest_score.audit_id IS NULL
+            OR latest_score.audit_id <> a.id
+            OR latest_score.created_at < COALESCE(a.checked_at, a.created_at)
           )
         ORDER BY l.id, a.created_at DESC
         LIMIT %s
@@ -131,7 +140,7 @@ def _score_linked_leads(limit: int) -> list[dict[str, Any]]:
     return scored
 
 
-def repair_campaign_pipeline(limit: int = 100, dry_run: bool = True) -> dict[str, Any]:
+def repair_campaign_pipeline(limit: int = 100, dry_run: bool = True, prepare_previews: bool = True) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 100), 500))
     before = campaign_pipeline_gap_snapshot(safe_limit)
     if dry_run:
@@ -149,7 +158,15 @@ def repair_campaign_pipeline(limit: int = 100, dry_run: bool = True) -> dict[str
         }
     linked = _link_orphan_audits(safe_limit)
     scored = _score_linked_leads(safe_limit)
-    prepared = prepare_campaign_control_room(safe_limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=5)
+    prepared = (
+        prepare_campaign_control_room(safe_limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=5)
+        if prepare_previews
+        else {
+            "campaign_previews_prepared": 0,
+            "campaigns_created_or_confirmed": 0,
+            "status": "skipped_already_prepared_by_parent_cycle",
+        }
+    )
     after = campaign_pipeline_gap_snapshot(safe_limit)
     return json_safe(
         {

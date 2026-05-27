@@ -97,6 +97,21 @@ def run_scout_quality_gate(scout_run_id: str) -> dict[str, Any]:
 
 
 def latest_scout_quality_gate(scout_run_id: str) -> dict[str, Any]:
+    if not scout_run_id or str(scout_run_id).lower() == "none":
+        return {
+            "decision": "FAIL_REVIEW_REQUIRED",
+            "allowed_for_campaign_preview": False,
+            "blockers": [{"code": "missing_scout_run_id", "severity": "high"}],
+            "self_check_status": "missing",
+            "provenance_status": "missing",
+            "provenance_score": 0,
+            "source_url_coverage": 0,
+            "confidence_average": 0,
+            "send_mail": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
     self_check = fetch_one(
         "SELECT * FROM scout_self_checks WHERE scout_run_id = %s ORDER BY created_at DESC LIMIT 1",
         (scout_run_id,),
@@ -147,7 +162,7 @@ def lead_scout_quality_gate(lead_id: str) -> dict[str, Any]:
         """,
         (lead_id,),
     )
-    if not row:
+    if not row or not row.get("scout_run_id"):
         return {
             "allowed_for_campaign_preview": False,
             "decision": "FAIL_REVIEW_REQUIRED",

@@ -135,14 +135,15 @@ def run_campaign_action(action: str, campaign_id: str | None = None, limit: int 
         refreshed = prepare_campaign_control_room(safe_limit, 70, dry_run=dry_run, offer_key="contact_form_repair", max_segments=8)
         result = {"status": "completed" if not dry_run else "dry_run", "action": action, "refreshed": refreshed}
     elif action == "run_quality":
-        campaigns = _campaign_summaries(20)
+        campaigns = _campaign_summaries(min(safe_limit, 8))
+        per_campaign_limit = max(1, min(safe_limit, 5))
         quality = []
         for campaign in campaigns:
             if campaign_id and campaign["campaign_id"] != campaign_id:
                 continue
             if campaign["preview_count"] <= 0:
                 continue
-            quality.append({"campaign_id": campaign["campaign_id"], "country": campaign["country"], "niche": campaign["niche"], "quality": campaign_preview_quality_pack(campaign["campaign_id"], 20)})
+            quality.append({"campaign_id": campaign["campaign_id"], "country": campaign["country"], "niche": campaign["niche"], "quality": campaign_preview_quality_pack(campaign["campaign_id"], per_campaign_limit)})
         result = {"status": "completed", "action": action, "quality_count": len(quality), "quality": quality}
     elif action == "owner_preview_report":
         room = campaign_control_room_snapshot(safe_limit, 70)
@@ -174,9 +175,13 @@ def run_campaign_action(action: str, campaign_id: str | None = None, limit: int 
     return json_safe(result)
 
 
-def run_campaign_operator_cycle(limit: int = 25) -> dict[str, Any]:
+def run_campaign_operator_cycle(limit: int = 25, refresh_previews: bool = True) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 25), 100))
-    refresh = run_campaign_action("refresh_previews", limit=safe_limit, dry_run=False)
+    refresh = (
+        run_campaign_action("refresh_previews", limit=safe_limit, dry_run=False)
+        if refresh_previews
+        else {"status": "skipped_already_prepared_by_parent_cycle", "send_mail": False, "smtp_called": False, "live_outreach_allowed": False}
+    )
     quality = run_campaign_action("run_quality", limit=min(safe_limit, 20), dry_run=False)
     summary = campaign_actions_summary(8)
     return json_safe(

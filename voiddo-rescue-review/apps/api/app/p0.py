@@ -753,9 +753,10 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
 def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = "", auth_results: str = "") -> dict[str, Any]:
     settings = get_settings()
     owner_email = (settings.owner_command_email or OWNER_EMAIL_FALLBACK).lower()
+    studio_owner_command_emails = getattr(settings, "studio_owner_command_emails", "")
     owner_emails = {
         item.strip().lower()
-        for item in ",".join([owner_email, settings.studio_owner_command_emails or ""]).split(",")
+        for item in ",".join([owner_email, studio_owner_command_emails or ""]).split(",")
         if item.strip()
     }
     sender_email = parseaddr(sender)[1].lower()

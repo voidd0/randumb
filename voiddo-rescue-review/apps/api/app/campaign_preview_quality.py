@@ -62,6 +62,20 @@ def _preview_rows(campaign_id: str, limit: int) -> list[dict[str, Any]]:
     ]
 
 
+def _latest_or_score_audit_strength(audit_id: str) -> dict[str, Any]:
+    latest = fetch_one(
+        """
+        SELECT *
+        FROM audit_strength_scores
+        WHERE audit_id = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (audit_id,),
+    )
+    return dict(latest) if latest else score_audit_strength(audit_id)
+
+
 def campaign_preview_quality_pack(campaign_id: str, limit: int = 20) -> dict[str, Any]:
     campaign = fetch_one("SELECT * FROM campaigns WHERE id = %s", (campaign_id,))
     if not campaign:
@@ -76,7 +90,7 @@ def campaign_preview_quality_pack(campaign_id: str, limit: int = 20) -> dict[str
         blockers: list[str] = []
         audit_strength = {"final_score": 0, "issues_json": [{"code": "missing_audit"}]}
         if row.get("audit_id"):
-            audit_strength = score_audit_strength(str(row["audit_id"]))
+            audit_strength = _latest_or_score_audit_strength(str(row["audit_id"]))
         if int(audit_strength.get("final_score") or 0) < 70:
             blockers.append("audit_strength_below_70")
         if not row.get("public_slug"):

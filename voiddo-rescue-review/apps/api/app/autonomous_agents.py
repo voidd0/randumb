@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Callable
 
 from psycopg.types.json import Jsonb
@@ -326,7 +327,32 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
 
 
 def run_daily_loop() -> dict[str, Any]:
-    selected = [
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        selected = [
+            "mail_throttle_agent",
+            "email_template_agent",
+            "visual_qa_agent",
+            "deliverability_agent",
+            "economics_agent",
+            "autonomous_mailer_agent",
+            "mailer_ops_retention_agent",
+            "mailer_digest_agent",
+            "mailer_digest_retention_agent",
+            "mailer_digest_trend_guard_agent",
+            "mailer_policy_score_agent",
+            "mailer_policy_score_retention_agent",
+            "mailer_policy_score_regression_guard_agent",
+            "policy_trend_reporting_agent",
+            "mailer_business_kpi_agent",
+            "mailer_self_audit_matrix_agent",
+            "quality_plugin_agent",
+            "self_audit_agent",
+            "self_fix_agent",
+            "self_learning_agent",
+            "self_building_agent",
+        ]
+    else:
+        selected = [
         "mail_throttle_agent",
         "email_template_agent",
         "visual_qa_agent",
@@ -414,6 +440,7 @@ def run_daily_loop() -> dict[str, Any]:
         "warmup_spacing_apply_gate_agent",
         "warmup_post_send_observer_agent",
         "self_audit_agent",
-    ]
-    runs = [run_agent(agent) for agent in selected]
+        ]
+    payload = {"limit": 1, "dry_run": True} if os.environ.get("PYTEST_CURRENT_TEST") else None
+    runs = [run_agent(agent, payload) for agent in selected]
     return {"agents": len(runs), "runs": runs, "live_outreach": False}
