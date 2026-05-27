@@ -69,6 +69,7 @@ from .scouts import cleanup_scout_source_readiness_checks, process_queued_scout_
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_quality_gate, record_scout_campaign_quality_history, run_scout_quality_gate, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .self_operating import run_self_audit, self_operating_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
+from .warmup_block_recovery import recover_blocked_warmup_slots, warmup_block_recovery_snapshot
 from .warmup_post_send import observe_warmup_post_send
 
 
@@ -230,6 +231,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
         "deliverability_agent": lambda: {"dry_run": True, "signals": mail_signal_summary()},
         "warmup_agent": lambda: run_warmup_calendar_due(limit=2),
+        "warmup_block_recovery_agent": lambda: recover_blocked_warmup_slots(
+            int(payload.get("limit", 25)),
+            apply=bool(payload.get("apply", True)),
+        ),
+        "warmup_block_recovery_snapshot_agent": lambda: warmup_block_recovery_snapshot(int(payload.get("limit", 50))),
         "campaign_agent": lambda: prepare_outreach_preview(int(payload.get("limit", 20))),
         "campaign_operator_agent": lambda: run_campaign_operator_cycle(int(payload.get("limit", 25))),
         "campaign_control_room_agent": lambda: campaign_control_room_snapshot(int(payload.get("limit", 100))),
@@ -346,6 +352,7 @@ def run_daily_loop() -> dict[str, Any]:
             "mailer_business_kpi_agent",
             "mailer_self_audit_matrix_agent",
             "quality_plugin_agent",
+            "warmup_block_recovery_snapshot_agent",
             "self_audit_agent",
             "self_fix_agent",
             "self_learning_agent",
@@ -436,6 +443,9 @@ def run_daily_loop() -> dict[str, Any]:
         "clean_window_recheck_agent",
         "post_window_recheck_agent",
         "sender_rotation_readiness_agent",
+        "warmup_agent",
+        "warmup_block_recovery_agent",
+        "warmup_block_recovery_snapshot_agent",
         "warmup_spacing_planner_agent",
         "warmup_spacing_apply_gate_agent",
         "warmup_post_send_observer_agent",
