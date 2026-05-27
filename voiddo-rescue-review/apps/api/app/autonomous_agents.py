@@ -41,6 +41,7 @@ from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 from .language_gate import check_no_ai_public_language
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
+from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
 from .scouts import cleanup_scout_source_readiness_checks, process_queued_scout_runs, process_scout_run_gated, ready_scout_source_queue_candidates, run_scout_source_readiness, scout_source_readiness_regression_guard, scout_source_readiness_summary
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_quality_gate, record_scout_campaign_quality_history, run_scout_quality_gate, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .self_operating import run_self_audit, self_operating_summary
@@ -145,6 +146,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "source_campaign_operator_agent": lambda: source_campaign_operator_snapshot(int(payload.get("limit", 25)), payload.get("source_id")),
         "source_campaign_operator_advance_agent": lambda: advance_source_to_campaign(payload.get("source_id"), int(payload.get("limit", 25)), dry_run=True),
         "launch_readiness_scoreboard_agent": lambda: launch_readiness_scoreboard(int(payload.get("limit", 25))),
+        "launch_repair_plan_agent": lambda: launch_repair_plan(int(payload.get("limit", 25))),
+        "launch_repair_executor_agent": lambda: execute_launch_repair_plan(int(payload.get("limit", 25)), dry_run=True),
         "inbox_agent": lambda: {"dry_run": True, "status": "worker_polls_when_enabled"},
         "owner_command_agent": lambda: {"dry_run": True, "status": "owner_commands_are_gated"},
         "checkout_agent": lambda: {"dry_run": True, "status": "paddle_webhook_handlers_ready"},
@@ -211,6 +214,7 @@ def run_daily_loop() -> dict[str, Any]:
         "source_campaign_operator_agent",
         "source_campaign_operator_advance_agent",
         "launch_readiness_scoreboard_agent",
+        "launch_repair_plan_agent",
         "reporting_agent",
         "fix_task_agent",
         "monitoring_scheduler_agent",
