@@ -56,6 +56,7 @@ from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 from .language_gate import check_no_ai_public_language
+from .scout_run_recovery import recover_stale_scout_runs, stale_scout_run_recovery_snapshot
 from .scanner_ops import retry_transient_scanner_failures, scanner_queue_health_snapshot
 from .scanner_queue_hygiene import archive_scanner_queue_artifacts, scanner_queue_hygiene_snapshot
 from .scanner_priority import prioritize_guided_scanner_jobs, scanner_guided_backlog
@@ -201,6 +202,15 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "post_scan_lead_scoring_agent": lambda: backfill_post_scan_lead_scores(int(payload.get("limit", 50)), dry_run=bool(payload.get("dry_run", False))),
         "lead_quality_diagnostics_agent": lambda: record_lead_quality_diagnostics(int(payload.get("limit", 50))),
         "scout_source_feedback_agent": lambda: apply_scout_source_feedback(int(payload.get("limit", 50)), dry_run=bool(payload.get("dry_run", True))),
+        "scout_run_recovery_agent": lambda: recover_stale_scout_runs(
+            int(payload.get("limit", 25)),
+            int(payload.get("older_than_minutes", 120)),
+            apply=bool(payload.get("apply", True)),
+        ),
+        "scout_run_recovery_snapshot_agent": lambda: stale_scout_run_recovery_snapshot(
+            int(payload.get("limit", 50)),
+            int(payload.get("older_than_minutes", 120)),
+        ),
         "audit_page_agent": lambda: {"dry_run": True, "status": "audit_pages_api_backed"},
         "audit_evidence_candidates_agent": lambda: audit_evidence_candidates(int(payload.get("limit", 25))),
         "audit_evidence_remediation_agent": lambda: audit_evidence_remediation(
@@ -367,6 +377,7 @@ def run_daily_loop() -> dict[str, Any]:
             "warmup_block_recovery_snapshot_agent",
             "campaign_preview_hygiene_snapshot_agent",
             "scanner_queue_hygiene_snapshot_agent",
+            "scout_run_recovery_snapshot_agent",
             "self_audit_agent",
             "self_fix_agent",
             "self_learning_agent",
@@ -390,6 +401,8 @@ def run_daily_loop() -> dict[str, Any]:
         "post_scan_lead_scoring_agent",
         "lead_quality_diagnostics_agent",
         "scout_source_feedback_agent",
+        "scout_run_recovery_agent",
+        "scout_run_recovery_snapshot_agent",
         "campaign_agent",
         "campaign_operator_agent",
         "campaign_control_room_agent",

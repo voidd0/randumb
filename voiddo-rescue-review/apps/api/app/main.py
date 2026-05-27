@@ -95,6 +95,7 @@ from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
+from .scout_run_recovery import recover_stale_scout_runs, stale_scout_run_recovery_snapshot
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, latest_scout_quality_gate, run_scout_quality_gate, run_scout_self_check, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, latest_scout_source_readiness, latest_scout_source_readiness_regression_guard_summary, prepare_campaign, prepare_campaign_gated, prepare_scout_source_from_adapter, process_scout_run, process_scout_run_gated, queue_ready_scout_source_runs, ready_scout_source_queue_candidates, run_scout_source_readiness, scout_campaign_expansion_gate, scout_source_readiness_gate, scout_source_readiness_regression_guard, scout_source_readiness_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup, rollback_latest_spacing_repair
@@ -551,6 +552,24 @@ def scout_source_queue_candidates_get(limit: int = 20, source_id: str | None = N
 async def scout_source_queue_run(request: Request):
     payload = await request.json()
     return {"ok": True, "queue": queue_ready_scout_source_runs(int(payload.get("limit", 10)), bool(payload.get("dry_run", True)), payload.get("source_id"))}
+
+
+@app.get("/admin/scouts/stale-runs", dependencies=[Depends(require_admin)])
+def scout_stale_runs_get(limit: int = 50, older_than_minutes: int = 120):
+    return {"ok": True, "recovery": stale_scout_run_recovery_snapshot(limit, older_than_minutes)}
+
+
+@app.post("/admin/scouts/recover-stale-runs", dependencies=[Depends(require_admin)])
+async def scout_recover_stale_runs(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "recovery": recover_stale_scout_runs(
+            int(payload.get("limit", 25)),
+            int(payload.get("older_than_minutes", 120)),
+            bool(payload.get("apply", False)),
+        ),
+    }
 
 
 @app.post("/admin/scouts/sources/{source_id}/readiness", dependencies=[Depends(require_admin)])

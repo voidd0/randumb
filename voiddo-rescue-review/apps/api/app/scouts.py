@@ -616,22 +616,18 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
             rejection_reason = "missing_domain"
         elif niche in EXCLUDED_NICHES:
             rejection_reason = "excluded_niche"
-        elif _is_excluded_large_brand(business_name, domain, website):
-            rejection_reason = "excluded_large_enterprise"
         elif fetch_one(
             """
             SELECT 1
             FROM scout_leads
             WHERE lower(COALESCE(domain, '')) = lower(%s)
               AND lower(COALESCE(email, '')) = lower(%s)
-              AND EXISTS (
-                SELECT 1 FROM businesses b
-                WHERE lower(b.domain) = lower(%s)
-              )
             """,
-            (domain, email or "", domain),
+            (domain, email or ""),
         ):
             rejection_reason = "duplicate_scout_lead"
+        elif _is_excluded_large_brand(business_name, domain, website):
+            rejection_reason = "excluded_large_enterprise"
         elif fetch_one("SELECT 1 FROM businesses WHERE lower(domain) = lower(%s)", (domain,)):
             rejection_reason = "duplicate_domain"
         elif email and fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,)):
