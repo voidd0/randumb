@@ -1,6 +1,6 @@
 # Vøiddo Rescue Runtime State
 
-- generated_at: 2026-05-27T16:52:12.167756+00:00
+- generated_at: 2026-05-27T17:00:51.313591+00:00
 - current_branch_head: 
 - current_zip_sha: 
 - checkout_status: READY
@@ -16,11 +16,11 @@
 - rate_limit_signal_count_24h: 0
 - next_allowed_action: wait_until_recent_bounce_and_rate_limit_window_clears_then_recheck_mail_qa
 - launch_readiness_state: WARMUP_ACTIVE_NO_OUTREACH
-- mailer_policy_score_history_count: 5
-- mailer_policy_latest_score: 45
-- mailer_policy_latest_decision: NO_SEND_BLOCKED_REPAIR
-- mailer_policy_latest_blockers: 2
-- mailer_policy_score_trend_direction: degrading
+- mailer_policy_score_history_count: 1
+- mailer_policy_latest_score: 100
+- mailer_policy_latest_decision: NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW
+- mailer_policy_latest_blockers: 0
+- mailer_policy_score_trend_direction: insufficient_history
 - mailer_policy_regression_guard_decision: FAIL_BLOCK_LAUNCH
 - mailer_policy_regression_count: 3
 - mailer_policy_regression_score_drop: 55

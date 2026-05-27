@@ -12,7 +12,22 @@ from .mailer_control import evaluate_outbound_message
 from .p0 import json_safe
 
 
-OUTREACH_GATE_EXPECTED_BLOCKERS = {"outreach_dry_run_enabled", "live_outreach_not_approved"}
+OUTREACH_GATE_EXPECTED_BLOCKERS = {
+    "outreach_dry_run_enabled",
+    "live_outreach_not_approved",
+    "warmup_clean_send_count_below_threshold",
+    "min_delay",
+    "backoff_active",
+    "recent_bounce_or_dsn",
+    "recent_rate_limit",
+    "mail_qa_not_passed",
+    "visual_qa_not_passed",
+}
+
+
+def _unexpected_outbound_blockers(reason: str) -> list[str]:
+    blockers = [item.strip() for item in str(reason or "").split(",") if item.strip()]
+    return [item for item in blockers if item not in OUTREACH_GATE_EXPECTED_BLOCKERS]
 
 
 def _price_text(product_key: str) -> str:
@@ -103,7 +118,8 @@ def campaign_preview_quality_pack(campaign_id: str, limit: int = 20) -> dict[str
             }
         )
         outbound_reason = str(outbound.get("reason") or "")
-        if outbound["status"] != "ready" and outbound_reason not in OUTREACH_GATE_EXPECTED_BLOCKERS:
+        unexpected_outbound_blockers = _unexpected_outbound_blockers(outbound_reason)
+        if outbound["status"] != "ready" and unexpected_outbound_blockers:
             blockers.append("outbound_gate_unexpected_block")
         for blocker in blockers:
             blockers_by_code[blocker] = blockers_by_code.get(blocker, 0) + 1

@@ -29,6 +29,18 @@ def _redact_mailer_summary(value: Any) -> Any:
     return value
 
 
+def _active_mailer_action_queue_count() -> int:
+    row = fetch_one(
+        """
+        SELECT count(*) AS count
+        FROM mailer_action_queue
+        WHERE status IN ('queued', 'send_ready', 'blocked', 'gate_blocked', 'transport_blocked', 'review_required')
+           OR risk_level = 'HIGH_RISK'
+        """
+    )
+    return int(row["count"] or 0) if row else 0
+
+
 def mailer_control_room_summary(write_snapshot: bool = False) -> dict[str, Any]:
     snapshot = mailer_status_snapshot() if write_snapshot else fetch_one(
         """
@@ -247,7 +259,8 @@ def mailer_digest_trend_guard(limit: int = 8) -> dict[str, Any]:
     )
     digest_count = fetch_one("SELECT count(*) AS count FROM mailer_digest_reports")
     retention_count = fetch_one("SELECT count(*) AS count FROM mailer_ops_retention_reports")
-    action_queue = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
+    action_queue = {"count": _active_mailer_action_queue_count()}
+    action_queue_total = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
     send_ledger = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
     resolver_audit = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
 
@@ -303,6 +316,7 @@ def mailer_digest_trend_guard(limit: int = 8) -> dict[str, Any]:
             },
             "queue_hygiene": {
                 "mailer_action_queue_rows": int((action_queue or {}).get("count", 0) or 0),
+                "mailer_action_queue_total_rows": int((action_queue_total or {}).get("count", 0) or 0),
                 "mailer_send_ledger_rows": int((send_ledger or {}).get("count", 0) or 0),
                 "recipient_resolver_audit_rows": int((resolver_audit or {}).get("count", 0) or 0),
             },
@@ -392,11 +406,13 @@ def mailer_policy_score() -> dict[str, Any]:
     signals = mail_signal_summary(24)
     warmup = warmup_calendar_health()
     mail_qa = latest_mail_qa_decision()
-    action_queue = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
+    action_queue = {"count": _active_mailer_action_queue_count()}
+    action_queue_total = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
     send_ledger = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
     resolver_audit = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
     queue_counts = {
         "mailer_action_queue_rows": int((action_queue or {}).get("count", 0) or 0),
+        "mailer_action_queue_total_rows": int((action_queue_total or {}).get("count", 0) or 0),
         "mailer_send_ledger_rows": int((send_ledger or {}).get("count", 0) or 0),
         "recipient_resolver_audit_rows": int((resolver_audit or {}).get("count", 0) or 0),
     }
