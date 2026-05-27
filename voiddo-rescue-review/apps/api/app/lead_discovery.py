@@ -365,3 +365,142 @@ def regional_lead_discovery_cycle(limit_targets: int = 2, per_target_limit: int 
         "raw_recipient_addresses_included": False,
         "secrets_included": False,
     }
+
+
+def performance_guided_target_plan(limit_targets: int = 5) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit_targets or 5), 20))
+    latest_performance = fetch_all(
+        """
+        WITH latest AS (
+          SELECT DISTINCT ON (source_id)
+            source_id, status, qualified_count, qualified_rate, average_final_score,
+            email_coverage, issue_signal_rate, recommendation, created_at
+          FROM scout_source_performance_scores
+          WHERE source_id IS NOT NULL
+          ORDER BY source_id, created_at DESC
+        )
+        SELECT ss.name, ss.country, ss.niche, ss.language, latest.*
+        FROM latest
+        JOIN scout_sources ss ON ss.id = latest.source_id
+        WHERE latest.recommendation IN ('PROMOTE_SOURCE_FOR_MORE_SCOUTING', 'KEEP_TESTING_WITH_SMALL_BATCHES')
+          AND latest.qualified_count > 0
+        ORDER BY
+          CASE latest.recommendation WHEN 'PROMOTE_SOURCE_FOR_MORE_SCOUTING' THEN 0 ELSE 1 END,
+          latest.qualified_rate DESC,
+          latest.average_final_score DESC,
+          latest.created_at DESC
+        LIMIT 25
+        """
+    )
+    existing_source_names = {str(row["name"]) for row in fetch_all("SELECT name FROM scout_sources WHERE name LIKE %s", ("overpass-%",))}
+    selected: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+    for perf in latest_performance:
+        country = str(perf.get("country") or "").upper()
+        niche = str(perf.get("niche") or "")
+        language = str(perf.get("language") or "en")
+        for target in lead_discovery_target_plan(False)["targets"]:
+            if target["country"].upper() != country or target["niche"] != niche:
+                continue
+            source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
+            if source_name in existing_source_names or source_name in seen_names:
+                continue
+            selected.append(
+                {
+                    **target,
+                    "language": target.get("language") or language,
+                    "source_name": source_name,
+                    "guidance": {
+                        "source_id": str(perf["source_id"]),
+                        "source_name": perf["name"],
+                        "recommendation": perf["recommendation"],
+                        "qualified_count": int(perf["qualified_count"] or 0),
+                        "qualified_rate": float(perf["qualified_rate"] or 0),
+                        "average_final_score": float(perf["average_final_score"] or 0),
+                        "email_coverage": float(perf["email_coverage"] or 0),
+                        "issue_signal_rate": float(perf["issue_signal_rate"] or 0),
+                    },
+                }
+            )
+            seen_names.add(source_name)
+            if len(selected) >= safe_limit:
+                break
+        if len(selected) >= safe_limit:
+            break
+    return {
+        "status": "ready" if selected else "no_guided_targets",
+        "selected_count": len(selected),
+        "targets": selected,
+        "guidance_sources_checked": len(latest_performance),
+        "strategy": "promote_country_niche_pairs_with_real_qualified_scan_yield",
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def performance_guided_regional_discovery_cycle(limit_targets: int = 3, per_target_limit: int = 30, dry_run: bool = True) -> dict[str, Any]:
+    safe_target_limit = max(1, min(int(limit_targets or 3), 8))
+    safe_per_target_limit = max(1, min(int(per_target_limit or 30), 50))
+    plan = performance_guided_target_plan(safe_target_limit)
+    targets = plan["targets"]
+    if dry_run or not targets:
+        return {
+            "status": "dry_run" if dry_run else "no_guided_targets",
+            "selected_count": len(targets),
+            "targets": targets,
+            "created_sources": 0,
+            "found_count": 0,
+            "with_email_count": 0,
+            "plan": plan,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+
+    created = []
+    errors = []
+    for target in targets:
+        try:
+            result = overpass_lead_discovery(
+                target["country"],
+                target["city"],
+                target["niche"],
+                target.get("language") or "en",
+                safe_per_target_limit,
+                dry_run=False,
+            )
+            created.append(result)
+        except Exception as exc:
+            errors.append({"country": target["country"], "city": target["city"], "niche": target["niche"], "error": type(exc).__name__})
+    return {
+        "status": "completed" if created or not errors else "failed",
+        "selected_count": len(targets),
+        "created_sources": len([item for item in created if item.get("status") == "source_created"]),
+        "found_count": sum(int(item.get("found_count", 0)) for item in created),
+        "with_email_count": sum(int(item.get("with_email_count", 0)) for item in created),
+        "errors": errors,
+        "targets": [{"country": item["country"], "city": item["city"], "niche": item["niche"], "language": item["language"], "guidance": item.get("guidance", {})} for item in targets],
+        "results": [
+            {
+                "source_id": item.get("source_id"),
+                "country": item.get("country"),
+                "city": item.get("city"),
+                "niche": item.get("niche"),
+                "found_count": item.get("found_count", 0),
+                "with_email_count": item.get("with_email_count", 0),
+                "readiness": item.get("readiness", {}),
+            }
+            for item in created
+        ],
+        "plan": {key: value for key, value in plan.items() if key != "targets"},
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }

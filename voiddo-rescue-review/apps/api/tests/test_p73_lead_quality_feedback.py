@@ -6,8 +6,10 @@ import uuid
 from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
+import app.lead_discovery as discovery_module
 from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
+from app.lead_discovery import performance_guided_regional_discovery_cycle, performance_guided_target_plan
 from app.lead_quality_diagnostics import (
     latest_lead_quality_diagnostics_history,
     latest_scout_source_performance,
@@ -197,5 +199,83 @@ def test_lead_quality_feedback_endpoints_and_agents_are_admin_gated_no_send():
         assert feedback_agent["status"] == "completed"
         assert feedback_agent["result_json"]["dry_run"] is True
         assert feedback_agent["result_json"]["applied_status_changes"] == 0
+    finally:
+        _cleanup(token)
+
+
+def test_performance_guided_discovery_uses_real_source_yield_without_sending(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    city = f"GuideCity{token}"
+    try:
+        source = execute(
+            """
+            INSERT INTO scout_sources(name, source_type, country, language, niche, status, config_json)
+            VALUES (%s, 'manual_csv_scout', 'US', 'en', 'dentists', 'active', '{}'::jsonb)
+            RETURNING id
+            """,
+            (f"p73-guidance-{token}",),
+        )
+        execute(
+            """
+            INSERT INTO scout_source_performance_scores(
+              source_id, status, scanned_count, scored_count, qualified_count,
+              qualified_rate, average_final_score, email_coverage, issue_signal_rate,
+              recommendation, reasoning_json
+            )
+            VALUES (%s, 'PASS_SOURCE_PERFORMANCE_NO_SEND', 5, 5, 2, 0.4, 76, 0.8, 0.6,
+                    'PROMOTE_SOURCE_FOR_MORE_SCOUTING', %s)
+            """,
+            (source["id"], Jsonb({"token": token})),
+        )
+        monkeypatch.setattr(
+            discovery_module,
+            "FIRST_TIER_TARGETS",
+            [{"country": "US", "city": city, "language": "en", "niche": "dentists", "priority": 99}],
+        )
+        plan = performance_guided_target_plan(1)
+        assert plan["status"] == "ready"
+        assert plan["selected_count"] == 1
+        assert plan["targets"][0]["city"] == city
+        assert plan["targets"][0]["guidance"]["recommendation"] == "PROMOTE_SOURCE_FOR_MORE_SCOUTING"
+        assert plan["send_mail"] is False
+
+        dry = performance_guided_regional_discovery_cycle(1, 5, dry_run=True)
+        assert dry["status"] == "dry_run"
+        assert dry["created_sources"] == 0
+        assert dry["live_outreach_allowed"] is False
+
+        monkeypatch.setitem(discovery_module.CITY_AREAS, ("US", city.lower()), city)
+        monkeypatch.setattr(
+            discovery_module,
+            "_fetch_overpass",
+            lambda query: {
+                "elements": [
+                    {
+                        "type": "node",
+                        "id": 739,
+                        "tags": {
+                            "name": f"P73 Guided Clinic {token}",
+                            "website": f"https://p73-guided-{token}.clinic",
+                            "contact:email": f"hello-guided-{token}@p73-guided-{token}.clinic",
+                        },
+                    }
+                ]
+            },
+        )
+        live = performance_guided_regional_discovery_cycle(1, 5, dry_run=False)
+        assert live["status"] == "completed"
+        assert live["created_sources"] == 1
+        assert live["found_count"] == 1
+        assert live["with_email_count"] == 1
+        assert live["send_mail"] is False
+        assert live["smtp_called"] is False
+        assert f"hello-guided-{token}" not in str(live)
+
+        assert client.get("/admin/lead-discovery/performance-guided-targets").status_code == 401
+        response = client.get("/admin/lead-discovery/performance-guided-targets", headers=admin_headers())
+        assert response.status_code == 200
+        agent = run_agent("performance_guided_target_plan_agent", {"limit_targets": 1})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["send_mail"] is False
     finally:
         _cleanup(token)

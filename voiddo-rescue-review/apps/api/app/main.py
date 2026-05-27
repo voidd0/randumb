@@ -73,7 +73,7 @@ from .launch_operating_lane import advance_launch_operating_lane, launch_operati
 from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
-from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, regional_lead_discovery_cycle
+from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, regional_lead_discovery_cycle
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
@@ -1211,6 +1211,24 @@ async def lead_discovery_regional_cycle_run(request: Request):
 @app.get("/admin/lead-discovery/targets", dependencies=[Depends(require_admin)])
 def lead_discovery_targets(include_secondary: bool = False):
     return {"ok": True, "plan": lead_discovery_target_plan(include_secondary)}
+
+
+@app.get("/admin/lead-discovery/performance-guided-targets", dependencies=[Depends(require_admin)])
+def lead_discovery_performance_guided_targets(limit_targets: int = 5):
+    return {"ok": True, "plan": performance_guided_target_plan(limit_targets)}
+
+
+@app.post("/admin/lead-discovery/performance-guided-cycle", dependencies=[Depends(require_admin)])
+async def lead_discovery_performance_guided_cycle_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "cycle": performance_guided_regional_discovery_cycle(
+            int(payload.get("limit_targets", 3)),
+            int(payload.get("per_target_limit", 30)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
 
 
 @app.post("/admin/scouts/runs/{run_id}/self-check", dependencies=[Depends(require_admin)])
