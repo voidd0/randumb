@@ -1,11 +1,11 @@
 # Runtime State Report
 
-Generated: 2026-05-27 04:31 IDT
+Generated: 2026-05-27 04:53 IDT
 
 ## Canonical Latest State
 
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- current branch head before P59 commit: `584c938c796617cdd17dc0b5a0642065f5957919`
+- current branch head before P60 commit: `e3a477473fb15d4020cc646b252e85e8f6080cbf`
 - checkout status: `READY`
 - mail auth status: `PASS`
 - latest mail QA decision: `PASS`
@@ -35,13 +35,18 @@ Generated: 2026-05-27 04:31 IDT
 - mailer policy score: `100`
 - mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
 - mailer policy blockers: `0`
-- mailer policy score agent runs: `1`
+- mailer policy score agent runs: `3`
+- mailer policy score retention agent runs: `2`
+- mailer policy score regression guard agent runs: `2`
 - protected admin surfaces policy score evidence: `true`
 - daily loop includes policy score agent after trend guard: `true`
-- mailer policy score history rows: `2`
+- mailer policy score history rows: `3`
 - latest policy score history score: `100`
 - latest policy score history decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
 - latest policy score history send state: `false`
+- policy score regression guard decision: `PASS_NO_SEND`
+- policy score regression count: `0`
+- policy score retention total rows: `3`
 - digest includes policy score history evidence: `true`
 - daily loop surfaces retention history evidence: `true`
 - owner report includes retention history evidence: `true`
@@ -58,12 +63,12 @@ Generated: 2026-05-27 04:31 IDT
 
 ## Verification
 
-- targeted P59 policy history tests: `31 passed`
-- API tests: `303 passed`
-- smoke test: `303 passed, ok`
+- targeted P60 policy retention/regression tests: `36 passed`
+- API tests: `308 passed`
+- smoke test: `308 passed, ok`
 - Next production build: `PASS`
-- Huanshu admin visual gate P59: `PASS`
-- Playwright desktop/mobile + axe + pa11y P59: `PASS`
+- Huanshu admin visual gate P60: `PASS`
+- Playwright desktop/mobile + axe + pa11y P60: `PASS`
 - API/web/worker/postgres/redis: healthy
 
 ## Next Allowed Action

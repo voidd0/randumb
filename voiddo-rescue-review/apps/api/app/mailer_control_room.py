@@ -568,6 +568,246 @@ def latest_mailer_policy_score_history(limit: int = 5) -> dict[str, Any]:
     )
 
 
+def mailer_policy_score_retention_summary() -> dict[str, Any]:
+    summary = fetch_one(
+        """
+        SELECT count(*) AS total_rows,
+               count(*) FILTER (WHERE created_at > now() - interval '24 hours') AS rows_last_24h,
+               min(created_at) AS oldest_retained_at,
+               max(created_at) AS latest_retained_at
+        FROM mailer_policy_score_history
+        """
+    )
+    latest = fetch_one(
+        """
+        SELECT score, decision, blocker_count, send_mail, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM mailer_policy_score_history
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    return json_safe(
+        {
+            "total_rows": int((summary or {}).get("total_rows", 0) or 0),
+            "rows_last_24h": int((summary or {}).get("rows_last_24h", 0) or 0),
+            "oldest_retained_at": (summary or {}).get("oldest_retained_at"),
+            "latest_retained_at": (summary or {}).get("latest_retained_at"),
+            "latest_score": int((latest or {}).get("score", 0) or 0),
+            "latest_decision": (latest or {}).get("decision", "missing"),
+            "latest_blocker_count": int((latest or {}).get("blocker_count", 0) or 0),
+            "latest_send_mail": bool((latest or {}).get("send_mail", False)),
+            "latest_live_outreach_allowed": bool((latest or {}).get("live_outreach_allowed", False)),
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )
+
+
+def cleanup_mailer_policy_score_history(keep: int = 120) -> dict[str, Any]:
+    keep = max(2, int(keep))
+    before = mailer_policy_score_retention_summary()
+    deleted = execute(
+        """
+        WITH retained AS (
+            SELECT id
+            FROM mailer_policy_score_history
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s
+        ),
+        removed AS (
+            DELETE FROM mailer_policy_score_history
+            WHERE id NOT IN (SELECT id FROM retained)
+            RETURNING id
+        )
+        SELECT count(*) AS deleted_count FROM removed
+        """,
+        (keep,),
+    )
+    after = mailer_policy_score_retention_summary()
+    return {
+        "keep": keep,
+        "deleted_count": int((deleted or {}).get("deleted_count", 0) or 0),
+        "before": before,
+        "after": after,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def mailer_policy_score_regression_guard(limit: int = 12, min_drop: int = 10) -> dict[str, Any]:
+    capped = max(2, min(int(limit or 12), 50))
+    rows = _rows(
+        """
+        SELECT id, score, decision, blocker_count, mail_qa_decision,
+               bounce_or_dsn_count, rate_limit_count, spam_signal_count,
+               mailer_action_queue_rows, mailer_send_ledger_rows, recipient_resolver_audit_rows,
+               send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM mailer_policy_score_history
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (capped,),
+    )
+    latest = rows[0] if rows else None
+    prior = rows[1:]
+    clean_prior_scores = [
+        int(row.get("score") or 0)
+        for row in prior
+        if int(row.get("score") or 0) >= 90
+        and str(row.get("decision")) == "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW"
+        and int(row.get("blocker_count") or 0) == 0
+        and not bool(row.get("send_mail"))
+        and not bool(row.get("smtp_called"))
+        and not bool(row.get("live_outreach_allowed"))
+    ]
+    baseline = max(clean_prior_scores) if clean_prior_scores else None
+    regressions: list[str] = []
+    score_drop = 0
+    if not latest:
+        regressions.append("missing_policy_score_history")
+    else:
+        latest_score = int(latest.get("score") or 0)
+        latest_decision = str(latest.get("decision") or "missing")
+        if latest_decision != "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW":
+            regressions.append("latest_policy_decision_not_ready")
+        if int(latest.get("blocker_count") or 0) > 0:
+            regressions.append("latest_policy_blockers_present")
+        if bool(latest.get("send_mail")) or bool(latest.get("smtp_called")) or bool(latest.get("live_outreach_allowed")):
+            regressions.append("latest_policy_send_flags_not_false")
+        if baseline is not None:
+            score_drop = max(0, baseline - latest_score)
+            if score_drop >= min_drop:
+                regressions.append("policy_score_drop")
+        elif len(rows) > 1:
+            regressions.append("missing_clean_policy_baseline")
+
+    decision = "PASS_NO_SEND" if not regressions else "FAIL_BLOCK_LAUNCH"
+    event_id = None
+    task_id = None
+    if regressions and latest:
+        event = execute(
+            """
+            INSERT INTO system_events(type, severity, message, payload_json)
+            VALUES ('mailer.policy_score_regression', 'warning', 'Mailer policy score regression requires review', %s)
+            RETURNING id
+            """,
+            (
+                Jsonb(
+                    {
+                        "decision": decision,
+                        "regressions": regressions,
+                        "latest_score": int(latest.get("score") or 0),
+                        "latest_decision": latest.get("decision"),
+                        "baseline_score": baseline,
+                        "score_drop": score_drop,
+                        "send_mail": False,
+                    }
+                ),
+            ),
+        )
+        event_id = str(event["id"]) if event else None
+        task = execute(
+            """
+            INSERT INTO codex_tasks(type, priority, status, title, description, input_json)
+            VALUES ('deployment_issue', 'high', 'open', 'Review mailer policy score regression',
+                    'Policy score regression guard detected a no-send launch blocker.', %s)
+            RETURNING id
+            """,
+            (
+                Jsonb(
+                    {
+                        "source": "mailer_policy_score_regression_guard",
+                        "regressions": regressions,
+                        "latest_policy_score_history_id": str(latest["id"]),
+                        "baseline_score": baseline,
+                        "score_drop": score_drop,
+                        "constraints": ["no_live_outreach", "no_warmup_forcing", "no_secret_exposure"],
+                    }
+                ),
+            ),
+        )
+        task_id = str(task["id"]) if task else None
+
+    return json_safe(
+        {
+            "decision": decision,
+            "regressions": regressions,
+            "rows_checked": len(rows),
+            "clean_baseline_score": baseline,
+            "score_drop": score_drop,
+            "latest_score": int((latest or {}).get("score", 0) or 0),
+            "latest_decision": (latest or {}).get("decision", "missing"),
+            "latest_blocker_count": int((latest or {}).get("blocker_count", 0) or 0),
+            "system_event_id": event_id,
+            "codex_task_id": task_id,
+            "review_task_created": bool(task_id),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+            "raw_history_rows_included": False,
+        }
+    )
+
+
+def latest_mailer_policy_score_regression_guard_summary() -> dict[str, Any]:
+    row = fetch_one(
+        """
+        SELECT id, status, result_json, error, started_at, completed_at, created_at
+        FROM agent_runs
+        WHERE agent = 'mailer_policy_score_regression_guard_agent'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    if not row:
+        return json_safe(
+            {
+                "decision": "MISSING",
+                "status": "missing",
+                "regression_count": 1,
+                "regressions": ["missing_policy_score_regression_guard_run"],
+                "send_mail": False,
+                "smtp_called": False,
+                "live_outreach_allowed": False,
+                "raw_recipient_addresses_included": False,
+                "secrets_included": False,
+                "raw_history_rows_included": False,
+            }
+        )
+    result = row["result_json"] or {}
+    regressions = result.get("regressions") if isinstance(result, dict) else []
+    regressions = regressions if isinstance(regressions, list) else []
+    return json_safe(
+        {
+            "decision": result.get("decision", "FAIL_BLOCK_LAUNCH") if isinstance(result, dict) else "FAIL_BLOCK_LAUNCH",
+            "status": row["status"],
+            "regression_count": len(regressions),
+            "regressions": regressions,
+            "rows_checked": result.get("rows_checked", 0) if isinstance(result, dict) else 0,
+            "clean_baseline_score": result.get("clean_baseline_score") if isinstance(result, dict) else None,
+            "score_drop": result.get("score_drop", 0) if isinstance(result, dict) else 0,
+            "latest_score": result.get("latest_score", 0) if isinstance(result, dict) else 0,
+            "latest_decision": result.get("latest_decision", "missing") if isinstance(result, dict) else "missing",
+            "review_task_created": bool(result.get("review_task_created", False)) if isinstance(result, dict) else False,
+            "latest_run_id": str(row["id"]),
+            "latest_run_completed_at": row["completed_at"],
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+            "raw_history_rows_included": False,
+        }
+    )
+
+
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     state = runtime_state_snapshot()

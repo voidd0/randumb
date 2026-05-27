@@ -49,7 +49,7 @@ from .autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_au
 from .mailer_control import evaluate_outbound_message
 from .mailer_readiness import mailbox_health_score, run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import email_template_autonomy_qa, mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
-from .mailer_control_room import cleanup_mailer_digest_history, latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, mailer_control_room_summary, mailer_digest_summary, mailer_digest_trend_guard, mailer_policy_score, monitoring_control_room_summary, write_owner_status_report
+from .mailer_control_room import cleanup_mailer_digest_history, latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, latest_mailer_policy_score_regression_guard_summary, mailer_control_room_summary, mailer_digest_summary, mailer_digest_trend_guard, mailer_policy_score, mailer_policy_score_regression_guard, mailer_policy_score_retention_summary, monitoring_control_room_summary, write_owner_status_report
 from .mailer_autonomy_ledger import mailer_autonomy_ledger
 from .mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, process_mailer_action_queue, send_customer_mail, transport_dry_run
 from .mailer_closed_loop import mailer_closed_loop_summary, run_mailer_closed_loop
@@ -688,6 +688,21 @@ def mailer_policy_score_get():
 @app.get("/admin/mailer/policy-score/history", dependencies=[Depends(require_admin)])
 def mailer_policy_score_history_get(limit: int = 5):
     return {"ok": True, "history": latest_mailer_policy_score_history(limit)}
+
+
+@app.get("/admin/mailer/policy-score/retention", dependencies=[Depends(require_admin)])
+def mailer_policy_score_retention_get():
+    return {"ok": True, "retention": mailer_policy_score_retention_summary()}
+
+
+@app.get("/admin/mailer/policy-score/regression-guard", dependencies=[Depends(require_admin)])
+def mailer_policy_score_regression_guard_get(limit: int = 12):
+    return {"ok": True, "guard": mailer_policy_score_regression_guard(limit)}
+
+
+@app.get("/admin/mailer/policy-score/regression-guard/latest", dependencies=[Depends(require_admin)])
+def mailer_policy_score_regression_guard_latest_get():
+    return {"ok": True, "guard": latest_mailer_policy_score_regression_guard_summary()}
 
 
 @app.get("/admin/customers/{customer_id}/journey", dependencies=[Depends(require_admin)])

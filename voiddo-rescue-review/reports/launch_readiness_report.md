@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 04:31 IDT
+Generated: 2026-05-27 04:53 IDT
 
 ## Decision
 
@@ -30,11 +30,14 @@ Generated: 2026-05-27 04:31 IDT
 - mailer policy score agent: `PASS`
 - protected admin policy score evidence: `PASS`
 - mailer policy score history: `PASS`
+- mailer policy score retention: `PASS`
+- mailer policy score regression guard: `PASS_NO_SEND`
 - owner digest policy score evidence: `PASS`
 - protected admin policy history evidence: `PASS`
-- Huanshu admin visual gate P59: `PASS`
-- tests: `303 passed`
-- smoke: `303 passed, ok`
+- protected admin policy retention/regression evidence: `PASS`
+- Huanshu admin visual gate P60: `PASS`
+- tests: `308 passed`
+- smoke: `308 passed, ok`
 
 ## Current Runtime Counts
 
@@ -44,11 +47,14 @@ Generated: 2026-05-27 04:31 IDT
 - mailer retention history rows: `1`
 - mailer digest history rows: `1`
 - mailer digest trend guard agent runs: `1`
-- mailer policy score agent runs: `1`
-- mailer policy score history rows: `2`
+- mailer policy score agent runs: `3`
+- mailer policy score retention agent runs: `2`
+- mailer policy score regression guard agent runs: `2`
+- mailer policy score history rows: `3`
 - mailer digest trend regressions: `0`
 - latest trend guard raw history rows included: `false`
 - mailer policy blockers: `0`
+- mailer policy regression count: `0`
 
 ## Remaining Launch Gates
 

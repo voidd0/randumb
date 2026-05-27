@@ -4,7 +4,7 @@ Branch: `voiddo-rescue-mvp-review-20260526-files`
 
 Folder: `voiddo-rescue-review/`
 
-Pass: `P59 Policy Score History and Digest Wiring`
+Pass: `P60 Policy Score Retention and Regression Guard`
 
 ## Original Runtime Path
 
@@ -36,20 +36,20 @@ Pass: `P59 Policy Score History and Digest Wiring`
 
 ## Verification
 
-- targeted P59 tests: `31 passed`
-- full API tests: `303 passed`
-- smoke: `303 passed, ok`
+- targeted P60 tests: `36 passed`
+- full API tests: `308 passed`
+- smoke: `308 passed, ok`
 - Next production build: `PASS`
-- Huanshu P59: `PASS`
-- Playwright desktop/mobile + axe + pa11y P59: `PASS`
+- Huanshu P60: `PASS`
+- Playwright desktop/mobile + axe + pa11y P60: `PASS`
 
 ## Runtime Safety
 
 - live outreach sent: `0`
 - warmup sent: `0`
 - mailer policy score: `100`
-- mailer policy history rows: `2`
-- mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
+- mailer policy history rows: `3`
+- policy regression guard: `PASS_NO_SEND`
 - non-Rescue projects touched: `no`
 
 ## Commit

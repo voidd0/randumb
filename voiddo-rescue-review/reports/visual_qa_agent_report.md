@@ -1,6 +1,27 @@
 # Visual QA Agent Report
 
-Generated: 2026-05-27 04:31 IDT
+Generated: 2026-05-27 04:53 IDT
+
+## P60 Admin Policy Retention and Regression Surface
+
+- Huanshu local adapter: `PASS`
+- Playwright desktop: `PASS`
+- Playwright mobile: `PASS`
+- axe violations: `0`
+- pa11y issues: `0`
+- horizontal overflow: `false`
+- console errors: `0`
+- broken images: `0`
+- unresolved template vars: `false`
+- raw JSON visible: `false`
+- raw report paths visible: `false`
+- owner personal email visible: `false`
+- policy score retention rows visible: `true`
+- policy score regression guard decision visible: `true`
+- policy score review task state visible: `true`
+- policy guard no-send/privacy/secrets flags visible: `true`
+- CTA/action above fold: `true`
+- screenshot artifacts: `reports/visual_qa_p60/admin-desktop.png`, `reports/visual_qa_p60/admin-mobile.png`
 
 ## P59 Admin Policy Score History Surface
 

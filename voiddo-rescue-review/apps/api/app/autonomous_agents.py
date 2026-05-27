@@ -11,7 +11,7 @@ from .email_templates import render_all_samples
 from .economics import run_economics_audit
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
-from .mailer_control_room import cleanup_mailer_digest_history, mailer_digest_trend_guard, mailer_policy_score, record_mailer_policy_score_history, write_mailer_digest_agent_report, write_owner_status_report
+from .mailer_control_room import cleanup_mailer_digest_history, cleanup_mailer_policy_score_history, mailer_digest_trend_guard, mailer_policy_score, mailer_policy_score_regression_guard, record_mailer_policy_score_history, write_mailer_digest_agent_report, write_owner_status_report
 from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
 from .mailer_closed_loop import run_mailer_closed_loop
@@ -104,6 +104,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "mailer_digest_retention_agent": lambda: cleanup_mailer_digest_history(90),
         "mailer_digest_trend_guard_agent": lambda: mailer_digest_trend_guard(),
         "mailer_policy_score_agent": lambda: mailer_policy_score(),
+        "mailer_policy_score_retention_agent": lambda: cleanup_mailer_policy_score_history(120),
+        "mailer_policy_score_regression_guard_agent": lambda: mailer_policy_score_regression_guard(),
         "mailer_ops_retention_agent": lambda: cleanup_mailer_ops_synthetic_history(),
         "outbound_mailer_gate_agent": lambda: evaluate_outbound_message({"email": "sample@example.test", "template_key": "first_audit_notice"}),
         "reply_action_agent": lambda: plan_reply_action("Price", "How much does it cost?", "audit@voiddorescue.com"),
@@ -148,6 +150,8 @@ def run_daily_loop() -> dict[str, Any]:
         "mailer_digest_retention_agent",
         "mailer_digest_trend_guard_agent",
         "mailer_policy_score_agent",
+        "mailer_policy_score_retention_agent",
+        "mailer_policy_score_regression_guard_agent",
         "outbound_mailer_gate_agent",
         "reply_action_agent",
         "mail_clean_window_transition_agent",

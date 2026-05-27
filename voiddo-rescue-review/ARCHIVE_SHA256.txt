@@ -1,2 +1,2 @@
-P59 export ZIP: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p59-policy-score-history-digest-2026-05-27.zip`
-P59 export SHA256: `fa4df481e837ea8fa25adac3fe9bd5704a5e29394faa06a911f3800bd13cfe28`
+P60 export ZIP: `/opt/voiddo-rescue/storage/exports/voiddo-rescue-p60-policy-retention-regression-2026-05-27.zip`
+P60 export SHA256: `85f37d059ccb3066cb765b6c6a3e6d0eff19137ba72abc0ce56e3a30fff9c259`

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
-from app.mailer_control_room import latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, mailer_digest_summary, mailer_policy_score
+from app.mailer_control_room import cleanup_mailer_policy_score_history, latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, latest_mailer_policy_score_regression_guard_summary, mailer_digest_summary, mailer_policy_score, mailer_policy_score_regression_guard, mailer_policy_score_retention_summary
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -24,6 +24,8 @@ def _cleanup(action_id: str | None = None) -> None:
     execute("DELETE FROM mailer_action_queue WHERE payload_json::text LIKE %s", ("%daily_digest_hook%",))
     execute("DELETE FROM mailer_digest_reports WHERE report_path LIKE %s", ("%mailer_digest_agent_report.md%",))
     execute("DELETE FROM mailer_policy_score_history WHERE agent_run_id IS NULL OR created_at > now() - interval '1 hour'")
+    execute("DELETE FROM system_events WHERE type = 'mailer.policy_score_regression'")
+    execute("DELETE FROM codex_tasks WHERE input_json::text LIKE %s", ("%mailer_policy_score_regression_guard%",))
 
 
 def _clean_trend_runtime() -> None:
@@ -375,12 +377,21 @@ def test_daily_loop_includes_mailer_policy_score_after_trend_guard():
     agents = [item["agent"] for item in result["runs"]]
     assert "mailer_policy_score_agent" in agents
     assert agents.index("mailer_digest_trend_guard_agent") < agents.index("mailer_policy_score_agent")
+    assert "mailer_policy_score_retention_agent" in agents
+    assert "mailer_policy_score_regression_guard_agent" in agents
+    assert agents.index("mailer_policy_score_agent") < agents.index("mailer_policy_score_retention_agent")
+    assert agents.index("mailer_policy_score_retention_agent") < agents.index("mailer_policy_score_regression_guard_agent")
     policy_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_agent"][0]
+    retention_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_retention_agent"][0]
+    guard_run = [item for item in result["runs"] if item["agent"] == "mailer_policy_score_regression_guard_agent"][0]
     assert policy_run["result_json"]["send_mail"] is False
     assert policy_run["result_json"]["smtp_called"] is False
     assert policy_run["result_json"]["live_outreach_allowed"] is False
     assert policy_run["result_json"]["raw_recipient_addresses_included"] is False
     assert policy_run["result_json"]["secrets_included"] is False
+    assert retention_run["result_json"]["send_mail"] is False
+    assert guard_run["result_json"]["send_mail"] is False
+    assert guard_run["result_json"]["live_outreach_allowed"] is False
     assert result["live_outreach"] is False
     digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
     if digest_runs:
@@ -462,6 +473,84 @@ def test_mailer_digest_agent_report_includes_policy_score_history_evidence():
     assert "mailer_policy_history_secrets: `false`" in text
     _cleanup(digest_run["result_json"]["owner_report_action"]["id"])
     execute("DELETE FROM mailer_policy_score_history WHERE id = %s", (policy_run["result_json"]["policy_score_history"]["id"],))
+
+
+def test_policy_score_history_retention_deletes_old_rows_without_sending():
+    execute("DELETE FROM mailer_policy_score_history WHERE decision LIKE %s", ("p60-retention-%",))
+    execute(
+        """
+        INSERT INTO mailer_policy_score_history(score, decision, blocker_count, created_at)
+        SELECT 100, 'p60-retention-' || gs::text, 0, now() - (gs || ' minutes')::interval
+        FROM generate_series(1, 130) AS gs
+        """
+    )
+    cleanup = cleanup_mailer_policy_score_history(120)
+    summary = mailer_policy_score_retention_summary()
+    remaining = fetch_one("SELECT count(*) AS count FROM mailer_policy_score_history WHERE decision LIKE %s", ("p60-retention-%",))
+    assert cleanup["deleted_count"] >= 10
+    assert summary["total_rows"] >= 120
+    assert int(remaining["count"]) <= 120
+    assert cleanup["send_mail"] is False
+    assert cleanup["live_outreach_allowed"] is False
+    assert cleanup["raw_recipient_addresses_included"] is False
+    execute("DELETE FROM mailer_policy_score_history WHERE decision LIKE %s", ("p60-retention-%",))
+
+
+def test_policy_score_regression_guard_passes_clean_history():
+    _prepare_clean_policy_evidence()
+    run_agent("mailer_policy_score_agent")
+    run_agent("mailer_policy_score_agent")
+    guard = mailer_policy_score_regression_guard()
+    assert guard["decision"] == "PASS_NO_SEND"
+    assert guard["regressions"] == []
+    assert guard["send_mail"] is False
+    assert guard["smtp_called"] is False
+    assert guard["live_outreach_allowed"] is False
+    assert guard["review_task_created"] is False
+
+
+def test_policy_score_regression_guard_creates_review_task_on_score_drop():
+    _prepare_clean_policy_evidence()
+    run_agent("mailer_policy_score_agent")
+    execute(
+        """
+        INSERT INTO mailer_policy_score_history(score, decision, blocker_count, blockers_json, mail_qa_decision)
+        VALUES (65, 'NO_SEND_BLOCKED_REPAIR', 1, '["p60-regression"]'::jsonb, 'PASS')
+        """
+    )
+    guard = mailer_policy_score_regression_guard()
+    assert guard["decision"] == "FAIL_BLOCK_LAUNCH"
+    assert "latest_policy_decision_not_ready" in guard["regressions"]
+    assert "policy_score_drop" in guard["regressions"]
+    assert guard["review_task_created"] is True
+    assert guard["send_mail"] is False
+    assert fetch_one("SELECT count(*) AS count FROM system_events WHERE type = 'mailer.policy_score_regression'")["count"] >= 1
+    assert fetch_one("SELECT count(*) AS count FROM codex_tasks WHERE input_json::text LIKE %s", ("%mailer_policy_score_regression_guard%",))["count"] >= 1
+    _cleanup()
+
+
+def test_policy_score_retention_and_regression_endpoints_require_auth():
+    _prepare_clean_policy_evidence()
+    run_agent("mailer_policy_score_agent")
+    run_agent("mailer_policy_score_regression_guard_agent")
+    assert client.get("/admin/mailer/policy-score/retention").status_code == 401
+    assert client.get("/admin/mailer/policy-score/regression-guard/latest").status_code == 401
+    retention = client.get("/admin/mailer/policy-score/retention", headers=admin_headers())
+    guard = client.get("/admin/mailer/policy-score/regression-guard/latest", headers=admin_headers())
+    assert retention.status_code == 200
+    assert guard.status_code == 200
+    assert retention.json()["retention"]["latest_send_mail"] is False
+    assert guard.json()["guard"]["send_mail"] is False
+    assert guard.json()["guard"]["raw_recipient_addresses_included"] is False
+
+
+def test_latest_policy_score_regression_guard_summary_fails_closed_without_run():
+    execute("DELETE FROM agent_runs WHERE agent = 'mailer_policy_score_regression_guard_agent'")
+    summary = latest_mailer_policy_score_regression_guard_summary()
+    assert summary["decision"] == "MISSING"
+    assert "missing_policy_score_regression_guard_run" in summary["regressions"]
+    assert summary["send_mail"] is False
+    assert summary["live_outreach_allowed"] is False
 
 
 def test_mailer_digest_retention_agent_does_not_touch_action_queue_or_send_ledger():

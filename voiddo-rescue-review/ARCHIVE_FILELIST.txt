@@ -302,6 +302,8 @@
 ./reports/p5_review_package_hygiene_report.md
 ./reports/p5_warmup_safety_report.md
 ./reports/p60_next_self_written_tz.md
+./reports/p60_policy_score_retention_regression_guard.md
+./reports/p61_next_self_written_tz.md
 ./reports/p6_autonomous_mailer_report.md
 ./reports/p6_cycle_audit_and_fixes.md
 ./reports/p6_economics_engine_report.md
