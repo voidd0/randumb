@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import re
 from typing import Any
 from urllib.parse import urlparse
@@ -22,6 +23,10 @@ SUPPORTED_SCOUT_TYPES = {
     "wordpress_footprint_scout",
 }
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _json_safe(value: Any) -> Any:
+    return json.loads(json.dumps(value, default=str))
 
 
 def normalize_domain(value: str) -> str:
@@ -96,7 +101,7 @@ def get_scout_run(run_id: str) -> dict[str, Any] | None:
     if not row:
         return None
     leads = fetch_all("SELECT business_name, domain, country, city, language, niche, confidence, status, rejection_reason FROM scout_leads WHERE scout_run_id = %s ORDER BY created_at", (run_id,))
-    payload = dict(row)
+    payload = _json_safe(dict(row))
     payload["leads"] = [dict(item) for item in leads]
     return payload
 
@@ -211,7 +216,7 @@ def run_scout_source_readiness(source_id: str) -> dict[str, Any]:
             Jsonb(issues),
         ),
     )
-    payload = dict(row)
+    payload = _json_safe(dict(row))
     payload["allowed_for_scout_run"] = status == "PASS_SOURCE_READY"
     payload["issues"] = issues
     payload["send_mail"] = False
@@ -251,6 +256,27 @@ def latest_scout_source_readiness(source_id: str) -> dict[str, Any]:
     return payload
 
 
+def scout_source_readiness_gate(source_id: str) -> dict[str, Any]:
+    latest = latest_scout_source_readiness(source_id)
+    if latest["status"] == "missing":
+        latest = run_scout_source_readiness(source_id)
+    blockers = []
+    if latest["status"] != "PASS_SOURCE_READY":
+        blockers.append({"code": "source_readiness_not_pass", "severity": "high", "status": latest["status"], "score": int(latest.get("score") or 0)})
+    if any(bool(latest.get(flag)) for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"]):
+        blockers.append({"code": "source_readiness_flags_not_safe", "severity": "high"})
+    return {
+        "allowed": not blockers,
+        "blockers": blockers,
+        "readiness": latest,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
 def scout_source_readiness_summary() -> dict[str, Any]:
     latest = fetch_all(
         """
@@ -273,7 +299,7 @@ def scout_source_readiness_summary() -> dict[str, Any]:
         "sources_checked": len(latest),
         "sources_ready": len([row for row in latest if row["status"] == "PASS_SOURCE_READY"]),
         "sources_blocked": len(blockers),
-        "latest": [dict(row) for row in latest[:20]],
+        "latest": [_json_safe(dict(row)) for row in latest[:20]],
         "send_mail": False,
         "smtp_called": False,
         "live_outreach_allowed": False,
@@ -415,6 +441,24 @@ def process_scout_run_gated(run_id: str) -> dict[str, Any]:
             ("self_audit_gate_blocked", Jsonb({"gate": gate}), run_id),
         )
         return {"processed": False, "status": "blocked", "reason": "self_audit_gate_blocked", "gate": gate, "send_mail": False, "live_outreach_allowed": False}
+    run = fetch_one("SELECT source_id FROM scout_runs WHERE id = %s", (run_id,))
+    if not run:
+        raise ValueError("scout_run_not_found")
+    source_gate = scout_source_readiness_gate(str(run["source_id"]))
+    if not source_gate["allowed"]:
+        execute(
+            "UPDATE scout_runs SET status = 'review_required', error = %s, result_json = %s, completed_at = now() WHERE id = %s",
+            ("source_readiness_review_required", Jsonb({"gate": gate, "source_readiness_gate": source_gate}), run_id),
+        )
+        return {
+            "processed": False,
+            "status": "review_required",
+            "reason": "source_readiness_review_required",
+            "gate": gate,
+            "source_readiness_gate": source_gate,
+            "send_mail": False,
+            "live_outreach_allowed": False,
+        }
     result = process_scout_run(run_id)
     quality_gate = run_scout_quality_gate(run_id)
     if not quality_gate["allowed_for_campaign_preview"]:

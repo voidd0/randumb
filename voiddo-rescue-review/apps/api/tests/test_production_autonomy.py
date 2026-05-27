@@ -13,8 +13,8 @@ from app.lead_scoring import score_lead
 from app.main import app
 from app.mailer_throttle import throttle_decision
 from app.p0 import handle_paddle_event, record_mail_signal
-from app.scout_quality import latest_scout_quality_gate, lead_scout_quality_gate
-from app.scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, prepare_campaign, prepare_campaign_gated, process_queued_scout_runs, process_scout_run, process_scout_run_gated, scout_campaign_expansion_gate
+from app.scout_quality import latest_scout_quality_gate, lead_scout_quality_gate, run_scout_quality_gate
+from app.scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, prepare_campaign, prepare_campaign_gated, process_queued_scout_runs, process_scout_run, process_scout_run_gated, run_scout_source_readiness, scout_campaign_expansion_gate
 
 
 client = TestClient(app)
@@ -33,6 +33,7 @@ def _cleanup_token(token: str):
     execute("DELETE FROM businesses WHERE domain LIKE %s OR source IN ('scout_agent', 'test_prod')", (f"%{token}%",))
     execute("DELETE FROM scout_provenance_scores WHERE scout_run_id IN (SELECT id FROM scout_runs WHERE result_json::text LIKE %s OR source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s))", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM scout_self_checks WHERE scout_run_id IN (SELECT id FROM scout_runs WHERE result_json::text LIKE %s OR source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s))", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM scout_leads WHERE domain LIKE %s", (f"%{token}%",))
     execute("DELETE FROM scout_runs WHERE result_json::text LIKE %s OR source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM scout_sources WHERE name LIKE %s", (f"%{token}%",))
@@ -139,7 +140,7 @@ def test_scout_expansion_gate_blocks_without_self_audit_matrix():
 
 def test_gated_scout_agent_processes_queued_run_after_self_audit_matrix():
     token = uuid.uuid4().hex[:8]
-    csv_text = f"business_name,website_url,email,country,niche\nGate Ok,https://gate-ok-{token}.example.test,gate-ok@gate-ok-{token}.example.test,EE,dentists\n"
+    csv_text = f"business_name,website_url,email,country,niche,source_url,confidence\nGate Ok,https://gate-ok-{token}.example.test,gate-ok@gate-ok-{token}.example.test,EE,dentists,https://directory.example/{token},95\n"
     try:
         run_agent("mailer_business_kpi_agent")
         run_agent("mailer_self_audit_matrix_agent")
@@ -156,7 +157,7 @@ def test_gated_scout_agent_processes_queued_run_after_self_audit_matrix():
         _cleanup_token(token)
 
 
-def test_gated_scout_records_quality_failure_for_weak_provenance():
+def test_gated_scout_blocks_weak_source_before_scanner_queue():
     token = uuid.uuid4().hex[:8]
     csv_text = f"business_name,website_url,email,country,niche\nWeak,https://weak-{token}.example.test,weak@weak-{token}.example.test,EE,dentists\n"
     try:
@@ -166,10 +167,11 @@ def test_gated_scout_records_quality_failure_for_weak_provenance():
         run = create_scout_run(str(source["id"]))
         result = process_scout_run_gated(str(run["id"]))
         assert result["status"] == "review_required"
-        assert result["quality_gate"]["allowed_for_campaign_preview"] is False
+        assert result["reason"] == "source_readiness_review_required"
+        assert result["source_readiness_gate"]["allowed"] is False
         assert result["send_mail"] is False
-        assert latest_scout_quality_gate(str(run["id"]))["decision"] == "FAIL_REVIEW_REQUIRED"
         assert fetch_one("SELECT status FROM scout_runs WHERE id = %s", (run["id"],))["status"] == "review_required"
+        assert fetch_one("SELECT count(*) AS count FROM scanner_jobs WHERE url LIKE %s", (f"%weak-{token}.example.test%",))["count"] == 0
     finally:
         _cleanup_token(token)
 
@@ -184,7 +186,8 @@ def test_gated_campaign_excludes_scout_leads_without_quality_pass():
         run_agent("mailer_self_audit_matrix_agent")
         source = create_scout_source({"name": f"weak-campaign-quality-{token}", "source_type": "manual_csv_scout", "country": country, "language": "en", "niche": niche, "config_json": {"csv": csv_text}})
         run = create_scout_run(str(source["id"]))
-        result = process_scout_run_gated(str(run["id"]))
+        result = process_scout_run(str(run["id"]))
+        run_scout_quality_gate(str(run["id"]))
         lead_id = result["previews"][0]["lead_id"]
         business = fetch_one("SELECT business_id FROM leads WHERE id = %s", (lead_id,))
         audit = execute("INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at) VALUES (%s, %s, %s, %s, 'completed', 80, 'Issue', %s, now()) RETURNING id", (business["business_id"], lead_id, f"weak-campaign-{token}.example.test", f"https://weak-campaign-{token}.example.test", f"weak-campaign-{token}"))
@@ -207,6 +210,8 @@ def test_gated_campaign_allows_scout_leads_with_quality_pass():
         run_agent("mailer_business_kpi_agent")
         run_agent("mailer_self_audit_matrix_agent")
         source = create_scout_source({"name": f"strong-campaign-quality-{token}", "source_type": "manual_csv_scout", "country": country, "language": "en", "niche": niche, "config_json": {"csv": csv_text}})
+        readiness = run_scout_source_readiness(str(source["id"]))
+        assert readiness["status"] == "PASS_SOURCE_READY"
         run = create_scout_run(str(source["id"]))
         result = process_scout_run_gated(str(run["id"]))
         assert result["quality_gate"]["decision"] == "PASS_IMPORT_READY"
