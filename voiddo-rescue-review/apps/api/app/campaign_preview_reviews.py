@@ -233,6 +233,9 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
         elif lead_score >= 80 and audit_strength >= 75:
             action = "approved"
             reason = "lead score and audit evidence meet no-send preview threshold"
+        elif lead_score >= 72 and audit_strength >= 77:
+            action = "approved"
+            reason = "specific public audit evidence meets no-send preview threshold"
         elif lead_score < 70 or audit_strength < 70:
             action = "held"
             reason = "lead or audit score below preview threshold"
