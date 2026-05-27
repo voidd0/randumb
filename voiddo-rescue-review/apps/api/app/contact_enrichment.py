@@ -321,7 +321,7 @@ def run_hunter_contact_enrichment(limit: int = 10, dry_run: bool = True) -> dict
 
 
 def run_public_contact_page_enrichment(limit: int = 10, dry_run: bool = True, max_pages_per_domain: int = 4) -> dict[str, Any]:
-    safe_limit = max(1, min(int(limit or 10), 25))
+    safe_limit = max(1, min(int(limit or 10), 100))
     safe_max_pages = max(1, min(int(max_pages_per_domain or 4), 8))
     candidates = contact_enrichment_candidates(safe_limit)["candidates"]
     scanned = 0
