@@ -1256,6 +1256,7 @@ async def campaign_control_room_auto_review_post(request: Request):
         int(payload.get("limit", 25)),
         apply=bool(payload.get("apply", True)),
         campaign_id=payload.get("campaign_id") or None,
+        reconsider_held=bool(payload.get("reconsider_held", False)),
     )
     return {"ok": True, "auto_review": result}
 

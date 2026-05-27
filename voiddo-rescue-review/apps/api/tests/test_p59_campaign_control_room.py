@@ -220,6 +220,35 @@ def test_held_preview_remediation_queues_safe_evidence_refresh_without_send():
         _cleanup(token)
 
 
+def test_self_review_reconsiders_only_agent_held_rows():
+    token = uuid.uuid4().hex[:8]
+    try:
+        _qualified_lead(token)
+        campaign = create_campaign(
+            {
+                "name": f"P59 reconsider {token}",
+                "country": f"P59{token[:3].upper()}",
+                "language": "en",
+                "niche": "dentists",
+                "offer_key": "contact_form_repair",
+            }
+        )
+        prepare_campaign_gated(str(campaign["id"]), 70, 20)
+        row = [item for item in campaign_preview_rows(100)["rows"] if item["domain"] == f"p59-{token}.clinic"][0]
+        review_campaign_preview(row["campaign_lead_id"], "held", "agent wants second pass", actor="campaign_preview_self_review_agent")
+        result = auto_review_campaign_previews(100, apply=True, campaign_id=str(campaign["id"]), reconsider_held=True)
+        assert result["approved_count"] == 1
+        reviewed = [item for item in campaign_preview_rows(100)["rows"] if item["domain"] == f"p59-{token}.clinic"][0]
+        assert reviewed["latest_review_action"] == "approved"
+        review_campaign_preview(row["campaign_lead_id"], "held", "manual admin hold", actor="admin")
+        skipped = auto_review_campaign_previews(100, apply=True, campaign_id=str(campaign["id"]), reconsider_held=True)
+        assert skipped["checked_count"] == 0
+        reviewed = [item for item in campaign_preview_rows(100)["rows"] if item["domain"] == f"p59-{token}.clinic"][0]
+        assert reviewed["latest_review_action"] == "held"
+    finally:
+        _cleanup(token)
+
+
 def test_campaign_control_room_admin_endpoints_require_auth():
     assert client.get("/admin/campaign-control-room").status_code == 401
     assert client.get("/admin/campaign-control-room/preview-rows").status_code == 401

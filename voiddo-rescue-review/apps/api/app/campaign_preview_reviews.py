@@ -180,7 +180,7 @@ def campaign_preview_review_summary(campaign_id: str) -> dict[str, Any]:
     )
 
 
-def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_id: str | None = None) -> dict[str, Any]:
+def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_id: str | None = None, reconsider_held: bool = False) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 25), 100))
     rows = fetch_all(
         """
@@ -189,7 +189,8 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
                l.status AS lead_status,
                b.domain, a.public_slug,
                latest_strength.final_score AS audit_strength_score,
-               latest_review.action AS latest_review_action
+               latest_review.action AS latest_review_action,
+               latest_review.actor AS latest_review_actor
         FROM campaign_leads cl
         JOIN campaigns c ON c.id = cl.campaign_id
         JOIN leads l ON l.id = cl.lead_id
@@ -199,15 +200,18 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
           SELECT final_score FROM audit_strength_scores WHERE audit_id = cl.audit_id ORDER BY created_at DESC LIMIT 1
         ) latest_strength ON true
         LEFT JOIN LATERAL (
-          SELECT action FROM campaign_preview_reviews WHERE campaign_lead_id = cl.id ORDER BY created_at DESC LIMIT 1
+          SELECT action, actor FROM campaign_preview_reviews WHERE campaign_lead_id = cl.id ORDER BY created_at DESC LIMIT 1
         ) latest_review ON true
         WHERE cl.status = 'preview'
-          AND latest_review.action IS NULL
+          AND (
+            latest_review.action IS NULL
+            OR (%s AND latest_review.action = 'held' AND latest_review.actor = 'campaign_preview_self_review_agent')
+          )
           AND (%s::uuid IS NULL OR c.id = %s::uuid)
         ORDER BY cl.score DESC NULLS LAST, cl.updated_at DESC NULLS LAST, cl.created_at DESC
         LIMIT %s
         """,
-        (campaign_id, campaign_id, safe_limit),
+        (bool(reconsider_held), campaign_id, campaign_id, safe_limit),
     )
     decisions = []
     applied = 0
@@ -249,6 +253,7 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
         {
             "status": "completed" if decisions else "idle_no_unreviewed_previews",
             "campaign_id": campaign_id,
+            "reconsider_held": bool(reconsider_held),
             "checked_count": len(decisions),
             "applied_count": applied,
             "approved_count": len([item for item in decisions if item["action"] == "approved"]),

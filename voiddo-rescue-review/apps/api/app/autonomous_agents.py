@@ -311,6 +311,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("limit", 25)),
             apply=bool(payload.get("apply", True)),
             campaign_id=payload.get("campaign_id"),
+            reconsider_held=bool(payload.get("reconsider_held", True)),
         ),
         "campaign_review_remediation_snapshot_agent": lambda: held_preview_remediation_candidates(int(payload.get("limit", 25))),
         "campaign_review_remediation_agent": lambda: remediate_held_preview_reviews(
