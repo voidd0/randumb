@@ -29,7 +29,7 @@ def _due_schedule(email: str | None = None) -> dict:
         VALUES (%s, 'audit@voiddorescue.com', 1, %s, 'scheduled', '{}'::jsonb)
         RETURNING id, recipient_email
         """,
-        (email, datetime.now(timezone.utc) - timedelta(minutes=1)),
+        (email, datetime(2000, 1, 1, tzinfo=timezone.utc)),
     )
 
 
