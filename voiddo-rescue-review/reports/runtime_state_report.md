@@ -1,6 +1,6 @@
 # Runtime State Report
 
-Generated: 2026-05-27 03:31 IDT
+Generated: 2026-05-27 03:47 IDT
 
 ## Canonical Latest State
 
@@ -32,6 +32,9 @@ Generated: 2026-05-27 03:31 IDT
 - latest trend guard raw history rows included: `false`
 - protected admin surfaces compact trend guard summary: `true`
 - daily loop includes trend guard agent: `true`
+- mailer policy score: `100`
+- mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
+- mailer policy blockers: `0`
 - daily loop surfaces retention history evidence: `true`
 - owner report includes retention history evidence: `true`
 - raw recipient addresses included: `false`
@@ -47,9 +50,9 @@ Generated: 2026-05-27 03:31 IDT
 
 ## Verification
 
-- targeted P56 digest/agent/latest-summary tests: `39 passed`
-- API tests: `293 passed`
-- smoke test: `293 passed, ok`
+- targeted P57 mailer policy tests: `43 passed`
+- API tests: `297 passed`
+- smoke test: `297 passed, ok`
 - Next production build: `PASS`
 - Huanshu admin visual gate P56: `PASS`
 - Playwright desktop/mobile + axe + pa11y P56: `PASS`

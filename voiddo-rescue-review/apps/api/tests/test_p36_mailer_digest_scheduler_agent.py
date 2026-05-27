@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
-from app.mailer_control_room import latest_mailer_digest_trend_guard_summary
+from app.mailer_control_room import latest_mailer_digest_trend_guard_summary, mailer_policy_score
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -280,6 +280,77 @@ def test_latest_trend_guard_summary_fails_closed_without_agent_run():
     assert "missing_trend_guard_agent_run" in summary["regressions"]
     assert summary["send_mail"] is False
     assert summary["live_outreach_allowed"] is False
+
+
+def _prepare_clean_policy_evidence() -> None:
+    _clean_trend_runtime()
+    execute("DELETE FROM mail_signals WHERE source LIKE %s", ("p57-%",))
+    run_agent("mailer_ops_retention_agent")
+    digest_run = run_agent("mailer_digest_agent")
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (digest_run["result_json"]["owner_report_action"]["id"],))
+    run_agent("mailer_digest_trend_guard_agent")
+
+
+def test_mailer_policy_score_passes_clean_no_send_evidence():
+    _prepare_clean_policy_evidence()
+    score = mailer_policy_score()
+    assert score["score"] >= 90
+    assert score["decision"] == "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW"
+    assert score["trend_guard_decision"] == "PASS_NO_SEND"
+    assert score["send_mail"] is False
+    assert score["smtp_called"] is False
+    assert score["live_outreach_allowed"] is False
+    assert score["raw_recipient_addresses_included"] is False
+    assert score["secrets_included"] is False
+    serialized = str(score)
+    assert "owner-private@" not in serialized
+    assert "SMTP_PASSWORD" not in serialized
+
+
+def test_mailer_policy_score_blocks_current_queue_regression():
+    _prepare_clean_policy_evidence()
+    action = execute(
+        """
+        INSERT INTO mailer_action_queue(action_type, risk_level, status, payload_json)
+        VALUES ('owner_report', 'SAFE_AUTO', 'queued', '{"source":"p57-policy-regression"}'::jsonb)
+        RETURNING id
+        """
+    )
+    score = mailer_policy_score()
+    assert score["decision"] == "NO_SEND_BLOCKED_REPAIR"
+    assert "current_mailer_action_queue_not_empty" in score["blockers"]
+    assert score["queue_hygiene"]["mailer_action_queue_rows"] >= 1
+    assert score["send_mail"] is False
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (action["id"],))
+
+
+def test_mailer_policy_score_blocks_recent_bounce_signal():
+    _prepare_clean_policy_evidence()
+    execute(
+        """
+        INSERT INTO mail_signals(signal_type, severity, source, mailbox, raw_summary)
+        VALUES ('bounce', 'warning', 'p57-policy-test', 'audit@voiddorescue.com', 'synthetic bounce signal')
+        """
+    )
+    score = mailer_policy_score()
+    assert score["decision"] == "NO_SEND_BLOCKED_REPAIR"
+    assert "recent_bounce_or_dsn" in score["blockers"]
+    assert score["signals"]["bounce_or_dsn_count"] >= 1
+    assert score["send_mail"] is False
+    execute("DELETE FROM mail_signals WHERE source = 'p57-policy-test'")
+
+
+def test_mailer_policy_score_endpoint_requires_auth_and_is_no_send():
+    _prepare_clean_policy_evidence()
+    assert client.get("/admin/mailer/policy-score").status_code == 401
+    response = client.get("/admin/mailer/policy-score", headers=admin_headers())
+    assert response.status_code == 200
+    score = response.json()["policy_score"]
+    assert score["score"] >= 90
+    assert score["send_mail"] is False
+    assert score["live_outreach_allowed"] is False
+    assert score["raw_recipient_addresses_included"] is False
+    assert score["secrets_included"] is False
 
 
 def test_mailer_digest_retention_agent_does_not_touch_action_queue_or_send_ledger():

@@ -1,31 +1,29 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 03:31 IDT
+Generated: 2026-05-27 03:47 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - review folder: `voiddo-rescue-review/`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- pass: `P56 admin trend guard summary surface`
+- pass: `P57 mailer policy score`
 
-## P56 Summary
+## P57 Summary
 
-- Protected admin Daily Digest Evidence now shows the compact latest trend-guard summary.
-- The panel displays decision, regression count, queue/ledger/resolver zero-state, latest run time, no-send state, raw-history omission, and secret omission.
-- It does not display raw history rows, report paths, raw JSON, recipient data, owner personal email, or secrets.
+- Added protected no-send mailer policy score.
+- New endpoint: `GET /admin/mailer/policy-score`.
+- Score combines trend guard, mail QA, recent mail signals, warmup state, queue hygiene, ledger hygiene, and resolver-audit hygiene.
+- Runtime score is `100` with decision `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`.
 
 ## Verification
 
-- targeted P56 tests: `39 passed`
-- full API tests: `293 passed`
-- smoke tests: `293 passed, ok`
-- Next production build: `PASS`
-- Huanshu visual gate: `PASS`
-- Playwright desktop/mobile: `PASS`
-- axe violations: `0`
-- pa11y issues: `0`
-- runtime latest summary decision: `PASS_NO_SEND`
+- targeted P57 tests: `43 passed`
+- full API tests: `297 passed`
+- smoke tests: `297 passed, ok`
+- runtime policy score: `100`
+- runtime policy blockers: `0`
+- send capability: `false`
 
 ## Runtime Counts
 

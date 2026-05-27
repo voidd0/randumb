@@ -1,11 +1,11 @@
 # Smoke Test Report
 
-Generated: 2026-05-27 03:31 IDT
+Generated: 2026-05-27 03:47 IDT
 
-- targeted P56 tests: `39 passed`
-- docker compose API tests: `293 passed`
+- targeted P57 tests: `43 passed`
+- docker compose API tests: `297 passed`
 - smoke command: `bash scripts/run_smoke_tests.sh`
-- smoke result: `293 passed, ok`
+- smoke result: `297 passed, ok`
 - Next production build: `PASS`
 - services healthy: `api`, `web`, `worker`, `postgres`, `redis`
 - warmup sent count: `0`
@@ -22,5 +22,8 @@ Generated: 2026-05-27 03:31 IDT
 - Huanshu P56: `PASS`
 - axe P56: `0`
 - pa11y P56: `0`
+- mailer policy score: `100`
+- mailer policy decision: `NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW`
+- mailer policy blockers: `0`
 - secrets exposed: `false`
 - raw recipients exposed: `false`

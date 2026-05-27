@@ -385,6 +385,91 @@ def latest_mailer_digest_trend_guard_summary() -> dict[str, Any]:
     )
 
 
+def mailer_policy_score() -> dict[str, Any]:
+    trend = latest_mailer_digest_trend_guard_summary()
+    signals = mail_signal_summary(24)
+    warmup = warmup_calendar_health()
+    mail_qa = latest_mail_qa_decision()
+    action_queue = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
+    send_ledger = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
+    resolver_audit = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
+    queue_counts = {
+        "mailer_action_queue_rows": int((action_queue or {}).get("count", 0) or 0),
+        "mailer_send_ledger_rows": int((send_ledger or {}).get("count", 0) or 0),
+        "recipient_resolver_audit_rows": int((resolver_audit or {}).get("count", 0) or 0),
+    }
+    blockers: list[str] = []
+    score = 100
+
+    if trend["decision"] != "PASS_NO_SEND":
+        blockers.append("trend_guard_not_pass")
+        score -= 35
+    if mail_qa != "PASS":
+        blockers.append("mail_qa_not_pass")
+        score -= 25
+    if int(signals.get("bounce_or_dsn_count", 0) or 0) > 0:
+        blockers.append("recent_bounce_or_dsn")
+        score -= 25
+    if int(signals.get("rate_limit_count", 0) or 0) > 0:
+        blockers.append("recent_rate_limit")
+        score -= 20
+    if int(signals.get("spam_signal_count", 0) or 0) > 0:
+        blockers.append("recent_spam_signal")
+        score -= 30
+    if int(warmup.get("scheduled_total", 0) or 0) <= 0:
+        blockers.append("warmup_schedule_missing")
+        score -= 5
+    if queue_counts["mailer_action_queue_rows"] > 0:
+        blockers.append("current_mailer_action_queue_not_empty")
+        score -= 20
+    if queue_counts["mailer_send_ledger_rows"] > 0:
+        blockers.append("current_mailer_send_ledger_not_empty")
+        score -= 20
+    if queue_counts["recipient_resolver_audit_rows"] > 0:
+        blockers.append("current_recipient_resolver_audit_not_empty")
+        score -= 20
+
+    score = max(0, min(100, score))
+    if blockers:
+        decision = "NO_SEND_BLOCKED_REPAIR"
+        next_safe_action = "repair_mailer_policy_blockers_then_rerun_trend_guard"
+    elif score >= 90:
+        decision = "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW"
+        next_safe_action = "continue_no_send_daily_loop_and_wait_for_authorized_send_window"
+    else:
+        decision = "NO_SEND_OBSERVE"
+        next_safe_action = "continue_observation_before_any_send_gate_change"
+
+    return json_safe(
+        {
+            "score": score,
+            "decision": decision,
+            "next_safe_action": next_safe_action,
+            "blockers": blockers,
+            "trend_guard_decision": trend["decision"],
+            "trend_guard_regression_count": trend["regression_count"],
+            "mail_qa_decision": mail_qa,
+            "signals": {
+                "bounce_or_dsn_count": int(signals.get("bounce_or_dsn_count", 0) or 0),
+                "rate_limit_count": int(signals.get("rate_limit_count", 0) or 0),
+                "spam_signal_count": int(signals.get("spam_signal_count", 0) or 0),
+            },
+            "warmup": {
+                "scheduled_total": int(warmup.get("scheduled_total", 0) or 0),
+                "due_now": int(warmup.get("due_now", 0) or 0),
+                "sent_today": int(warmup.get("sent_today", 0) or 0),
+                "blocked_today": int(warmup.get("blocked_today", 0) or 0),
+            },
+            "queue_hygiene": queue_counts,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )
+
+
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     state = runtime_state_snapshot()
