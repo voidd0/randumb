@@ -38,7 +38,7 @@ from .campaign_control_room import campaign_control_room_snapshot, prepare_campa
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
-from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery
+from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, regional_lead_discovery_cycle
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
@@ -134,6 +134,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "scout_source_readiness_regression_guard_agent": lambda: scout_source_readiness_regression_guard(),
         "scout_source_queue_preview_agent": lambda: ready_scout_source_queue_candidates(int(payload.get("limit", 25))),
         "lead_discovery_target_plan_agent": lambda: lead_discovery_target_plan(False),
+        "regional_lead_discovery_agent": lambda: regional_lead_discovery_cycle(
+            int(payload.get("limit_targets", 1)),
+            int(payload.get("per_target_limit", 25)),
+            dry_run=bool(payload.get("dry_run", False)),
+        ),
         "overpass_lead_discovery_agent": lambda: overpass_lead_discovery(
             payload.get("country", "US"),
             payload.get("city", "Boise"),
@@ -261,6 +266,7 @@ def run_daily_loop() -> dict[str, Any]:
         "scout_source_readiness_regression_guard_agent",
         "scout_source_queue_preview_agent",
         "lead_discovery_target_plan_agent",
+        "regional_lead_discovery_agent",
         "overpass_lead_discovery_agent",
         "scout_campaign_quality_summary_agent",
         "scout_campaign_quality_retention_agent",

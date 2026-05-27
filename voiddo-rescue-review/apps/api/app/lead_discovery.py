@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+from .db import fetch_all
 from .scouts import create_scout_source, run_scout_source_readiness, website_url_for
 
 
@@ -286,6 +287,78 @@ def overpass_lead_discovery(
         },
         "created_scout_runs": 0,
         "created_scanner_jobs": 0,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def regional_lead_discovery_cycle(limit_targets: int = 2, per_target_limit: int = 30, dry_run: bool = True) -> dict[str, Any]:
+    safe_target_limit = max(1, min(int(limit_targets or 2), 8))
+    safe_per_target_limit = max(1, min(int(per_target_limit or 30), 50))
+    existing_rows = fetch_all("SELECT name FROM scout_sources WHERE name LIKE %s", ("overpass-%",))
+    existing = {str(row["name"]) for row in existing_rows}
+    targets = []
+    for target in lead_discovery_target_plan(False)["targets"]:
+        source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
+        if source_name in existing:
+            continue
+        targets.append({**target, "source_name": source_name})
+        if len(targets) >= safe_target_limit:
+            break
+
+    if dry_run:
+        return {
+            "status": "dry_run",
+            "selected_count": len(targets),
+            "targets": targets,
+            "created_sources": 0,
+            "found_count": 0,
+            "with_email_count": 0,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+
+    created = []
+    errors = []
+    for target in targets:
+        try:
+            result = overpass_lead_discovery(
+                target["country"],
+                target["city"],
+                target["niche"],
+                target["language"],
+                safe_per_target_limit,
+                dry_run=False,
+            )
+            created.append(result)
+        except Exception as exc:
+            errors.append({"country": target["country"], "city": target["city"], "niche": target["niche"], "error": type(exc).__name__})
+    return {
+        "status": "completed" if created or not errors else "failed",
+        "selected_count": len(targets),
+        "created_sources": len([item for item in created if item.get("status") == "source_created"]),
+        "found_count": sum(int(item.get("found_count", 0)) for item in created),
+        "with_email_count": sum(int(item.get("with_email_count", 0)) for item in created),
+        "errors": errors,
+        "targets": [{"country": item["country"], "city": item["city"], "niche": item["niche"], "language": item["language"]} for item in targets],
+        "results": [
+            {
+                "source_id": item.get("source_id"),
+                "country": item.get("country"),
+                "city": item.get("city"),
+                "niche": item.get("niche"),
+                "found_count": item.get("found_count", 0),
+                "with_email_count": item.get("with_email_count", 0),
+                "readiness": item.get("readiness", {}),
+            }
+            for item in created
+        ],
         "send_mail": False,
         "smtp_called": False,
         "live_outreach_allowed": False,

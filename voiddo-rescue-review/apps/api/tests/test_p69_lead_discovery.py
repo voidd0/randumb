@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 import app.lead_discovery as discovery_module
 from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
-from app.lead_discovery import lead_discovery_target_plan, overpass_lead_discovery
+from app.lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, regional_lead_discovery_cycle
 from app.main import app
 
 
@@ -116,4 +116,67 @@ def test_overpass_lead_discovery_endpoint_and_agent_are_safe():
     assert agent["status"] == "completed"
     assert agent["result_json"]["status"] == "dry_run"
     assert agent["result_json"]["country"] == "US"
+    assert agent["result_json"]["send_mail"] is False
+
+
+def test_regional_lead_discovery_cycle_selects_unprocessed_targets(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    targets = [
+        {"country": "EE", "city": f"CycleA{token}", "language": "en", "niche": "dentists", "priority": 90},
+        {"country": "EE", "city": f"CycleB{token}", "language": "en", "niche": "dentists", "priority": 80},
+    ]
+    monkeypatch.setattr(discovery_module, "FIRST_TIER_TARGETS", targets)
+    for target in targets:
+        monkeypatch.setitem(discovery_module.CITY_AREAS, ("EE", target["city"].lower()), target["city"])
+    try:
+        dry = regional_lead_discovery_cycle(2, 5, dry_run=True)
+        assert dry["status"] == "dry_run"
+        assert dry["selected_count"] == 2
+        assert dry["created_sources"] == 0
+        assert dry["send_mail"] is False
+        assert dry["live_outreach_allowed"] is False
+
+        monkeypatch.setattr(
+            discovery_module,
+            "_fetch_overpass",
+            lambda query: {
+                "elements": [
+                    {
+                        "type": "node",
+                        "id": 456,
+                        "tags": {
+                            "name": f"P69 Cycle {token}",
+                            "website": f"https://p69-cycle-{token}.example.test",
+                            "contact:email": f"team@p69-cycle-{token}.example.test",
+                        },
+                    }
+                ]
+            },
+        )
+        live = regional_lead_discovery_cycle(2, 5, dry_run=False)
+        assert live["status"] == "completed"
+        assert live["created_sources"] == 2
+        assert live["found_count"] == 2
+        assert live["with_email_count"] == 2
+        assert live["send_mail"] is False
+        assert live["smtp_called"] is False
+        assert live["raw_recipient_addresses_included"] is False
+        assert f"team@p69-cycle-{token}" not in str(live)
+    finally:
+        for target in targets:
+            _cleanup(f"overpass-EE-{target['city']}-dentists")
+
+
+def test_regional_lead_discovery_endpoint_and_agent_are_no_send():
+    assert client.post("/admin/lead-discovery/regional-cycle", json={"dry_run": True}).status_code == 401
+    response = client.post(
+        "/admin/lead-discovery/regional-cycle",
+        json={"limit_targets": 1, "per_target_limit": 5, "dry_run": True},
+        headers=admin_headers(),
+    )
+    assert response.status_code == 200
+    assert response.json()["cycle"]["status"] == "dry_run"
+    agent = run_agent("regional_lead_discovery_agent", {"limit_targets": 1, "per_target_limit": 5, "dry_run": True})
+    assert agent["status"] == "completed"
+    assert agent["result_json"]["status"] == "dry_run"
     assert agent["result_json"]["send_mail"] is False
