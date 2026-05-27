@@ -180,6 +180,7 @@ def campaign_control_room_snapshot(limit: int = 100, threshold: int = 70) -> dic
     candidates = qualified_campaign_lead_candidates(limit, threshold)
     segments = campaign_segment_candidates(limit, threshold)
     signals = mail_signal_summary(24)
+    preview_rows = campaign_preview_rows(min(limit, 25))
     return json_safe(
         {
             "status": "snapshot",
@@ -187,8 +188,81 @@ def campaign_control_room_snapshot(limit: int = 100, threshold: int = 70) -> dic
             "ready_candidate_count": len([item for item in candidates["candidates"] if item["campaign_ready"]]),
             "segment_count": segments["segment_count"],
             "top_segments": segments["segments"][:10],
+            "first_batch_preview_rows": preview_rows["rows"],
+            "first_batch_preview_count": preview_rows["count"],
             "mail_qa_decision": latest_mail_qa_decision(),
             "mail_signal_blockers": signals,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )
+
+
+def campaign_preview_rows(limit: int = 25) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 25), 100))
+    rows = fetch_all(
+        """
+        SELECT cl.id AS campaign_lead_id, cl.status, cl.score, cl.preview_json, cl.created_at, cl.updated_at,
+               c.id AS campaign_id, c.name AS campaign_name, c.status AS campaign_status,
+               c.country, c.language, c.niche, c.offer_key, c.dry_run,
+               b.name AS business_name, b.domain,
+               a.public_slug, a.score AS audit_score,
+               latest_strength.final_score AS audit_strength_score,
+               latest_preflight.status AS latest_preflight_status
+        FROM campaign_leads cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        JOIN leads l ON l.id = cl.lead_id
+        JOIN businesses b ON b.id = l.business_id
+        LEFT JOIN audits a ON a.id = cl.audit_id
+        LEFT JOIN LATERAL (
+          SELECT final_score FROM audit_strength_scores WHERE audit_id = cl.audit_id ORDER BY created_at DESC LIMIT 1
+        ) latest_strength ON true
+        LEFT JOIN LATERAL (
+          SELECT status FROM campaign_readiness_snapshots WHERE campaign_id = c.id ORDER BY created_at DESC LIMIT 1
+        ) latest_preflight ON true
+        WHERE cl.status = 'preview'
+          AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
+          AND lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
+        ORDER BY cl.score DESC NULLS LAST, cl.updated_at DESC NULLS LAST, cl.created_at DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    payload = [
+        {
+            "campaign_lead_id": str(row["campaign_lead_id"]),
+            "campaign_id": str(row["campaign_id"]),
+            "campaign_name": row["campaign_name"],
+            "campaign_status": row["campaign_status"],
+            "country": row["country"],
+            "language": row["language"],
+            "niche": row["niche"],
+            "offer_key": row["offer_key"],
+            "dry_run": bool(row["dry_run"]),
+            "business_name": row["business_name"],
+            "domain": row["domain"],
+            "audit_slug": row["public_slug"],
+            "audit_score": int(row["audit_score"] or 0),
+            "lead_score": int(row["score"] or 0),
+            "audit_strength_score": int(row["audit_strength_score"] or 0),
+            "latest_preflight_status": row["latest_preflight_status"] or "missing",
+            "preview_status": row["status"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+        }
+        for row in rows
+    ]
+    return json_safe(
+        {
+            "status": "ready" if payload else "empty",
+            "count": len(payload),
+            "rows": payload,
             "send_mail": False,
             "smtp_called": False,
             "live_outreach_allowed": False,

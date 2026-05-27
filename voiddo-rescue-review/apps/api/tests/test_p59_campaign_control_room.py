@@ -6,10 +6,11 @@ import uuid
 from fastapi.testclient import TestClient
 
 from app.autonomous_agents import run_agent
-from app.campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room, qualified_campaign_lead_candidates
+from app.campaign_control_room import campaign_control_room_snapshot, campaign_preview_rows, prepare_campaign_control_room, qualified_campaign_lead_candidates
 from app.db import execute, fetch_one
 from app.lead_scoring import score_lead
 from app.main import app
+from app.scouts import create_campaign, prepare_campaign_gated
 
 
 client = TestClient(app)
@@ -115,10 +116,41 @@ def test_campaign_control_room_prepare_scores_audit_and_creates_preview_only_cam
         _cleanup(token)
 
 
+def test_campaign_control_room_preview_rows_are_redacted_no_send():
+    token = uuid.uuid4().hex[:8]
+    try:
+        _qualified_lead(token)
+        campaign = create_campaign(
+            {
+                "name": f"P59 preview rows {token}",
+                "country": f"P59{token[:3].upper()}",
+                "language": "en",
+                "niche": "dentists",
+                "offer_key": "contact_form_repair",
+            }
+        )
+        prepare_campaign_gated(str(campaign["id"]), 70, 20)
+        result = campaign_preview_rows(100)
+        text = str(result)
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+        assert result["raw_recipient_addresses_included"] is False
+        assert f"owner-{token}@" not in text
+        rows = [row for row in result["rows"] if row["domain"] == f"p59-{token}.clinic"]
+        assert rows
+        assert rows[0]["send_mail"] is False
+        assert rows[0]["smtp_called"] is False
+        assert rows[0]["audit_slug"] == f"p59-{token}"
+    finally:
+        _cleanup(token)
+
+
 def test_campaign_control_room_admin_endpoints_require_auth():
     assert client.get("/admin/campaign-control-room").status_code == 401
+    assert client.get("/admin/campaign-control-room/preview-rows").status_code == 401
     assert client.post("/admin/campaign-control-room/prepare", json={"dry_run": True}).status_code == 401
     assert client.get("/admin/campaign-control-room", headers=admin_headers()).status_code == 200
+    assert client.get("/admin/campaign-control-room/preview-rows", headers=admin_headers()).status_code == 200
     response = client.post("/admin/campaign-control-room/prepare", json={"dry_run": True, "limit": 5}, headers=admin_headers())
     assert response.status_code == 200
     assert response.json()["control_room"]["status"] == "preview_only"

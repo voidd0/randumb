@@ -56,7 +56,7 @@ from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
 from .campaign_control import campaign_readiness_snapshot
 from .campaign_actions import campaign_actions_summary, run_campaign_action
-from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
+from .campaign_control_room import campaign_control_room_snapshot, campaign_preview_rows, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .campaign_preflight import campaign_preflight_batch, latest_campaign_preflight_runs
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation, latest_campaign_remediation_executions, latest_campaign_remediation_plans
@@ -1223,6 +1223,11 @@ async def campaign_preview_quality_run(campaign_id: str, request: Request):
 @app.get("/admin/campaign-control-room", dependencies=[Depends(require_admin)])
 def campaign_control_room_get(limit: int = 100, threshold: int = 70):
     return {"ok": True, "control_room": campaign_control_room_snapshot(limit, threshold)}
+
+
+@app.get("/admin/campaign-control-room/preview-rows", dependencies=[Depends(require_admin)])
+def campaign_control_room_preview_rows_get(limit: int = 25):
+    return {"ok": True, "preview_rows": campaign_preview_rows(limit)}
 
 
 @app.post("/admin/campaign-control-room/prepare", dependencies=[Depends(require_admin)])

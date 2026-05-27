@@ -81,6 +81,7 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
 }
 .button.primary { background: var(--accent); color: #111; border-color: var(--accent); }
 .button.secondary { background: rgba(244, 239, 230, 0.04); color: var(--ink); }
+.button.disabled { opacity: 0.55; pointer-events: none; }
 .trust-strip,
 .proof-strip {
   display: flex;
@@ -254,6 +255,34 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
 .campaign-action-row {
   grid-template-columns: 138px minmax(130px, 1fr) 76px 76px 76px;
 }
+.preview-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.preview-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.25fr) 72px 72px minmax(130px, 0.8fr) 86px;
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.02);
+}
+.preview-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.preview-row strong {
+  overflow-wrap: anywhere;
+}
+.preview-row span:not(.tag) {
+  color: var(--muted);
+  font-size: 12px;
+}
 .ops-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -380,6 +409,7 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
   .readiness-score span { text-align: left; }
   .segment-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .segment-row { grid-template-columns: 1fr 1fr; }
+  .preview-row { grid-template-columns: 1fr 1fr; }
   .campaign-action-grid { grid-template-columns: 1fr; }
   .campaign-action-row { grid-template-columns: 1fr 1fr; }
   .ops-grid { grid-template-columns: 1fr; }

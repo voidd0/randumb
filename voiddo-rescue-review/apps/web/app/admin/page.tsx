@@ -96,6 +96,7 @@ export default async function AdminPage() {
   const campaignActionRuns = Array.isArray(campaignActions.latest_runs) ? campaignActions.latest_runs : [];
   const campaignActionCampaigns = Array.isArray(campaignActions.campaigns) ? campaignActions.campaigns : [];
   const campaignSegments = Array.isArray(campaignControlRoom.top_segments) ? campaignControlRoom.top_segments : [];
+  const campaignPreviewRows = Array.isArray(campaignControlRoom.first_batch_preview_rows) ? campaignControlRoom.first_batch_preview_rows : [];
   const launchReadiness = launchReadinessData?.scoreboard || {};
   const launchEvidence = launchReadiness.evidence || {};
   const launchMail = launchEvidence.mail || {};
@@ -224,6 +225,33 @@ export default async function AdminPage() {
                   <span>{segment.ready_count ?? 0}/{segment.lead_count ?? 0} ready</span>
                   <span>lead {segment.average_lead_score ?? 0}</span>
                   <span>audit {segment.average_audit_strength ?? 0}</span>
+                </div>
+              ))}
+            </div>
+            <div className="preview-table" aria-label="First batch campaign preview rows">
+              {campaignPreviewRows.slice(0, 20).map((row: any) => (
+                <div className="preview-row" key={row.campaign_lead_id}>
+                  <div>
+                    <strong>{row.business_name || row.domain}</strong>
+                    <span>{row.country} · {row.language} · {row.niche}</span>
+                  </div>
+                  <div>
+                    <span className="tag">lead</span>
+                    <strong>{row.lead_score ?? 0}</strong>
+                  </div>
+                  <div>
+                    <span className="tag">audit</span>
+                    <strong>{row.audit_strength_score ?? row.audit_score ?? 0}</strong>
+                  </div>
+                  <div>
+                    <span className="tag">gate</span>
+                    <strong>{row.latest_preflight_status || "missing"}</strong>
+                  </div>
+                  {row.audit_slug ? (
+                    <a className="button secondary" href={`/r/${row.audit_slug}`}>Audit</a>
+                  ) : (
+                    <span className="button secondary disabled">Audit</span>
+                  )}
                 </div>
               ))}
             </div>
