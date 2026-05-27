@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timezone
 
 from .inbox_engine import poll_all
-from .pipeline import process_one_scanner_job
+from .pipeline import process_scanner_jobs
 from .scouts import process_one_scout_run
 
 
@@ -23,9 +23,10 @@ def main():
                 scout_result = process_one_scout_run()
                 if scout_result.get("processed"):
                     log("scout_run_processed", **scout_result)
-                result = process_one_scanner_job()
+                jobs_per_tick = max(1, min(int(os.environ.get("SCANNER_JOBS_PER_TICK", "1") or "1"), 5))
+                result = process_scanner_jobs(jobs_per_tick)
                 if result.get("processed"):
-                    log("scanner_job_processed", **result)
+                    log("scanner_jobs_processed", **result)
             if os.environ.get("INBOX_WORKER_ENABLED", "false").lower() == "true":
                 try:
                     messages = poll_all()

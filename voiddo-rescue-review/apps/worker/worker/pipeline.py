@@ -19,7 +19,7 @@ def claim_scanner_job() -> dict[str, Any] | None:
                   SELECT id
                   FROM scanner_jobs
                   WHERE status = 'queued'
-                  ORDER BY priority ASC, queued_at ASC
+                  ORDER BY priority DESC, queued_at ASC
                   FOR UPDATE SKIP LOCKED
                   LIMIT 1
                 )
@@ -27,7 +27,7 @@ def claim_scanner_job() -> dict[str, Any] | None:
                 SET status = 'running', started_at = now(), updated_at = now()
                 FROM picked
                 WHERE scanner_jobs.id = picked.id
-                RETURNING scanner_jobs.id, scanner_jobs.url, scanner_jobs.business_name, scanner_jobs.dry_run, scanner_jobs.result_json
+                RETURNING scanner_jobs.id, scanner_jobs.url, scanner_jobs.business_name, scanner_jobs.dry_run, scanner_jobs.priority, scanner_jobs.result_json
                 """
             )
             row = cur.fetchone()
@@ -173,7 +173,24 @@ def process_one_scanner_job() -> dict[str, Any]:
     try:
         result = safe_public_scan(job["url"], os.environ.get("STORAGE_ROOT", "/app/storage"))
         audit_id = persist_scan_result(job, result)
-        return {"processed": True, "job_id": str(job["id"]), "audit_id": audit_id, "slug": result.get("public_slug")}
+        return {"processed": True, "job_id": str(job["id"]), "priority": int(job.get("priority") or 0), "audit_id": audit_id, "slug": result.get("public_slug")}
     except Exception as exc:
         fail_scanner_job(str(job["id"]), type(exc).__name__)
-        return {"processed": True, "job_id": str(job["id"]), "failed": True, "error": type(exc).__name__}
+        return {"processed": True, "job_id": str(job["id"]), "priority": int(job.get("priority") or 0), "failed": True, "error": type(exc).__name__}
+
+
+def process_scanner_jobs(limit: int = 1) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 1), 5))
+    results: list[dict[str, Any]] = []
+    for _ in range(safe_limit):
+        result = process_one_scanner_job()
+        if not result.get("processed"):
+            break
+        results.append(result)
+    return {
+        "processed": bool(results),
+        "processed_count": len(results),
+        "failed_count": len([item for item in results if item.get("failed")]),
+        "max_per_tick": safe_limit,
+        "results": results,
+    }
