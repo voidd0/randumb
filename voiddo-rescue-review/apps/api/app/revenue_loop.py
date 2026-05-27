@@ -23,6 +23,24 @@ def _status_counts(table: str, column: str = "status") -> dict[str, int]:
     return {str(row["status"] or "unknown"): int(row["count"]) for row in rows}
 
 
+def _qa_customer_predicate(alias: str = "c") -> str:
+    return (
+        f"(lower({alias}.email) LIKE '%%@voiddorescue.local' "
+        f"OR lower({alias}.email) LIKE '%%@example.test' "
+        f"OR {alias}.paddle_customer_id LIKE 'ctm_p%%' "
+        f"OR {alias}.paddle_customer_id LIKE 'ctm_onboard_%%')"
+    )
+
+
+def _real_customer_predicate(alias: str = "c") -> str:
+    return f"NOT {_qa_customer_predicate(alias)}"
+
+
+def _amount(sql: str, params: tuple = ()) -> float:
+    row = fetch_one(sql, params)
+    return float(row["amount"] or 0) if row else 0.0
+
+
 def _latest_campaign_readiness(limit: int = 5) -> list[dict[str, Any]]:
     rows = fetch_all(
         """
@@ -266,7 +284,13 @@ def revenue_loop_snapshot(limit: int = 25) -> dict[str, Any]:
             },
             "customers": {
                 "customer_count": _count("SELECT count(*) FROM customers"),
+                "real_customer_count": _count(f"SELECT count(*) FROM customers c WHERE {_real_customer_predicate('c')}"),
+                "qa_customer_count": _count(f"SELECT count(*) FROM customers c WHERE {_qa_customer_predicate('c')}"),
                 "payment_count": _count("SELECT count(*) FROM payments"),
+                "real_payment_count": _count(f"SELECT count(*) FROM payments p JOIN customers c ON c.id = p.customer_id WHERE {_real_customer_predicate('c')}"),
+                "qa_payment_count": _count(f"SELECT count(*) FROM payments p JOIN customers c ON c.id = p.customer_id WHERE {_qa_customer_predicate('c')}"),
+                "real_paid_revenue_usd": _amount(f"SELECT COALESCE(sum(p.amount), 0) AS amount FROM payments p JOIN customers c ON c.id = p.customer_id WHERE p.status = 'paid' AND p.currency = 'USD' AND {_real_customer_predicate('c')}"),
+                "qa_paid_revenue_usd": _amount(f"SELECT COALESCE(sum(p.amount), 0) AS amount FROM payments p JOIN customers c ON c.id = p.customer_id WHERE p.status = 'paid' AND p.currency = 'USD' AND {_qa_customer_predicate('c')}"),
                 "subscription_count": _count("SELECT count(*) FROM subscriptions"),
                 "fix_request_count": _count("SELECT count(*) FROM fix_requests"),
                 "open_fix_request_count": _count("SELECT count(*) FROM fix_requests WHERE status IN ('new', 'open', 'queued')"),

@@ -109,6 +109,20 @@ def test_revenue_loop_prepares_paid_customer_lifecycle_without_raw_email_or_send
         _cleanup(token)
 
 
+def test_revenue_loop_separates_real_revenue_from_qa_payments():
+    token = uuid.uuid4().hex[:8]
+    before = revenue_loop_snapshot(5)["customers"]
+    try:
+        _paid_customer(token, provisioning_paused=True)
+        after = revenue_loop_snapshot(5)["customers"]
+        assert after["payment_count"] >= before["payment_count"] + 1
+        assert after["qa_payment_count"] >= before["qa_payment_count"] + 1
+        assert after["real_payment_count"] == before["real_payment_count"]
+        assert after["real_paid_revenue_usd"] == before["real_paid_revenue_usd"]
+    finally:
+        _cleanup(token)
+
+
 def test_revenue_loop_blocks_bulk_source_activation_without_explicit_source_id():
     result = prepare_revenue_loop(limit=5, dry_run=False, activate_sources=True, allow_bulk_source_activation=False)
     assert result["status"] == "blocked"

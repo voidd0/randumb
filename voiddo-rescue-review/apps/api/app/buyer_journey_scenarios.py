@@ -149,9 +149,14 @@ def run_buyer_journey_scenario(cleanup: bool = True) -> dict[str, Any]:
 
 
 def buyer_journey_readiness_scoreboard() -> dict[str, Any]:
+    qa_customer = "(lower(c.email) LIKE '%%@voiddorescue.local' OR lower(c.email) LIKE '%%@example.test' OR c.paddle_customer_id LIKE 'ctm_p%%' OR c.paddle_customer_id LIKE 'ctm_onboard_%%')"
     return {
         "checkout_paid_events": _count("SELECT count(*) FROM payments WHERE status = 'paid'"),
+        "real_checkout_paid_events": _count(f"SELECT count(*) FROM payments p JOIN customers c ON c.id = p.customer_id WHERE p.status = 'paid' AND NOT {qa_customer}"),
+        "qa_checkout_paid_events": _count(f"SELECT count(*) FROM payments p JOIN customers c ON c.id = p.customer_id WHERE p.status = 'paid' AND {qa_customer}"),
         "customer_count": _count("SELECT count(*) FROM customers"),
+        "real_customer_count": _count(f"SELECT count(*) FROM customers c WHERE NOT {qa_customer}"),
+        "qa_customer_count": _count(f"SELECT count(*) FROM customers c WHERE {qa_customer}"),
         "fix_request_count": _count("SELECT count(*) FROM fix_requests"),
         "codex_task_count": _count("SELECT count(*) FROM codex_tasks WHERE type = 'customer_fix_request'"),
         "campaign_preview_count": _count("SELECT count(*) FROM campaign_leads WHERE status = 'preview'"),

@@ -48,6 +48,8 @@ def test_buyer_journey_scenario_runs_end_to_end_and_cleans_runtime_data():
 def test_buyer_journey_scoreboard_is_no_send():
     scoreboard = buyer_journey_readiness_scoreboard()
     assert "checkout_paid_events" in scoreboard
+    assert "real_checkout_paid_events" in scoreboard
+    assert "qa_checkout_paid_events" in scoreboard
     assert scoreboard["send_mail"] is False
     assert scoreboard["live_outreach_allowed"] is False
 
