@@ -59,7 +59,11 @@ def _unpause_monitoring(monkeypatch) -> None:
     monkeypatch.setattr(monitoring, "effective_pause_state", lambda name, default: False)
 
 
-def test_due_monitoring_scheduler_blocks_when_scanning_paused():
+def test_due_monitoring_scheduler_blocks_when_scanning_paused(monkeypatch):
+    import app.monitoring as monitoring
+
+    monkeypatch.setattr(monitoring, "get_settings", lambda: SimpleNamespace(global_kill_switch=False, scanning_paused=True))
+    monkeypatch.setattr(monitoring, "effective_pause_state", lambda name, default: name == "scanner")
     result = process_due_monitoring_targets(limit=1, dry_run=True)
     assert result["status"] == "blocked_paused"
     assert result["sends_started"] is False

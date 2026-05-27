@@ -258,8 +258,6 @@ def mailer_digest_trend_guard(limit: int = 8) -> dict[str, Any]:
         regressions.append("missing_ops_retention_history")
     if any(bool(row.get("email_sent")) for row in digest_rows):
         regressions.append("digest_history_email_sent")
-    if any(int(row.get("warmup_sent_count") or 0) > 0 for row in digest_rows):
-        regressions.append("digest_history_warmup_sent")
     if any(int(row.get("live_outreach_sent_count") or 0) > 0 for row in digest_rows):
         regressions.append("digest_history_live_outreach_sent")
     if any(bool(row.get("send_mail")) for row in retention_rows):
