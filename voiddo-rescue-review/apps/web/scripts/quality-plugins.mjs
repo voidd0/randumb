@@ -44,11 +44,12 @@ async function runAxe(page, route) {
   };
 }
 
-async function runPa11y(url, route) {
+async function runPa11y(url, route, headers = {}) {
   try {
     const result = await pa11y(url, {
       timeout: 30000,
       standard: "WCAG2AA",
+      headers,
       chromeLaunchConfig: { args: ["--no-sandbox"] },
     });
     const blockers = result.issues.filter((issue) => issue.type === "error");
@@ -112,13 +113,14 @@ async function main() {
   for (const routeSpec of routes) {
     const route = routeSpec.path;
     const target = routeSpec.target;
-    const context = await browser.newContext({ viewport: { width: 1365, height: 900 } });
+    const authHeaders = route.startsWith("/admin") && adminToken ? { Authorization: `Bearer ${adminToken}` } : {};
+    const context = await browser.newContext({ viewport: { width: 1365, height: 900 }, extraHTTPHeaders: authHeaders });
     const page = await context.newPage();
     const url = `${baseUrl}${route}`;
     await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
     const name = target === "/" ? "home" : target.replace(/[^a-z0-9]/gi, "_");
     results.push(await runAxe(page, target));
-    results.push(await runPa11y(url, target));
+    results.push(await runPa11y(url, target, authHeaders));
     results.push(await runPixelmatch(page, target, name));
     await context.close();
   }

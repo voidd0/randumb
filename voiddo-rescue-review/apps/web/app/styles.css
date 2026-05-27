@@ -155,6 +155,89 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
 .metric strong { display: block; font-size: 28px; color: var(--accent); }
 .metric span { color: var(--muted); font-size: 13px; }
 .panel { margin-top: 14px; }
+.readiness-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 150px;
+  gap: 16px;
+  align-items: start;
+  background:
+    linear-gradient(135deg, rgba(226, 255, 95, 0.08), rgba(95, 215, 255, 0.035)),
+    rgba(255,255,255,0.025);
+}
+.readiness-panel h2 {
+  margin: 6px 0 8px;
+  font-size: 25px;
+  line-height: 1.12;
+}
+.readiness-score {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  padding-top: 2px;
+}
+.readiness-score strong {
+  color: var(--accent);
+  font-size: 52px;
+  line-height: 0.9;
+}
+.readiness-score span {
+  color: var(--muted);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.segment-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.segment-card {
+  display: grid;
+  gap: 5px;
+  min-height: 104px;
+  padding: 12px;
+  border: 1px solid rgba(244, 239, 230, 0.1);
+  border-radius: 8px;
+  background: rgba(16, 18, 20, 0.46);
+}
+.segment-card strong {
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+.segment-card span:last-child {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.segments-list {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+}
+.segment-row {
+  display: grid;
+  grid-template-columns: 164px minmax(130px, 1fr) 84px 72px 72px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(244, 239, 230, 0.08);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.025);
+  font-size: 13px;
+}
+.segment-row > * { min-width: 0; overflow-wrap: anywhere; }
+.readiness-chip {
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid rgba(103, 232, 164, 0.38);
+  border-radius: 7px;
+  color: var(--ok);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
 .ops-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -276,9 +359,15 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
   .grid, .metric-grid, .price-grid, .compact .price-grid { grid-template-columns: 1fr; }
   .nav { align-items: flex-start; gap: 14px; flex-direction: column; }
   .row { grid-template-columns: 1fr; }
+  .readiness-panel { grid-template-columns: 1fr; }
+  .readiness-score { justify-items: start; }
+  .readiness-score span { text-align: left; }
+  .segment-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .segment-row { grid-template-columns: 1fr 1fr; }
   .ops-grid { grid-template-columns: 1fr; }
   h1 { font-size: 46px; }
   .sidebar { border-right: 0; border-bottom: 1px solid var(--line); width: 100%; }
-  .content { width: 100%; }
+  .content { width: 100%; order: -1; display: flex; flex-direction: column; }
+  .readiness-panel { order: -1; }
   .screenshot-grid { grid-template-columns: 1fr; }
 }

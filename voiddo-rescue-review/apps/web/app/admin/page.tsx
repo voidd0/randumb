@@ -42,6 +42,8 @@ export default async function AdminPage() {
   const scoutQualityHistoryData = await fetchJson("/admin/scouts/campaign-quality-history", authorization ? { Authorization: authorization } : {});
   const scoutSourceReadinessData = await fetchJson("/admin/scouts/source-readiness-summary", authorization ? { Authorization: authorization } : {});
   const scoutSourceReadinessGuardData = await fetchJson("/admin/scouts/source-readiness-regression-guard/latest", authorization ? { Authorization: authorization } : {});
+  const campaignControlRoomData = await fetchJson("/admin/campaign-control-room?limit=25&threshold=70", authorization ? { Authorization: authorization } : {});
+  const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
@@ -79,6 +81,14 @@ export default async function AdminPage() {
   const scoutSourceReadiness = scoutSourceReadinessData?.summary || {};
   const scoutSourceReadinessLatest = Array.isArray(scoutSourceReadiness.latest) ? scoutSourceReadiness.latest[0] || {} : {};
   const scoutSourceReadinessGuard = scoutSourceReadinessGuardData?.guard || scoutSourceReadiness.regression_guard || {};
+  const campaignControlRoom = campaignControlRoomData?.control_room || {};
+  const campaignSegments = Array.isArray(campaignControlRoom.top_segments) ? campaignControlRoom.top_segments : [];
+  const launchReadiness = launchReadinessData?.scoreboard || {};
+  const launchEvidence = launchReadiness.evidence || {};
+  const launchMail = launchEvidence.mail || {};
+  const launchVisual = launchEvidence.visual || {};
+  const launchTransport = launchEvidence.transport_gate || {};
+  const launchCampaigns = launchEvidence.campaigns || {};
   const latestRealOpsAction = opsActions.latest_real || {};
   const opsRetentionAgent = opsActions.latest_retention_agent || {};
   const opsRetentionReport = opsActions.retention_agent_report || {};
@@ -159,6 +169,50 @@ export default async function AdminPage() {
         <section className="content">
           <div className="metric-grid">
             {cards.map(([value, label]) => <div className="metric" key={label}><strong>{value}</strong><span>{label}</span></div>)}
+          </div>
+          <div className="panel readiness-panel">
+            <div>
+              <div className="eyebrow">Revenue launch gate</div>
+              <h2>Real campaign previews are ready, sending is still locked</h2>
+              <p className="muted">The control room has proof-backed candidates, but the transport gate stays closed until the explicit live-send flags are changed and the mailer remains clean.</p>
+            </div>
+            <div className="readiness-score">
+              <strong>{launchReadiness.score ?? 0}</strong>
+              <span>{launchReadiness.state ?? "unknown"}</span>
+            </div>
+            <div className="segment-grid">
+              <div className="segment-card">
+                <span className="tag">campaigns</span>
+                <strong>{launchCampaigns.ready_candidate_count ?? campaignControlRoom.ready_candidate_count ?? 0}/{launchCampaigns.candidate_count ?? campaignControlRoom.candidate_count ?? 0}</strong>
+                <span>ready preview candidates</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">mail</span>
+                <strong>{launchMail.mail_qa_decision ?? campaignControlRoom.mail_qa_decision ?? "unknown"}</strong>
+                <span>strict auth and signal gate</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">visual</span>
+                <strong>{launchVisual.visual_qa_decision ?? "unknown"}</strong>
+                <span>Huanshu plus {launchVisual.additional_tool_count ?? 0} plugins</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">send</span>
+                <strong>{launchReadiness.live_outreach_allowed ? "armed" : "blocked"}</strong>
+                <span>{launchTransport.reason ?? "no live-send approval"}</span>
+              </div>
+            </div>
+            <div className="segments-list">
+              {campaignSegments.slice(0, 6).map((segment: any) => (
+                <div className="segment-row" key={`${segment.country}-${segment.language}-${segment.niche}`}>
+                  <span className="readiness-chip">{segment.decision ?? "preview"}</span>
+                  <strong>{segment.country} · {segment.niche}</strong>
+                  <span>{segment.ready_count ?? 0}/{segment.lead_count ?? 0} ready</span>
+                  <span>lead {segment.average_lead_score ?? 0}</span>
+                  <span>audit {segment.average_audit_strength ?? 0}</span>
+                </div>
+              ))}
+            </div>
           </div>
           <div className="panel">
             <h2>Scanner Jobs</h2>
