@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Vøiddo Rescue warmup due-slot runner
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30min
+AccuracySec=1min
+Persistent=true
+Unit=voiddo-rescue-warmup-due.service
+
+[Install]
+WantedBy=timers.target

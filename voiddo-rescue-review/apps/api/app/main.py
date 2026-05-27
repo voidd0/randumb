@@ -28,6 +28,7 @@ from .p0 import (
     import_test_inboxes,
     prepare_outreach_preview,
     queue_outreach_preview,
+    run_warmup_calendar_due,
     store_owner_command,
     transport_gate_status,
     effective_pause_state,
@@ -398,6 +399,12 @@ async def warmup_prepare(request: Request):
 async def warmup_recipients_import(request: Request):
     payload = await request.json()
     return {"ok": True, "pool": import_warmup_recipients(payload.get("csv", ""), payload.get("mailbox", "audit@voiddorescue.com"))}
+
+
+@app.post("/admin/warmup/run-due", dependencies=[Depends(require_admin)])
+async def warmup_run_due(request: Request):
+    payload = await request.json()
+    return {"ok": True, "warmup": run_warmup_calendar_due(int(payload.get("limit", 2)))}
 
 
 @app.post("/deliverability/test-inboxes/import", dependencies=[Depends(require_admin)])

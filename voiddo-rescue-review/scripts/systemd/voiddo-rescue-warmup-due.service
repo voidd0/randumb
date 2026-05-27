@@ -1,0 +1,11 @@
+[Unit]
+Description=Vøiddo Rescue warmup due-slot runner
+After=network-online.target docker.service voiddo_rescue_api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/voiddo-rescue
+ExecStart=/usr/bin/python3 /opt/voiddo-rescue/scripts/rescue_warmup_due.py --limit 2
+Nice=5
+
