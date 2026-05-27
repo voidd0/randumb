@@ -26,19 +26,23 @@ def _latest_failed_preflights(limit: int) -> list[dict[str, Any]]:
         dict(row)
         for row in fetch_all(
             """
-            SELECT DISTINCT ON (r.campaign_id)
-                   r.id, r.campaign_id, r.decision, r.checked_count, r.ready_count,
-                   r.blocker_count, r.result_json, r.created_at,
-                   c.name, c.status AS campaign_status, c.country, c.language, c.niche, c.offer_key
-            FROM campaign_preflight_runs r
-            LEFT JOIN campaigns c ON c.id = r.campaign_id
-            WHERE r.campaign_id IS NOT NULL
-            ORDER BY r.campaign_id, r.created_at DESC
+            SELECT *
+            FROM (
+              SELECT DISTINCT ON (r.campaign_id)
+                     r.id, r.campaign_id, r.decision, r.checked_count, r.ready_count,
+                     r.blocker_count, r.result_json, r.created_at,
+                     c.name, c.status AS campaign_status, c.country, c.language, c.niche, c.offer_key
+              FROM campaign_preflight_runs r
+              LEFT JOIN campaigns c ON c.id = r.campaign_id
+              WHERE r.campaign_id IS NOT NULL
+              ORDER BY r.campaign_id, r.created_at DESC
+            ) latest
+            WHERE decision <> 'PASS_NO_SEND_PREFLIGHT'
+            ORDER BY created_at DESC
             LIMIT %s
             """,
             (max(1, min(int(limit or 25), 100)),),
         )
-        if row["decision"] != "PASS_NO_SEND_PREFLIGHT"
     ]
 
 
@@ -208,11 +212,15 @@ def _latest_plan_rows(limit: int) -> list[dict[str, Any]]:
         dict(row)
         for row in fetch_all(
             """
-            SELECT DISTINCT ON (campaign_id)
-                   id, campaign_id, status, blocker_count, task_count, plan_json, created_at
-            FROM campaign_remediation_plans
-            WHERE campaign_id IS NOT NULL
-            ORDER BY campaign_id, created_at DESC
+            SELECT *
+            FROM (
+              SELECT DISTINCT ON (campaign_id)
+                     id, campaign_id, status, blocker_count, task_count, plan_json, created_at
+              FROM campaign_remediation_plans
+              WHERE campaign_id IS NOT NULL
+              ORDER BY campaign_id, created_at DESC
+            ) latest
+            ORDER BY created_at DESC
             LIMIT %s
             """,
             (max(1, min(int(limit or 10), 100)),),
