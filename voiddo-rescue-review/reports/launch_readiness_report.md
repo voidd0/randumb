@@ -1,6 +1,6 @@
 # Launch Readiness Report
 
-Generated: 2026-05-27 03:03 IDT
+Generated: 2026-05-27 03:16 IDT
 
 ## Decision
 
@@ -22,8 +22,9 @@ Generated: 2026-05-27 03:03 IDT
 - protected admin daily digest evidence: `PASS`
 - mailer digest trend guard: `PASS_NO_SEND`
 - mailer digest trend guard agent: `PASS`
-- tests: `290 passed`
-- smoke: `290 passed, ok`
+- latest trend guard compact summary: `PASS_NO_SEND`
+- tests: `293 passed`
+- smoke: `293 passed, ok`
 
 ## Current Runtime Counts
 
@@ -34,6 +35,7 @@ Generated: 2026-05-27 03:03 IDT
 - mailer digest history rows: `1`
 - mailer digest trend guard agent runs: `1`
 - mailer digest trend regressions: `0`
+- latest trend guard raw history rows included: `false`
 
 ## Remaining Launch Gates
 

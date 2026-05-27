@@ -1,11 +1,11 @@
 # Smoke Test Report
 
-Generated: 2026-05-27 03:03 IDT
+Generated: 2026-05-27 03:16 IDT
 
-- targeted P54 tests: `36 passed`
-- docker compose API tests: `290 passed`
+- targeted P55 tests: `39 passed`
+- docker compose API tests: `293 passed`
 - smoke command: `bash scripts/run_smoke_tests.sh`
-- smoke result: `290 passed, ok`
+- smoke result: `293 passed, ok`
 - Next production build: `PASS`
 - services healthy: `api`, `web`, `worker`, `postgres`, `redis`
 - warmup sent count: `0`
@@ -16,5 +16,7 @@ Generated: 2026-05-27 03:03 IDT
 - mailer digest trend guard: `PASS_NO_SEND`
 - mailer digest trend guard regressions: `0`
 - mailer digest trend guard agent runs: `1`
+- latest trend guard compact summary: `PASS_NO_SEND`
+- latest trend guard raw history rows included: `false`
 - secrets exposed: `false`
 - raw recipients exposed: `false`

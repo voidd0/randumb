@@ -313,6 +313,78 @@ def mailer_digest_trend_guard(limit: int = 8) -> dict[str, Any]:
     )
 
 
+def latest_mailer_digest_trend_guard_summary() -> dict[str, Any]:
+    row = fetch_one(
+        """
+        SELECT id, status, result_json, error, started_at, completed_at, created_at
+        FROM agent_runs
+        WHERE agent = 'mailer_digest_trend_guard_agent'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    if not row:
+        return json_safe(
+            {
+                "decision": "FAIL_BLOCK_LAUNCH",
+                "status": "missing",
+                "regression_count": 1,
+                "regressions": ["missing_trend_guard_agent_run"],
+                "queue_hygiene": {
+                    "mailer_action_queue_rows": None,
+                    "mailer_send_ledger_rows": None,
+                    "recipient_resolver_audit_rows": None,
+                },
+                "latest_run_id": None,
+                "latest_run_created_at": None,
+                "latest_run_completed_at": None,
+                "send_mail": False,
+                "smtp_called": False,
+                "live_outreach_allowed": False,
+                "raw_recipient_addresses_included": False,
+                "secrets_included": False,
+                "raw_history_rows_included": False,
+            }
+        )
+
+    result = row["result_json"] or {}
+    regressions = result.get("regressions") if isinstance(result, dict) else []
+    regressions = regressions if isinstance(regressions, list) else []
+    queue_hygiene = result.get("queue_hygiene") if isinstance(result, dict) else {}
+    queue_hygiene = queue_hygiene if isinstance(queue_hygiene, dict) else {}
+    status = row["status"]
+    decision = str(result.get("decision") or "FAIL_BLOCK_LAUNCH") if isinstance(result, dict) else "FAIL_BLOCK_LAUNCH"
+    if status != "completed":
+        decision = "FAIL_BLOCK_LAUNCH"
+        if "latest_trend_guard_agent_not_completed" not in regressions:
+            regressions = [*regressions, "latest_trend_guard_agent_not_completed"]
+
+    return json_safe(
+        {
+            "decision": decision,
+            "status": status,
+            "regression_count": len(regressions),
+            "regressions": regressions,
+            "queue_hygiene": {
+                "mailer_action_queue_rows": queue_hygiene.get("mailer_action_queue_rows", 0),
+                "mailer_send_ledger_rows": queue_hygiene.get("mailer_send_ledger_rows", 0),
+                "recipient_resolver_audit_rows": queue_hygiene.get("recipient_resolver_audit_rows", 0),
+            },
+            "digest_history_count": (result.get("digest_history") or {}).get("count", 0) if isinstance(result, dict) else 0,
+            "ops_retention_history_count": (result.get("ops_retention_history") or {}).get("count", 0) if isinstance(result, dict) else 0,
+            "latest_run_id": str(row["id"]),
+            "latest_run_created_at": row["created_at"],
+            "latest_run_completed_at": row["completed_at"],
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+            "raw_history_rows_included": False,
+        }
+    )
+
+
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     state = runtime_state_snapshot()

@@ -289,7 +289,9 @@ reports/p53_mailer_digest_trend_guard.md
 reports/p53_next_self_written_tz.md
 reports/p54_mailer_digest_trend_guard_agent.md
 reports/p54_next_self_written_tz.md
+reports/p55_latest_trend_guard_summary.md
 reports/p55_next_self_written_tz.md
+reports/p56_next_self_written_tz.md
 reports/p5_review_package_hygiene_report.md
 reports/p5_warmup_safety_report.md
 reports/p6_autonomous_mailer_report.md

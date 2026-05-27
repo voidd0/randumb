@@ -1,33 +1,29 @@
 # Vøiddo Rescue Review Notes
 
-Generated: 2026-05-27 03:03 IDT
+Generated: 2026-05-27 03:16 IDT
 
 ## Package
 
 - source path: `/opt/voiddo-rescue`
 - review folder: `voiddo-rescue-review/`
 - branch: `voiddo-rescue-mvp-review-20260526-files`
-- pass: `P54 mailer digest trend guard agent`
+- pass: `P55 latest trend guard summary`
 
-## P54 Summary
+## P55 Summary
 
-- Added `mailer_digest_trend_guard_agent`.
-- Wired it into the autonomous daily loop after ops-retention, digest, and digest-retention evidence.
-- The agent persists through `agent_runs` and returns no-send trend-guard evidence.
-
-## P53 Carry-Forward
-
-- Protected `GET /admin/mailer/digest-trend-guard` remains available for direct admin/API inspection.
-- The guard fails closed on queue/ledger/resolver or send/privacy/secret regressions.
+- Added compact protected latest trend-guard summary.
+- New endpoint: `GET /admin/mailer/digest-trend-guard/latest`.
+- The endpoint returns only latest decision, regression count, queue/ledger/resolver counts, timestamps, and no-send/privacy/secret flags.
+- It fails closed if no trend guard agent run exists.
 
 ## Verification
 
-- targeted P54 tests: `36 passed`
-- full API tests: `290 passed`
-- smoke tests: `290 passed, ok`
-- P54 runtime agent decision: `PASS_NO_SEND`
-- P54 runtime regressions: `0`
-- latest Huanshu visual gate: `PASS` from P52 admin UI change
+- targeted P55 tests: `39 passed`
+- full API tests: `293 passed`
+- smoke tests: `293 passed, ok`
+- runtime latest summary decision: `PASS_NO_SEND`
+- runtime latest summary regression count: `0`
+- raw history rows included: `false`
 
 ## Runtime Counts After Cleanup
 

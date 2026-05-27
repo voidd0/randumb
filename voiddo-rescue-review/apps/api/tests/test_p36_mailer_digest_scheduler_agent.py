@@ -4,6 +4,18 @@ from pathlib import Path
 
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
+from app.mailer_control_room import latest_mailer_digest_trend_guard_summary
+from app.main import app
+from fastapi.testclient import TestClient
+
+
+client = TestClient(app)
+
+
+def admin_headers() -> dict[str, str]:
+    import os
+
+    return {"X-Admin-Token": os.environ["ADMIN_AUTH_TOKEN"]}
 
 
 def _cleanup(action_id: str | None = None) -> None:
@@ -216,6 +228,58 @@ def test_daily_loop_includes_mailer_digest_trend_guard_agent_after_digest():
     digest_runs = [item for item in result["runs"] if item["agent"] == "mailer_digest_agent"]
     if digest_runs:
         _cleanup(digest_runs[0]["result_json"]["owner_report_action"]["id"])
+
+
+def test_latest_trend_guard_summary_is_compact_and_redacted():
+    _clean_trend_runtime()
+    run_agent("mailer_ops_retention_agent")
+    digest_run = run_agent("mailer_digest_agent")
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (digest_run["result_json"]["owner_report_action"]["id"],))
+    run_agent("mailer_digest_trend_guard_agent")
+    summary = latest_mailer_digest_trend_guard_summary()
+    assert summary["decision"] == "PASS_NO_SEND"
+    assert summary["status"] == "completed"
+    assert summary["regression_count"] == 0
+    assert summary["queue_hygiene"]["mailer_action_queue_rows"] == 0
+    assert summary["send_mail"] is False
+    assert summary["smtp_called"] is False
+    assert summary["live_outreach_allowed"] is False
+    assert summary["raw_recipient_addresses_included"] is False
+    assert summary["secrets_included"] is False
+    assert summary["raw_history_rows_included"] is False
+    serialized = str(summary)
+    assert "report_path" not in serialized
+    assert "blockers_json" not in serialized
+    assert "owner-private@" not in serialized
+    assert "SMTP_PASSWORD" not in serialized
+
+
+def test_latest_trend_guard_summary_endpoint_requires_auth_and_is_no_send():
+    _clean_trend_runtime()
+    run_agent("mailer_ops_retention_agent")
+    digest_run = run_agent("mailer_digest_agent")
+    execute("DELETE FROM mailer_action_queue WHERE id = %s", (digest_run["result_json"]["owner_report_action"]["id"],))
+    run_agent("mailer_digest_trend_guard_agent")
+    assert client.get("/admin/mailer/digest-trend-guard/latest").status_code == 401
+    response = client.get("/admin/mailer/digest-trend-guard/latest", headers=admin_headers())
+    assert response.status_code == 200
+    summary = response.json()["trend_guard"]
+    assert summary["decision"] == "PASS_NO_SEND"
+    assert summary["send_mail"] is False
+    assert summary["live_outreach_allowed"] is False
+    assert summary["raw_recipient_addresses_included"] is False
+    assert summary["secrets_included"] is False
+    assert summary["raw_history_rows_included"] is False
+
+
+def test_latest_trend_guard_summary_fails_closed_without_agent_run():
+    execute("DELETE FROM agent_runs WHERE agent = 'mailer_digest_trend_guard_agent'")
+    summary = latest_mailer_digest_trend_guard_summary()
+    assert summary["decision"] == "FAIL_BLOCK_LAUNCH"
+    assert summary["status"] == "missing"
+    assert "missing_trend_guard_agent_run" in summary["regressions"]
+    assert summary["send_mail"] is False
+    assert summary["live_outreach_allowed"] is False
 
 
 def test_mailer_digest_retention_agent_does_not_touch_action_queue_or_send_ledger():
