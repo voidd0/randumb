@@ -36,6 +36,7 @@ from .quality_plugins import latest_quality_summary
 from .revenue_simulation import run_synthetic_lead_simulation
 from .language_gate import check_no_ai_public_language
 from .scouts import process_queued_scout_runs, process_scout_run_gated
+from .scout_quality import latest_scout_quality_gate, run_scout_quality_gate
 from .self_operating import run_self_audit, self_operating_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
 
@@ -81,8 +82,20 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             return process_queued_scout_runs(int(payload.get("limit", 5)))
         return process_scout_run_gated(run_id)
 
+    def scout_quality_agent():
+        run_id = payload.get("scout_run_id")
+        if run_id:
+            return run_scout_quality_gate(run_id)
+        row = fetch_one("SELECT id FROM scout_runs WHERE status IN ('completed', 'review_required') ORDER BY completed_at DESC NULLS LAST, created_at DESC LIMIT 1")
+        if not row:
+            return {"status": "idle", "reason": "no_completed_scout_runs", "send_mail": False, "live_outreach_allowed": False}
+        quality = latest_scout_quality_gate(str(row["id"]))
+        quality["scout_run_id"] = str(row["id"])
+        return quality
+
     agents: dict[str, Callable[[], dict[str, Any]]] = {
         "scout_agent": scout_agent,
+        "scout_quality_agent": scout_quality_agent,
         "scanner_agent": lambda: {"dry_run": True, "status": "scanner_worker_processes_existing_queue"},
         "audit_page_agent": lambda: {"dry_run": True, "status": "audit_pages_api_backed"},
         "visual_qa_agent": lambda: {"dry_run": True, "status": "huanshu_required", "routes": ["/", "/r/demo", "/admin", "/customer", "/status"]},

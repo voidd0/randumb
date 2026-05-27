@@ -13,6 +13,7 @@ from app.lead_scoring import score_lead
 from app.main import app
 from app.mailer_throttle import throttle_decision
 from app.p0 import handle_paddle_event, record_mail_signal
+from app.scout_quality import latest_scout_quality_gate, lead_scout_quality_gate
 from app.scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, prepare_campaign, prepare_campaign_gated, process_queued_scout_runs, process_scout_run, process_scout_run_gated, scout_campaign_expansion_gate
 
 
@@ -30,6 +31,8 @@ def _cleanup_token(token: str):
     execute("DELETE FROM lead_scores WHERE lead_id IN (SELECT id FROM leads WHERE source IN ('scout_agent', 'test_prod'))")
     execute("DELETE FROM leads WHERE source IN ('scout_agent', 'test_prod')")
     execute("DELETE FROM businesses WHERE domain LIKE %s OR source IN ('scout_agent', 'test_prod')", (f"%{token}%",))
+    execute("DELETE FROM scout_provenance_scores WHERE scout_run_id IN (SELECT id FROM scout_runs WHERE result_json::text LIKE %s OR source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s))", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM scout_self_checks WHERE scout_run_id IN (SELECT id FROM scout_runs WHERE result_json::text LIKE %s OR source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s))", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM scout_leads WHERE domain LIKE %s", (f"%{token}%",))
     execute("DELETE FROM scout_runs WHERE result_json::text LIKE %s OR source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM scout_sources WHERE name LIKE %s", (f"%{token}%",))
@@ -149,6 +152,73 @@ def test_gated_scout_agent_processes_queued_run_after_self_audit_matrix():
         assert result["send_mail"] is False
         assert result["live_outreach_allowed"] is False
         assert result["results"][0]["accepted"] == 1
+    finally:
+        _cleanup_token(token)
+
+
+def test_gated_scout_records_quality_failure_for_weak_provenance():
+    token = uuid.uuid4().hex[:8]
+    csv_text = f"business_name,website_url,email,country,niche\nWeak,https://weak-{token}.example.test,weak@weak-{token}.example.test,EE,dentists\n"
+    try:
+        run_agent("mailer_business_kpi_agent")
+        run_agent("mailer_self_audit_matrix_agent")
+        source = create_scout_source({"name": f"weak-quality-{token}", "source_type": "manual_csv_scout", "config_json": {"csv": csv_text}})
+        run = create_scout_run(str(source["id"]))
+        result = process_scout_run_gated(str(run["id"]))
+        assert result["status"] == "review_required"
+        assert result["quality_gate"]["allowed_for_campaign_preview"] is False
+        assert result["send_mail"] is False
+        assert latest_scout_quality_gate(str(run["id"]))["decision"] == "FAIL_REVIEW_REQUIRED"
+        assert fetch_one("SELECT status FROM scout_runs WHERE id = %s", (run["id"],))["status"] == "review_required"
+    finally:
+        _cleanup_token(token)
+
+
+def test_gated_campaign_excludes_scout_leads_without_quality_pass():
+    token = uuid.uuid4().hex[:8]
+    niche = f"quality_weak_{token}"
+    country = f"Q{token[:2].upper()}"
+    csv_text = f"business_name,website_url,email,country,niche\nWeak Campaign,https://weak-campaign-{token}.example.test,weak@weak-campaign-{token}.example.test,{country},{niche}\n"
+    try:
+        run_agent("mailer_business_kpi_agent")
+        run_agent("mailer_self_audit_matrix_agent")
+        source = create_scout_source({"name": f"weak-campaign-quality-{token}", "source_type": "manual_csv_scout", "country": country, "language": "en", "niche": niche, "config_json": {"csv": csv_text}})
+        run = create_scout_run(str(source["id"]))
+        result = process_scout_run_gated(str(run["id"]))
+        lead_id = result["previews"][0]["lead_id"]
+        business = fetch_one("SELECT business_id FROM leads WHERE id = %s", (lead_id,))
+        audit = execute("INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at) VALUES (%s, %s, %s, %s, 'completed', 80, 'Issue', %s, now()) RETURNING id", (business["business_id"], lead_id, f"weak-campaign-{token}.example.test", f"https://weak-campaign-{token}.example.test", f"weak-campaign-{token}"))
+        execute("INSERT INTO lead_scores(lead_id, audit_id, final_score, technical_score, sales_score, urgency_score, value_score, deliverability_score) VALUES (%s, %s, 88, 90, 80, 90, 80, 80)", (lead_id, audit["id"]))
+        campaign = create_campaign({"name": f"weak-campaign-{token}", "country": country, "language": "en", "niche": niche})
+        prepared = prepare_campaign_gated(str(campaign["id"]), threshold=70, limit=20)
+        assert prepared["preview_count"] == 0
+        assert prepared["quality_excluded"] == 1
+        assert lead_scout_quality_gate(lead_id)["allowed_for_campaign_preview"] is False
+    finally:
+        _cleanup_token(token)
+
+
+def test_gated_campaign_allows_scout_leads_with_quality_pass():
+    token = uuid.uuid4().hex[:8]
+    niche = f"quality_strong_{token}"
+    country = f"Q{token[:2].upper()}"
+    csv_text = f"business_name,website_url,email,country,niche,confidence,source_url\nStrong Campaign,https://strong-campaign-{token}.example.test,strong@strong-campaign-{token}.example.test,{country},{niche},95,https://directory.example/{token}\n"
+    try:
+        run_agent("mailer_business_kpi_agent")
+        run_agent("mailer_self_audit_matrix_agent")
+        source = create_scout_source({"name": f"strong-campaign-quality-{token}", "source_type": "manual_csv_scout", "country": country, "language": "en", "niche": niche, "config_json": {"csv": csv_text}})
+        run = create_scout_run(str(source["id"]))
+        result = process_scout_run_gated(str(run["id"]))
+        assert result["quality_gate"]["decision"] == "PASS_IMPORT_READY"
+        lead_id = result["previews"][0]["lead_id"]
+        business = fetch_one("SELECT business_id FROM leads WHERE id = %s", (lead_id,))
+        audit = execute("INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at) VALUES (%s, %s, %s, %s, 'completed', 80, 'Issue', %s, now()) RETURNING id", (business["business_id"], lead_id, f"strong-campaign-{token}.example.test", f"https://strong-campaign-{token}.example.test", f"strong-campaign-{token}"))
+        execute("INSERT INTO lead_scores(lead_id, audit_id, final_score, technical_score, sales_score, urgency_score, value_score, deliverability_score) VALUES (%s, %s, 88, 90, 80, 90, 80, 80)", (lead_id, audit["id"]))
+        campaign = create_campaign({"name": f"strong-campaign-{token}", "country": country, "language": "en", "niche": niche})
+        prepared = prepare_campaign_gated(str(campaign["id"]), threshold=70, limit=20)
+        assert prepared["preview_count"] == 1
+        assert prepared["quality_excluded"] == 0
+        assert get_campaign(str(campaign["id"]))["leads"][0]["preview_json"]["scout_quality_decision"] == "PASS_IMPORT_READY"
     finally:
         _cleanup_token(token)
 

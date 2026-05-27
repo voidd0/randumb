@@ -64,7 +64,7 @@ from .language_gate import check_no_ai_public_language
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
 from .revenue_simulation import run_synthetic_lead_simulation
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
-from .scout_quality import run_scout_self_check, score_scout_provenance
+from .scout_quality import latest_scout_quality_gate, run_scout_quality_gate, run_scout_self_check, score_scout_provenance
 from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, prepare_campaign_gated, process_scout_run, process_scout_run_gated, scout_campaign_expansion_gate
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup, rollback_latest_spacing_repair
 from .self_operating import (
@@ -879,6 +879,16 @@ def scout_self_check(run_id: str):
 @app.post("/admin/scouts/runs/{run_id}/provenance", dependencies=[Depends(require_admin)])
 def scout_provenance_run(run_id: str):
     return {"ok": True, "provenance": score_scout_provenance(run_id)}
+
+
+@app.post("/admin/scouts/runs/{run_id}/quality", dependencies=[Depends(require_admin)])
+def scout_quality_run(run_id: str):
+    return {"ok": True, "quality": run_scout_quality_gate(run_id)}
+
+
+@app.get("/admin/scouts/runs/{run_id}/quality", dependencies=[Depends(require_admin)])
+def scout_quality_get(run_id: str):
+    return {"ok": True, "quality": latest_scout_quality_gate(run_id)}
 
 
 @app.post("/admin/audits/{audit_id}/strength", dependencies=[Depends(require_admin)])

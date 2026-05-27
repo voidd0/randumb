@@ -4,7 +4,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
-from .db import execute, fetch_all
+from .db import execute, fetch_all, fetch_one
 from .self_operating import record_learning
 
 
@@ -67,3 +67,97 @@ def score_scout_provenance(scout_run_id: str) -> dict[str, Any]:
         (scout_run_id, status, score, source_coverage, confidence_average, rejected, Jsonb(issues)),
     )
     return dict(row)
+
+
+def run_scout_quality_gate(scout_run_id: str) -> dict[str, Any]:
+    self_check = run_scout_self_check(scout_run_id)
+    provenance = score_scout_provenance(scout_run_id)
+    blockers: list[dict[str, Any]] = []
+    if self_check["status"] != "pass":
+        blockers.append({"code": "scout_self_check_not_pass", "severity": "high", "status": self_check["status"]})
+    if provenance["status"] != "pass":
+        blockers.append({"code": "scout_provenance_not_pass", "severity": "high", "status": provenance["status"], "score": int(provenance["score"])})
+    decision = "PASS_IMPORT_READY" if not blockers else "FAIL_REVIEW_REQUIRED"
+    return {
+        "decision": decision,
+        "allowed_for_campaign_preview": not blockers,
+        "blockers": blockers,
+        "self_check_id": str(self_check["id"]),
+        "self_check_status": self_check["status"],
+        "provenance_score_id": str(provenance["id"]),
+        "provenance_status": provenance["status"],
+        "provenance_score": int(provenance["score"]),
+        "source_url_coverage": float(provenance["source_url_coverage"] or 0),
+        "confidence_average": float(provenance["confidence_average"] or 0),
+        "send_mail": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def latest_scout_quality_gate(scout_run_id: str) -> dict[str, Any]:
+    self_check = fetch_one(
+        "SELECT * FROM scout_self_checks WHERE scout_run_id = %s ORDER BY created_at DESC LIMIT 1",
+        (scout_run_id,),
+    )
+    provenance = fetch_one(
+        "SELECT * FROM scout_provenance_scores WHERE scout_run_id = %s ORDER BY created_at DESC LIMIT 1",
+        (scout_run_id,),
+    )
+    blockers: list[dict[str, Any]] = []
+    if not self_check:
+        blockers.append({"code": "missing_scout_self_check", "severity": "high"})
+    elif self_check["status"] != "pass":
+        blockers.append({"code": "scout_self_check_not_pass", "severity": "high", "status": self_check["status"]})
+    if not provenance:
+        blockers.append({"code": "missing_scout_provenance_score", "severity": "high"})
+    elif provenance["status"] != "pass":
+        blockers.append({"code": "scout_provenance_not_pass", "severity": "high", "status": provenance["status"], "score": int(provenance["score"])})
+    return {
+        "decision": "PASS_IMPORT_READY" if not blockers else "FAIL_REVIEW_REQUIRED",
+        "allowed_for_campaign_preview": not blockers,
+        "blockers": blockers,
+        "self_check_status": self_check["status"] if self_check else "missing",
+        "provenance_status": provenance["status"] if provenance else "missing",
+        "provenance_score": int(provenance["score"]) if provenance else 0,
+        "source_url_coverage": float(provenance["source_url_coverage"] or 0) if provenance else 0,
+        "confidence_average": float(provenance["confidence_average"] or 0) if provenance else 0,
+        "send_mail": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def lead_scout_quality_gate(lead_id: str) -> dict[str, Any]:
+    lead = fetch_one("SELECT source FROM leads WHERE id = %s", (lead_id,))
+    if not lead:
+        return {"allowed_for_campaign_preview": False, "decision": "FAIL_REVIEW_REQUIRED", "blockers": [{"code": "lead_not_found", "severity": "high"}]}
+    if lead["source"] != "scout_agent":
+        return {"allowed_for_campaign_preview": True, "decision": "NOT_SCOUT_AGENT", "blockers": []}
+    row = fetch_one(
+        """
+        SELECT sl.scout_run_id
+        FROM scanner_jobs sj
+        JOIN scout_leads sl ON sl.id::text = sj.result_json->>'scout_lead_id'
+        WHERE sj.result_json->>'lead_id' = %s
+        ORDER BY sj.queued_at DESC
+        LIMIT 1
+        """,
+        (lead_id,),
+    )
+    if not row:
+        return {
+            "allowed_for_campaign_preview": False,
+            "decision": "FAIL_REVIEW_REQUIRED",
+            "blockers": [{"code": "missing_scout_quality_link", "severity": "high"}],
+            "send_mail": False,
+            "live_outreach_allowed": False,
+        }
+    gate = latest_scout_quality_gate(str(row["scout_run_id"]))
+    missing_evidence = {blocker["code"] for blocker in gate.get("blockers", [])} & {"missing_scout_self_check", "missing_scout_provenance_score"}
+    if missing_evidence:
+        gate = run_scout_quality_gate(str(row["scout_run_id"]))
+    gate["scout_run_id"] = str(row["scout_run_id"])
+    return gate

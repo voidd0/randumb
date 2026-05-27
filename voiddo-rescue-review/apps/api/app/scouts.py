@@ -11,6 +11,7 @@ from psycopg.types.json import Jsonb
 from .db import execute, fetch_all, fetch_one
 from .lead_scoring import score_lead
 from .mailer_control_room import latest_mailer_self_audit_matrix_history
+from .scout_quality import lead_scout_quality_gate, run_scout_quality_gate
 
 EXCLUDED_NICHES = {"government", "banks", "bank", "hospitals", "hospital", "gambling", "adult", "crypto", "political"}
 SUPPORTED_SCOUT_TYPES = {
@@ -245,6 +246,21 @@ def process_scout_run_gated(run_id: str) -> dict[str, Any]:
         )
         return {"processed": False, "status": "blocked", "reason": "self_audit_gate_blocked", "gate": gate, "send_mail": False, "live_outreach_allowed": False}
     result = process_scout_run(run_id)
+    quality_gate = run_scout_quality_gate(run_id)
+    if not quality_gate["allowed_for_campaign_preview"]:
+        execute(
+            """
+            UPDATE scout_runs
+            SET status = 'review_required',
+                result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb
+            WHERE id = %s
+            """,
+            (Jsonb({"quality_gate": quality_gate}), run_id),
+        )
+        result["status"] = "review_required"
+    else:
+        result["status"] = "completed"
+    result["quality_gate"] = quality_gate
     result["gate"] = gate
     result["send_mail"] = False
     result["live_outreach_allowed"] = False
@@ -265,7 +281,7 @@ def process_queued_scout_runs(limit: int = 5) -> dict[str, Any]:
         """,
         (max(1, min(int(limit or 5), 25)),),
     )
-    results = [process_scout_run(str(row["id"])) for row in rows]
+    results = [process_scout_run_gated(str(row["id"])) for row in rows]
     return {"processed": len(results), "status": "ok" if results else "idle", "results": results, "gate": gate, "send_mail": False, "live_outreach_allowed": False}
 
 
@@ -296,6 +312,7 @@ def prepare_campaign(campaign_id: str, threshold: int = 70, limit: int = 20) -> 
     rows = fetch_all(
         """
         SELECT l.id AS lead_id, l.email, l.country, l.language, l.niche, b.name AS business_name, b.domain,
+               l.source AS lead_source,
                a.id AS audit_id, a.public_slug, COALESCE(ls.final_score, l.score, 0) AS final_score
         FROM leads l
         JOIN businesses b ON b.id = l.business_id
@@ -315,13 +332,19 @@ def prepare_campaign(campaign_id: str, threshold: int = 70, limit: int = 20) -> 
         (threshold, campaign["country"], campaign["country"], campaign["language"], campaign["language"], campaign["niche"], campaign["niche"], limit),
     )
     created = 0
+    quality_excluded = 0
     for row in rows:
+        quality_gate = lead_scout_quality_gate(str(row["lead_id"]))
+        if not quality_gate["allowed_for_campaign_preview"]:
+            quality_excluded += 1
+            continue
         preview = {
             "business_name": row["business_name"],
             "domain": row["domain"],
             "audit_slug": row["public_slug"],
             "offer_key": campaign["offer_key"],
             "dry_run": True,
+            "scout_quality_decision": quality_gate["decision"],
         }
         execute(
             """
@@ -334,7 +357,7 @@ def prepare_campaign(campaign_id: str, threshold: int = 70, limit: int = 20) -> 
         )
         created += 1
     execute("UPDATE campaigns SET status = 'preview_ready', updated_at = now() WHERE id = %s", (campaign_id,))
-    return {"campaign_id": campaign_id, "preview_count": created, "threshold": threshold, "live_send": False}
+    return {"campaign_id": campaign_id, "preview_count": created, "threshold": threshold, "quality_excluded": quality_excluded, "live_send": False}
 
 
 def prepare_campaign_gated(campaign_id: str, threshold: int = 70, limit: int = 20) -> dict[str, Any]:
