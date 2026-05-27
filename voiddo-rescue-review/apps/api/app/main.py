@@ -40,6 +40,7 @@ from .visual_quality import check_visual_publish_gate
 from .autonomous_agents import run_agent, run_daily_loop
 from .email_templates import render_email_template, qa_email_template, render_all_samples
 from .lead_scoring import backfill_post_scan_lead_scores, score_lead
+from .lead_quality_diagnostics import apply_scout_source_feedback, latest_lead_quality_diagnostics_history, latest_scout_source_performance, lead_quality_diagnostics_snapshot, record_lead_quality_diagnostics, scout_source_performance
 from .audit_strength import score_audit_strength
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
@@ -507,6 +508,51 @@ async def lead_score_backfill_create(request: Request):
         "backfill": backfill_post_scan_lead_scores(
             int(payload.get("limit", 50)),
             bool(payload.get("dry_run", True)),
+        ),
+    }
+
+
+@app.get("/admin/leads/quality-diagnostics", dependencies=[Depends(require_admin)])
+def lead_quality_diagnostics_get(limit: int = 50):
+    return {"ok": True, "diagnostics": lead_quality_diagnostics_snapshot(limit)}
+
+
+@app.post("/admin/leads/quality-diagnostics", dependencies=[Depends(require_admin)])
+async def lead_quality_diagnostics_record(request: Request):
+    payload = await request.json()
+    return {"ok": True, "diagnostics": record_lead_quality_diagnostics(int(payload.get("limit", 50)))}
+
+
+@app.get("/admin/leads/quality-diagnostics/history", dependencies=[Depends(require_admin)])
+def lead_quality_diagnostics_history_get(limit: int = 10):
+    return {"ok": True, "history": latest_lead_quality_diagnostics_history(limit)}
+
+
+@app.post("/admin/scouts/source-feedback", dependencies=[Depends(require_admin)])
+async def scout_source_feedback_apply(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "feedback": apply_scout_source_feedback(
+            int(payload.get("limit", 50)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
+
+
+@app.get("/admin/scouts/source-performance", dependencies=[Depends(require_admin)])
+def scout_source_performance_get(limit: int = 20):
+    return {"ok": True, "performance": latest_scout_source_performance(limit)}
+
+
+@app.post("/admin/scouts/source-performance", dependencies=[Depends(require_admin)])
+async def scout_source_performance_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "performance": scout_source_performance(
+            int(payload.get("limit", 100)),
+            bool(payload.get("store", True)),
         ),
     }
 

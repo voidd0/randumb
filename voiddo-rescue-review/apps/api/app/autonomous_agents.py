@@ -49,6 +49,7 @@ from .launch_operating_lane import advance_launch_operating_lane, launch_operati
 from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
 from .lead_scoring import backfill_post_scan_lead_scores
+from .lead_quality_diagnostics import apply_scout_source_feedback, record_lead_quality_diagnostics
 from .scouts import cleanup_scout_source_readiness_checks, process_queued_scout_runs, process_scout_run_gated, ready_scout_source_queue_candidates, run_scout_source_readiness, scout_source_readiness_regression_guard, scout_source_readiness_summary
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_quality_gate, record_scout_campaign_quality_history, run_scout_quality_gate, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .self_operating import run_self_audit, self_operating_summary
@@ -155,6 +156,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "scanner_agent": lambda: scanner_queue_health_snapshot(int(payload.get("limit", 20))),
         "scanner_retry_agent": lambda: retry_transient_scanner_failures(int(payload.get("limit", 5)), dry_run=bool(payload.get("dry_run", False))),
         "post_scan_lead_scoring_agent": lambda: backfill_post_scan_lead_scores(int(payload.get("limit", 50)), dry_run=bool(payload.get("dry_run", False))),
+        "lead_quality_diagnostics_agent": lambda: record_lead_quality_diagnostics(int(payload.get("limit", 50))),
+        "scout_source_feedback_agent": lambda: apply_scout_source_feedback(int(payload.get("limit", 50)), dry_run=bool(payload.get("dry_run", True))),
         "audit_page_agent": lambda: {"dry_run": True, "status": "audit_pages_api_backed"},
         "visual_qa_agent": lambda: {"dry_run": True, "status": "huanshu_required", "routes": ["/", "/r/demo", "/admin", "/customer", "/status"]},
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
@@ -238,6 +241,8 @@ def run_daily_loop() -> dict[str, Any]:
         "scanner_agent",
         "scanner_retry_agent",
         "post_scan_lead_scoring_agent",
+        "lead_quality_diagnostics_agent",
+        "scout_source_feedback_agent",
         "campaign_agent",
         "campaign_operator_agent",
         "campaign_control_room_agent",

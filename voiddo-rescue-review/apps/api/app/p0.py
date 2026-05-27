@@ -370,6 +370,8 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "scout_source_queue_created_scout_runs": source_queue["created_scout_runs"],
         "scout_source_queue_created_scanner_jobs": source_queue["created_scanner_jobs"],
         "scout_campaign_quality_history": scalar("SELECT count(*) FROM scout_campaign_quality_history"),
+        "lead_quality_diagnostics_history": scalar("SELECT count(*) FROM lead_quality_diagnostic_runs"),
+        "scout_source_performance_feedback": scalar("SELECT count(*) FROM scout_source_performance_scores"),
         "mail_clean_window_transitions": scalar("SELECT count(*) FROM mail_clean_window_transitions"),
         "mailbox_health_scores": scalar("SELECT count(*) FROM mailbox_health_scores"),
         "sender_rotation_readiness": scalar("SELECT count(*) FROM sender_rotation_readiness"),
