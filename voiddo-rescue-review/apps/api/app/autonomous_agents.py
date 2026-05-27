@@ -38,6 +38,7 @@ from .campaign_control_room import campaign_control_room_snapshot, prepare_campa
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .post_scan_campaign_cycle import post_scan_campaign_cycle
 from .campaign_preflight import campaign_preflight_batch
+from .campaign_remediation import campaign_remediation_plan
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, refresh_campaign_previews_if_needed
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
@@ -205,6 +206,10 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             dry_run=bool(payload.get("dry_run", False)),
         ),
         "campaign_preflight_agent": lambda: campaign_preflight_batch(int(payload.get("limit", 20)), payload.get("campaign_id")),
+        "campaign_remediation_agent": lambda: campaign_remediation_plan(
+            int(payload.get("limit", 25)),
+            create_tasks=bool(payload.get("create_tasks", True)),
+        ),
         "post_scan_campaign_cycle_agent": lambda: post_scan_campaign_cycle(
             int(payload.get("limit", 100)),
             dry_run=bool(payload.get("dry_run", True)),
@@ -297,6 +302,7 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_preview_refresh_snapshot_agent",
         "campaign_preview_refresh_agent",
         "campaign_preflight_agent",
+        "campaign_remediation_agent",
         "post_scan_campaign_cycle_agent",
         "campaign_preview_quality_agent",
         "buyer_journey_scoreboard_agent",
