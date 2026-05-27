@@ -35,7 +35,7 @@ from .p0 import (
 from .quality_plugins import latest_quality_summary
 from .revenue_simulation import run_synthetic_lead_simulation
 from .language_gate import check_no_ai_public_language
-from .scouts import process_scout_run
+from .scouts import process_queued_scout_runs, process_scout_run_gated
 from .self_operating import run_self_audit, self_operating_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
 
@@ -78,8 +78,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
     def scout_agent():
         run_id = payload.get("scout_run_id")
         if not run_id:
-            return {"dry_run": True, "status": "no_scout_run_selected"}
-        return process_scout_run(run_id)
+            return process_queued_scout_runs(int(payload.get("limit", 5)))
+        return process_scout_run_gated(run_id)
 
     agents: dict[str, Callable[[], dict[str, Any]]] = {
         "scout_agent": scout_agent,

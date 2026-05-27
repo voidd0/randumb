@@ -65,7 +65,7 @@ from .quality_plugins import latest_quality_summary, quality_plugin_manifest, re
 from .revenue_simulation import run_synthetic_lead_simulation
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 from .scout_quality import run_scout_self_check, score_scout_provenance
-from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, process_scout_run
+from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, prepare_campaign_gated, process_scout_run, process_scout_run_gated, scout_campaign_expansion_gate
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup, rollback_latest_spacing_repair
 from .self_operating import (
     create_self_fix_task,
@@ -360,7 +360,7 @@ async def scout_run_create(request: Request):
     source_id = payload.get("source_id")
     run = create_scout_run(source_id, payload)
     if payload.get("process_now", False):
-        return {"ok": True, "run": run, "result": process_scout_run(str(run["id"]))}
+        return {"ok": True, "run": run, "result": process_scout_run_gated(str(run["id"]))}
     return {"ok": True, "run": run}
 
 
@@ -381,7 +381,12 @@ async def campaign_create(request: Request):
 @app.post("/admin/campaigns/{campaign_id}/prepare", dependencies=[Depends(require_admin)])
 async def campaign_prepare(campaign_id: str, request: Request):
     payload = await request.json()
-    return {"ok": True, "result": prepare_campaign(campaign_id, int(payload.get("threshold", 70)), int(payload.get("limit", 20)))}
+    return {"ok": True, "result": prepare_campaign_gated(campaign_id, int(payload.get("threshold", 70)), int(payload.get("limit", 20)))}
+
+
+@app.get("/admin/scouts/expansion-gate", dependencies=[Depends(require_admin)])
+def scout_expansion_gate_get():
+    return {"ok": True, "gate": scout_campaign_expansion_gate()}
 
 
 @app.get("/admin/campaigns/{campaign_id}", dependencies=[Depends(require_admin)])

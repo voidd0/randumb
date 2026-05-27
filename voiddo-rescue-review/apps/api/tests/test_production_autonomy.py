@@ -13,7 +13,7 @@ from app.lead_scoring import score_lead
 from app.main import app
 from app.mailer_throttle import throttle_decision
 from app.p0 import handle_paddle_event, record_mail_signal
-from app.scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, prepare_campaign, process_scout_run
+from app.scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, prepare_campaign, prepare_campaign_gated, process_queued_scout_runs, process_scout_run, process_scout_run_gated, scout_campaign_expansion_gate
 
 
 client = TestClient(app)
@@ -114,6 +114,61 @@ def test_campaign_prepare_selects_top_scored_leads():
 def test_admin_scout_and_campaign_endpoints_require_auth():
     assert client.post("/admin/scouts/sources", json={}).status_code == 401
     assert client.post("/admin/campaigns", json={"name": "x"}, headers=admin_headers()).status_code == 200
+
+
+def test_scout_expansion_gate_blocks_without_self_audit_matrix():
+    token = uuid.uuid4().hex[:8]
+    csv_text = f"business_name,website_url,email,country,niche\nGate,https://gate-{token}.example.test,gate@gate-{token}.example.test,EE,dentists\n"
+    try:
+        execute("DELETE FROM mailer_self_audit_matrix_history")
+        source = create_scout_source({"name": f"gate-{token}", "source_type": "manual_csv_scout", "config_json": {"csv": csv_text}})
+        run = create_scout_run(str(source["id"]))
+        result = process_scout_run_gated(str(run["id"]))
+        assert result["status"] == "blocked"
+        assert result["send_mail"] is False
+        assert "missing_mailer_self_audit_matrix" in result["gate"]["blockers"]
+        assert fetch_one("SELECT status FROM scout_runs WHERE id = %s", (run["id"],))["status"] == "blocked"
+    finally:
+        _cleanup_token(token)
+        run_agent("mailer_business_kpi_agent")
+        run_agent("mailer_self_audit_matrix_agent")
+
+
+def test_gated_scout_agent_processes_queued_run_after_self_audit_matrix():
+    token = uuid.uuid4().hex[:8]
+    csv_text = f"business_name,website_url,email,country,niche\nGate Ok,https://gate-ok-{token}.example.test,gate-ok@gate-ok-{token}.example.test,EE,dentists\n"
+    try:
+        run_agent("mailer_business_kpi_agent")
+        run_agent("mailer_self_audit_matrix_agent")
+        gate = scout_campaign_expansion_gate()
+        assert gate["allowed"] is True
+        source = create_scout_source({"name": f"gate-ok-{token}", "source_type": "manual_csv_scout", "config_json": {"csv": csv_text}})
+        create_scout_run(str(source["id"]))
+        result = process_queued_scout_runs(1)
+        assert result["processed"] == 1
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+        assert result["results"][0]["accepted"] == 1
+    finally:
+        _cleanup_token(token)
+
+
+def test_gated_campaign_prepare_requires_self_audit_matrix():
+    token = uuid.uuid4().hex[:8]
+    try:
+        execute("DELETE FROM mailer_self_audit_matrix_history")
+        campaign = create_campaign({"name": f"gate-campaign-{token}", "country": "EE", "language": "en", "niche": "dentists"})
+        blocked = prepare_campaign_gated(str(campaign["id"]), threshold=70, limit=20)
+        assert blocked["status"] == "blocked"
+        assert blocked["send_mail"] is False
+        assert "missing_mailer_self_audit_matrix" in blocked["gate"]["blockers"]
+        run_agent("mailer_business_kpi_agent")
+        run_agent("mailer_self_audit_matrix_agent")
+        allowed = prepare_campaign_gated(str(campaign["id"]), threshold=70, limit=20)
+        assert allowed["status"] == "preview_ready"
+        assert allowed["live_send"] is False
+    finally:
+        _cleanup_token(token)
 
 
 def test_email_templates_render_all_samples_and_pass_qa():

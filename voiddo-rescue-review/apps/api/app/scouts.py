@@ -10,6 +10,7 @@ from psycopg.types.json import Jsonb
 
 from .db import execute, fetch_all, fetch_one
 from .lead_scoring import score_lead
+from .mailer_control_room import latest_mailer_self_audit_matrix_history
 
 EXCLUDED_NICHES = {"government", "banks", "bank", "hospitals", "hospital", "gambling", "adult", "crypto", "political"}
 SUPPORTED_SCOUT_TYPES = {
@@ -108,6 +109,30 @@ def _rows_from_source(source: dict[str, Any]) -> list[dict[str, str]]:
         domains = re.split(r"[\s,;]+", config.get("domains", ""))
         return [{"website_url": item, "business_name": normalize_domain(item)} for item in domains if item.strip()]
     return []
+
+
+def scout_campaign_expansion_gate() -> dict[str, Any]:
+    matrix = latest_mailer_self_audit_matrix_history()
+    blockers: list[str] = []
+    if matrix["count"] < 1:
+        blockers.append("missing_mailer_self_audit_matrix")
+    if int(matrix.get("latest_coverage_score") or 0) < 100:
+        blockers.append("self_audit_coverage_below_100")
+    if int(matrix.get("latest_fail_count") or 0) > 0:
+        blockers.append("self_audit_matrix_failures")
+    if matrix.get("latest_send_mail") or matrix.get("latest_live_outreach_allowed"):
+        blockers.append("self_audit_send_state_not_safe")
+    return {
+        "allowed": not blockers,
+        "blockers": blockers,
+        "matrix_count": matrix["count"],
+        "latest_coverage_score": matrix.get("latest_coverage_score", 0),
+        "latest_fail_count": matrix.get("latest_fail_count", 0),
+        "send_mail": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
 
 
 def process_scout_run(run_id: str) -> dict[str, Any]:
@@ -211,6 +236,39 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
     return result
 
 
+def process_scout_run_gated(run_id: str) -> dict[str, Any]:
+    gate = scout_campaign_expansion_gate()
+    if not gate["allowed"]:
+        execute(
+            "UPDATE scout_runs SET status = 'blocked', error = %s, result_json = %s, completed_at = now() WHERE id = %s",
+            ("self_audit_gate_blocked", Jsonb({"gate": gate}), run_id),
+        )
+        return {"processed": False, "status": "blocked", "reason": "self_audit_gate_blocked", "gate": gate, "send_mail": False, "live_outreach_allowed": False}
+    result = process_scout_run(run_id)
+    result["gate"] = gate
+    result["send_mail"] = False
+    result["live_outreach_allowed"] = False
+    return result
+
+
+def process_queued_scout_runs(limit: int = 5) -> dict[str, Any]:
+    gate = scout_campaign_expansion_gate()
+    if not gate["allowed"]:
+        return {"processed": 0, "status": "blocked", "reason": "self_audit_gate_blocked", "gate": gate, "send_mail": False, "live_outreach_allowed": False}
+    rows = fetch_all(
+        """
+        SELECT id
+        FROM scout_runs
+        WHERE status = 'queued'
+        ORDER BY created_at
+        LIMIT %s
+        """,
+        (max(1, min(int(limit or 5), 25)),),
+    )
+    results = [process_scout_run(str(row["id"])) for row in rows]
+    return {"processed": len(results), "status": "ok" if results else "idle", "results": results, "gate": gate, "send_mail": False, "live_outreach_allowed": False}
+
+
 def create_campaign(payload: dict[str, Any]) -> dict[str, Any]:
     row = execute(
         """
@@ -277,6 +335,18 @@ def prepare_campaign(campaign_id: str, threshold: int = 70, limit: int = 20) -> 
         created += 1
     execute("UPDATE campaigns SET status = 'preview_ready', updated_at = now() WHERE id = %s", (campaign_id,))
     return {"campaign_id": campaign_id, "preview_count": created, "threshold": threshold, "live_send": False}
+
+
+def prepare_campaign_gated(campaign_id: str, threshold: int = 70, limit: int = 20) -> dict[str, Any]:
+    gate = scout_campaign_expansion_gate()
+    if not gate["allowed"]:
+        return {"campaign_id": campaign_id, "preview_count": 0, "threshold": threshold, "status": "blocked", "reason": "self_audit_gate_blocked", "gate": gate, "live_send": False, "send_mail": False, "live_outreach_allowed": False}
+    result = prepare_campaign(campaign_id, threshold, limit)
+    result["status"] = "preview_ready"
+    result["gate"] = gate
+    result["send_mail"] = False
+    result["live_outreach_allowed"] = False
+    return result
 
 
 def get_campaign(campaign_id: str) -> dict[str, Any] | None:
