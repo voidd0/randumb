@@ -46,6 +46,7 @@ from .lead_scoring import backfill_post_scan_lead_scores, score_lead
 from .lead_quality_diagnostics import apply_scout_source_feedback, latest_lead_quality_diagnostics_history, latest_scout_source_performance, lead_quality_diagnostics_snapshot, record_lead_quality_diagnostics, scout_source_performance
 from .audit_strength import score_audit_strength
 from .audit_evidence_remediation import audit_evidence_candidates, audit_evidence_remediation, latest_audit_evidence_remediation_runs
+from .audit_refresh_drain import audit_refresh_drain_snapshot, latest_audit_refresh_drain_runs, prioritize_audit_refresh_jobs
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
 from .campaign_control import campaign_readiness_snapshot
@@ -1279,6 +1280,29 @@ async def audit_evidence_remediation_run(request: Request):
         "remediation": audit_evidence_remediation(
             int(payload.get("limit", 25)),
             bool(payload.get("dry_run", True)),
+        ),
+    }
+
+
+@app.get("/admin/audit-refresh/drain", dependencies=[Depends(require_admin)])
+def audit_refresh_drain_get(limit: int = 25):
+    return {"ok": True, "drain": audit_refresh_drain_snapshot(limit)}
+
+
+@app.get("/admin/audit-refresh/drain-runs", dependencies=[Depends(require_admin)])
+def audit_refresh_drain_runs_get(limit: int = 10):
+    return {"ok": True, "runs": latest_audit_refresh_drain_runs(limit)}
+
+
+@app.post("/admin/audit-refresh/prioritize", dependencies=[Depends(require_admin)])
+async def audit_refresh_prioritize_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "priority": prioritize_audit_refresh_jobs(
+            int(payload.get("limit", 25)),
+            bool(payload.get("dry_run", True)),
+            int(payload.get("priority", 220)),
         ),
     }
 
