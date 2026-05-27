@@ -35,22 +35,36 @@ def _job(token: str, url: str, name: str):
     )
 
 
+def _running_job(token: str, url: str, name: str):
+    return execute(
+        """
+        INSERT INTO scanner_jobs(url, business_name, dry_run, status, priority, started_at, result_json)
+        VALUES (%s, %s, false, 'running', 999, now() - interval '20 minutes', '{}'::jsonb)
+        RETURNING id
+        """,
+        (url, name),
+    )
+
+
 def test_scanner_queue_hygiene_archives_queued_test_jobs_only():
     token = uuid.uuid4().hex[:8]
     try:
         test_job = _job(token, f"https://sim-{token}.example.test", f"sim-{token}")
         compact_test_job = _job(token, f"https://self-{token}example.test", f"One {token}")
+        running_test_job = _running_job(token, f"https://running-{token}.example.test", f"sim-running-{token}")
         real_job = _job(token, f"https://real-{token}.com", f"Real {token}")
         snapshot = scanner_queue_hygiene_snapshot(50)
-        assert snapshot["artifact_count"] >= 2
+        assert snapshot["artifact_count"] >= 3
         result = archive_scanner_queue_artifacts(50, apply=True)
-        assert result["archived_count"] >= 2
+        assert result["archived_count"] >= 3
         assert result["send_mail"] is False
         archived = fetch_one("SELECT status, result_json FROM scanner_jobs WHERE id = %s", (test_job["id"],))
         compact_archived = fetch_one("SELECT status FROM scanner_jobs WHERE id = %s", (compact_test_job["id"],))
+        running_archived = fetch_one("SELECT status FROM scanner_jobs WHERE id = %s", (running_test_job["id"],))
         real = fetch_one("SELECT status FROM scanner_jobs WHERE id = %s", (real_job["id"],))
         assert archived["status"] == "archived_test_artifact"
         assert compact_archived["status"] == "archived_test_artifact"
+        assert running_archived["status"] == "archived_test_artifact"
         assert archived["result_json"]["scanner_queue_hygiene"]["live_outreach_allowed"] is False
         assert real["status"] == "queued"
     finally:

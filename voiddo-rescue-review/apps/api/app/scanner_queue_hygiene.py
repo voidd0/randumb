@@ -34,9 +34,10 @@ def scanner_queue_hygiene_snapshot(limit: int = 500) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 500), 2000))
     rows = fetch_all(
         """
-        SELECT id, url, business_name, priority, result_json
+        SELECT id, url, business_name, priority, status, result_json
         FROM scanner_jobs
         WHERE status = 'queued'
+           OR (status = 'running' AND started_at < now() - interval '10 minutes')
         ORDER BY priority DESC, queued_at ASC
         LIMIT %s
         """,
@@ -52,9 +53,9 @@ def scanner_queue_hygiene_snapshot(limit: int = 500) -> dict[str, Any]:
     return json_safe(
         {
             "status": "artifacts_found" if artifacts else "clean",
-            "queued_inspected": len(rows),
+            "inspected_count": len(rows),
             "artifact_count": artifacts,
-            "real_queued_count": len(rows) - artifacts,
+            "real_active_count": len(rows) - artifacts,
             "artifact_reasons": artifact_reasons,
             **SAFE_FLAGS,
         }
@@ -65,9 +66,10 @@ def archive_scanner_queue_artifacts(limit: int = 500, apply: bool = False) -> di
     safe_limit = max(1, min(int(limit or 500), 2000))
     rows = fetch_all(
         """
-        SELECT id, url, business_name, priority, result_json
+        SELECT id, url, business_name, priority, status, result_json
         FROM scanner_jobs
         WHERE status = 'queued'
+           OR (status = 'running' AND started_at < now() - interval '10 minutes')
         ORDER BY priority DESC, queued_at ASC
         LIMIT %s
         """,
@@ -83,6 +85,7 @@ def archive_scanner_queue_artifacts(limit: int = 500, apply: bool = False) -> di
                 "scanner_job_id": str(row["id"]),
                 "reason": reason,
                 "priority": int(row["priority"] or 0),
+                "previous_status": row["status"],
                 **SAFE_FLAGS,
             }
         )
@@ -93,7 +96,11 @@ def archive_scanner_queue_artifacts(limit: int = 500, apply: bool = False) -> di
                 SET status = 'archived_test_artifact',
                     result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb,
                     updated_at = now()
-                WHERE id = %s AND status = 'queued'
+                WHERE id = %s
+                  AND (
+                    status = 'queued'
+                    OR (status = 'running' AND started_at < now() - interval '10 minutes')
+                  )
                 """,
                 (
                     Jsonb(
