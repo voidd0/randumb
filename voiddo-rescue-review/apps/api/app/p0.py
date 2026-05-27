@@ -1099,6 +1099,46 @@ def scout_source_readiness_trend_snapshot(limit: int = 8) -> dict[str, Any]:
     }
 
 
+def scout_source_queue_preview_snapshot(limit: int = 20) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 20), 100))
+    rows = fetch_all(
+        """
+        WITH latest AS (
+          SELECT DISTINCT ON (source_id) *
+          FROM scout_source_readiness_checks
+          ORDER BY source_id, created_at DESC, id DESC
+        )
+        SELECT latest.score AS readiness_score
+        FROM scout_sources s
+        JOIN latest ON latest.source_id = s.id
+        WHERE latest.status = 'PASS_SOURCE_READY'
+          AND s.status IN ('active', 'preflight_ready')
+          AND NOT EXISTS (
+            SELECT 1 FROM scout_runs sr
+            WHERE sr.source_id = s.id
+              AND sr.status IN ('queued', 'running', 'completed', 'review_required')
+          )
+        ORDER BY latest.created_at DESC, s.created_at DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    scores = [int(row.get("readiness_score") or 0) for row in rows]
+    return {
+        "candidate_count": len(scores),
+        "top_score": max(scores) if scores else 0,
+        "average_score": round(sum(scores) / len(scores), 2) if scores else 0,
+        "ready_for_dry_run_queue": bool(scores),
+        "created_scout_runs": 0,
+        "created_scanner_jobs": 0,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
 def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> dict[str, Any]:
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1121,6 +1161,7 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
         "mailer_business_kpi": mailer_business_kpi_report_snapshot(),
         "scout_campaign_quality_trend": scout_campaign_quality_trend_snapshot(),
         "scout_source_readiness_trend": scout_source_readiness_trend_snapshot(),
+        "scout_source_queue_preview": scout_source_queue_preview_snapshot(),
     }
 
 
@@ -1130,6 +1171,7 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
     business_kpi = snapshot["mailer_business_kpi"]
     scout_quality = snapshot["scout_campaign_quality_trend"]
     scout_source_readiness = snapshot["scout_source_readiness_trend"]
+    scout_source_queue = snapshot["scout_source_queue_preview"]
     lines = [
         "# Vøiddo Rescue Runtime State",
         "",
@@ -1182,6 +1224,11 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
         f"- scout_source_readiness_regression_guard_decision: {scout_source_readiness['regression_guard_decision']}",
         f"- scout_source_readiness_regression_count: {scout_source_readiness['regression_count']}",
         f"- scout_source_readiness_latest_send_mail: {str(scout_source_readiness['latest_send_mail']).lower()}",
+        f"- scout_source_queue_candidate_count: {scout_source_queue['candidate_count']}",
+        f"- scout_source_queue_top_score: {scout_source_queue['top_score']}",
+        f"- scout_source_queue_created_scout_runs: {scout_source_queue['created_scout_runs']}",
+        f"- scout_source_queue_created_scanner_jobs: {scout_source_queue['created_scanner_jobs']}",
+        f"- scout_source_queue_send_mail: {str(scout_source_queue['send_mail']).lower()}",
         "",
         "Raw recipient addresses are intentionally omitted.",
     ]
@@ -1198,6 +1245,7 @@ def write_daily_business_report(path: str | Path | None = None) -> dict[str, Any
     business_kpi = snapshot["mailer_business_kpi"]
     scout_quality = snapshot["scout_campaign_quality_trend"]
     scout_source_readiness = snapshot["scout_source_readiness_trend"]
+    scout_source_queue = snapshot["scout_source_queue_preview"]
     target = Path(path) if path else Path(get_settings().storage_root) / "reports" / "daily_business_report.md"
     lines = [
         "# Vøiddo Rescue Daily Business Report",
@@ -1239,6 +1287,9 @@ def write_daily_business_report(path: str | Path | None = None) -> dict[str, Any
         f"- scout_source_readiness_latest_status: {scout_source_readiness['latest_status']}",
         f"- scout_source_readiness_trend_direction: {scout_source_readiness['blocked_source_trend_direction']}",
         f"- scout_source_readiness_regression_guard_decision: {scout_source_readiness['regression_guard_decision']}",
+        f"- scout_source_queue_candidate_count: {scout_source_queue['candidate_count']}",
+        f"- scout_source_queue_created_scout_runs: {scout_source_queue['created_scout_runs']}",
+        f"- scout_source_queue_created_scanner_jobs: {scout_source_queue['created_scanner_jobs']}",
         f"- mailer_policy_raw_recipients: {str(policy_trend['raw_recipient_addresses_included']).lower()}",
         f"- mailer_policy_secrets: {str(policy_trend['secrets_included']).lower()}",
         "",
@@ -1255,6 +1306,7 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
     business_kpi = snapshot["mailer_business_kpi"]
     scout_quality = snapshot["scout_campaign_quality_trend"]
     scout_source_readiness = snapshot["scout_source_readiness_trend"]
+    scout_source_queue = snapshot["scout_source_queue_preview"]
     blockers: list[str] = []
     if snapshot["bounce_count"] > 0:
         blockers.append("recent_bounce_or_dsn_signal")
@@ -1309,6 +1361,9 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
         f"- scout_source_readiness_latest_status: {scout_source_readiness['latest_status']}",
         f"- scout_source_readiness_trend_direction: {scout_source_readiness['blocked_source_trend_direction']}",
         f"- scout_source_readiness_regression_guard_decision: {scout_source_readiness['regression_guard_decision']}",
+        f"- scout_source_queue_candidate_count: {scout_source_queue['candidate_count']}",
+        f"- scout_source_queue_created_scout_runs: {scout_source_queue['created_scout_runs']}",
+        f"- scout_source_queue_created_scanner_jobs: {scout_source_queue['created_scanner_jobs']}",
         f"- live_outreach_sent_count: {snapshot['live_outreach_sent_count']}",
         f"- warmup_sent_count: {snapshot['warmup_sent_count']}",
         "",

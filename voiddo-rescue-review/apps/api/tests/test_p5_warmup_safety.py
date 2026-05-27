@@ -13,6 +13,7 @@ from app.p0 import (
     run_deliverability_diagnostics,
     run_warmup_calendar_due,
     scout_campaign_quality_trend_snapshot,
+    scout_source_queue_preview_snapshot,
     scout_source_readiness_trend_snapshot,
     write_blockers_report,
     write_daily_business_report,
@@ -201,6 +202,37 @@ def test_scout_source_readiness_trend_snapshot_is_redacted():
         execute("DELETE FROM scout_sources WHERE name LIKE %s", (f"p75-readiness-{token}",))
 
 
+def test_scout_source_queue_preview_snapshot_is_no_send():
+    token = uuid.uuid4().hex[:8]
+    try:
+        source = create_scout_source(
+            {
+                "name": f"p83-queue-{token}",
+                "source_type": "manual_csv_scout",
+                "country": "P83",
+                "niche": "dentists",
+                "config_json": {
+                    "csv": (
+                        "business_name,website_url,email,country,niche,source_url,confidence\n"
+                        f"P83,https://p83-{token}.example.test,owner@p83-{token}.example.test,P83,dentists,https://directory.example/{token},95\n"
+                    )
+                },
+            }
+        )
+        run_scout_source_readiness(str(source["id"]))
+        snapshot = scout_source_queue_preview_snapshot()
+        assert snapshot["candidate_count"] >= 1
+        assert snapshot["created_scout_runs"] == 0
+        assert snapshot["created_scanner_jobs"] == 0
+        assert snapshot["send_mail"] is False
+        assert snapshot["raw_recipient_addresses_included"] is False
+        assert snapshot["secrets_included"] is False
+    finally:
+        execute("DELETE FROM scout_runs WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"p83-queue-{token}",))
+        execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"p83-queue-{token}",))
+        execute("DELETE FROM scout_sources WHERE name LIKE %s", (f"p83-queue-{token}",))
+
+
 def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
     business = write_daily_business_report(tmp_path / "daily_business_report.md")
     blockers = write_blockers_report(tmp_path / "blockers_report.md")
@@ -218,6 +250,8 @@ def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
     assert "scout_source_readiness_latest_status" in blockers_text
     assert "scout_source_readiness_regression_guard_decision" in business_text
     assert "scout_source_readiness_regression_guard_decision" in blockers_text
+    assert "scout_source_queue_candidate_count" in business_text
+    assert "scout_source_queue_created_scanner_jobs" in blockers_text
     assert "No raw recipient addresses" in business_text
     assert "No raw recipient addresses" in blockers_text
 
