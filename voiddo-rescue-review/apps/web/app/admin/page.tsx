@@ -37,6 +37,13 @@ export default async function AdminPage() {
     await postJson("/admin/campaign-control-room/review", { campaign_lead_id, action, reason, actor: "admin" });
   }
 
+  async function autoReviewCampaignPreviews(formData: FormData) {
+    "use server";
+    const limit = Number(formData.get("limit") || 20);
+    const apply = String(formData.get("apply") || "true") === "true";
+    await postJson("/admin/campaign-control-room/auto-review", { limit, apply });
+  }
+
   const requestHeaders = await headers();
   const authorization = requestHeaders.get("authorization") || "";
   const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
@@ -304,6 +311,11 @@ export default async function AdminPage() {
                 <input type="hidden" name="campaign_id" value={campaignActionCampaigns[0]?.campaign_id || ""} />
                 <input type="hidden" name="dry_run" value="true" />
                 <button className="button secondary" type="submit">Dry-run safety lock</button>
+              </form>
+              <form action={autoReviewCampaignPreviews}>
+                <input type="hidden" name="limit" value="20" />
+                <input type="hidden" name="apply" value="true" />
+                <button className="button secondary" type="submit">Auto-review previews</button>
               </form>
             </div>
             <div className="segment-grid">

@@ -4,6 +4,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from .audit_strength import score_audit_strength
 from .db import execute, fetch_all, fetch_one
 from .p0 import json_safe
 
@@ -170,6 +171,90 @@ def campaign_preview_review_summary(campaign_id: str) -> dict[str, Any]:
             "usable_preview_count": usable,
             "decision": "BLOCKED_BY_REVIEW" if rows and usable <= 0 else "PASS_REVIEW_GATE",
             "latest_reviews": latest[:25],
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )
+
+
+def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_id: str | None = None) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 25), 100))
+    rows = fetch_all(
+        """
+        SELECT cl.id AS campaign_lead_id, cl.status, cl.score AS lead_score, cl.audit_id,
+               c.id AS campaign_id, c.name AS campaign_name,
+               l.status AS lead_status,
+               b.domain, a.public_slug,
+               latest_strength.final_score AS audit_strength_score,
+               latest_review.action AS latest_review_action
+        FROM campaign_leads cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        JOIN leads l ON l.id = cl.lead_id
+        JOIN businesses b ON b.id = l.business_id
+        LEFT JOIN audits a ON a.id = cl.audit_id
+        LEFT JOIN LATERAL (
+          SELECT final_score FROM audit_strength_scores WHERE audit_id = cl.audit_id ORDER BY created_at DESC LIMIT 1
+        ) latest_strength ON true
+        LEFT JOIN LATERAL (
+          SELECT action FROM campaign_preview_reviews WHERE campaign_lead_id = cl.id ORDER BY created_at DESC LIMIT 1
+        ) latest_review ON true
+        WHERE cl.status = 'preview'
+          AND latest_review.action IS NULL
+          AND (%s::uuid IS NULL OR c.id = %s::uuid)
+        ORDER BY cl.score DESC NULLS LAST, cl.updated_at DESC NULLS LAST, cl.created_at DESC
+        LIMIT %s
+        """,
+        (campaign_id, campaign_id, safe_limit),
+    )
+    decisions = []
+    applied = 0
+    for row in rows:
+        lead_score = int(row["lead_score"] or 0)
+        audit_strength = int(row["audit_strength_score"] or 0)
+        if not audit_strength and row.get("audit_id"):
+            audit_strength = int(score_audit_strength(str(row["audit_id"]))["final_score"])
+        domain = (row["domain"] or "").lower()
+        lead_status = row["lead_status"] or ""
+        action = "held"
+        reason = "needs stronger evidence before preview approval"
+        if lead_status in {"excluded_sensitive_target", "suppressed", "unsubscribed"} or domain.endswith(".example.test") or domain in {"example.com", "localhost"}:
+            action = "rejected"
+            reason = "suppressed, sensitive, or non-production target"
+        elif not row.get("public_slug"):
+            action = "held"
+            reason = "missing public audit page"
+        elif lead_score >= 80 and audit_strength >= 75:
+            action = "approved"
+            reason = "lead score and audit evidence meet no-send preview threshold"
+        elif lead_score < 70 or audit_strength < 70:
+            action = "held"
+            reason = "lead or audit score below preview threshold"
+        decision = {
+            "campaign_lead_id": str(row["campaign_lead_id"]),
+            "campaign_id": str(row["campaign_id"]),
+            "domain": row["domain"],
+            "lead_score": lead_score,
+            "audit_strength_score": audit_strength,
+            "action": action,
+            "reason": reason,
+        }
+        if apply:
+            review_campaign_preview(str(row["campaign_lead_id"]), action, reason, "campaign_preview_self_review_agent")
+            applied += 1
+        decisions.append(decision)
+    return json_safe(
+        {
+            "status": "completed" if decisions else "idle_no_unreviewed_previews",
+            "campaign_id": campaign_id,
+            "checked_count": len(decisions),
+            "applied_count": applied,
+            "approved_count": len([item for item in decisions if item["action"] == "approved"]),
+            "held_count": len([item for item in decisions if item["action"] == "held"]),
+            "rejected_count": len([item for item in decisions if item["action"] == "rejected"]),
+            "decisions": decisions,
             "send_mail": False,
             "smtp_called": False,
             "live_outreach_allowed": False,

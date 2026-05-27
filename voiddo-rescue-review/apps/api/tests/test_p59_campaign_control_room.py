@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.autonomous_agents import run_agent
 from app.campaign_control_room import campaign_control_room_snapshot, campaign_preview_rows, prepare_campaign_control_room, qualified_campaign_lead_candidates
-from app.campaign_preview_reviews import latest_campaign_preview_reviews, review_campaign_preview
+from app.campaign_preview_reviews import auto_review_campaign_previews, latest_campaign_preview_reviews, review_campaign_preview
 from app.db import execute, fetch_one
 from app.lead_scoring import score_lead
 from app.main import app
@@ -157,15 +157,46 @@ def test_campaign_control_room_preview_rows_are_redacted_no_send():
         _cleanup(token)
 
 
+def test_campaign_preview_self_review_agent_approves_strong_rows_without_send():
+    token = uuid.uuid4().hex[:8]
+    try:
+        _qualified_lead(token)
+        campaign = create_campaign(
+            {
+                "name": f"P59 self review {token}",
+                "country": f"P59{token[:3].upper()}",
+                "language": "en",
+                "niche": "dentists",
+                "offer_key": "contact_form_repair",
+            }
+        )
+        prepare_campaign_gated(str(campaign["id"]), 70, 20)
+        dry = auto_review_campaign_previews(100, apply=False, campaign_id=str(campaign["id"]))
+        assert dry["send_mail"] is False
+        assert f"owner-{token}@" not in str(dry)
+        result = auto_review_campaign_previews(100, apply=True, campaign_id=str(campaign["id"]))
+        rows = campaign_preview_rows(100)["rows"]
+        row = [item for item in rows if item["domain"] == f"p59-{token}.clinic"][0]
+        assert row["latest_review_action"] == "approved"
+        assert result["smtp_called"] is False
+        agent = run_agent("campaign_preview_self_review_agent", {"limit": 5, "apply": True, "campaign_id": str(campaign["id"])})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["live_outreach_allowed"] is False
+    finally:
+        _cleanup(token)
+
+
 def test_campaign_control_room_admin_endpoints_require_auth():
     assert client.get("/admin/campaign-control-room").status_code == 401
     assert client.get("/admin/campaign-control-room/preview-rows").status_code == 401
     assert client.get("/admin/campaign-control-room/reviews").status_code == 401
     assert client.post("/admin/campaign-control-room/review", json={"campaign_lead_id": str(uuid.uuid4()), "action": "held"}).status_code == 401
+    assert client.post("/admin/campaign-control-room/auto-review", json={"limit": 1}).status_code == 401
     assert client.post("/admin/campaign-control-room/prepare", json={"dry_run": True}).status_code == 401
     assert client.get("/admin/campaign-control-room", headers=admin_headers()).status_code == 200
     assert client.get("/admin/campaign-control-room/preview-rows", headers=admin_headers()).status_code == 200
     assert client.get("/admin/campaign-control-room/reviews", headers=admin_headers()).status_code == 200
+    assert client.post("/admin/campaign-control-room/auto-review", json={"limit": 1, "apply": False}, headers=admin_headers()).status_code == 200
     response = client.post("/admin/campaign-control-room/prepare", json={"dry_run": True, "limit": 5}, headers=admin_headers())
     assert response.status_code == 200
     assert response.json()["control_room"]["status"] == "preview_only"
