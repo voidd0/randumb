@@ -41,8 +41,11 @@ EXCLUDED_LARGE_BRAND_TOKENS = {
     "lq.com",
     "marriott",
     "medicalcenter",
+    "medicalcentre",
     "motel6",
     "mydentist",
+    "nhs",
+    "nhs.uk",
     "radissonhotels",
     "renown",
     "ryancompanies",
@@ -50,9 +53,11 @@ EXCLUDED_LARGE_BRAND_TOKENS = {
     "super8",
     "twitter",
     "university",
+    "wales.nhs.uk",
     "wyndham",
     "wyndhamhotels",
     "x.com",
+    "laserclinics",
 }
 SUPPORTED_SCOUT_TYPES = {
     "manual_csv_scout",

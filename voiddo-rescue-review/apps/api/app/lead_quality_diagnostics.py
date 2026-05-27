@@ -365,6 +365,7 @@ def scout_source_performance(limit: int = 100, store: bool = True) -> dict[str, 
           ORDER BY ls.created_at DESC
           LIMIT 1
         ) ls ON true
+        WHERE COALESCE(ss.status, '') NOT IN ('archived_test_artifact', 'excluded_sensitive_target')
         GROUP BY ss.id, ss.name, ss.source_type, ss.country, ss.niche
         ORDER BY ss.created_at DESC
         LIMIT %s

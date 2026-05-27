@@ -160,6 +160,19 @@ def test_scout_source_performance_promotes_good_source_without_mutating_status()
         _cleanup(token)
 
 
+def test_scout_source_performance_ignores_archived_test_artifact_sources():
+    token = uuid.uuid4().hex[:8]
+    try:
+        source_id = _seed_source(token, count=3, final_score=88, with_high_issue=True)
+        execute("UPDATE scout_sources SET status = 'archived_test_artifact' WHERE id = %s", (source_id,))
+        result = scout_source_performance(100, store=True)
+        assert all(item["source_id"] != source_id for item in result["performances"])
+        latest = latest_scout_source_performance(100)
+        assert all(item["source_id"] != source_id for item in latest["performances"])
+    finally:
+        _cleanup(token)
+
+
 def test_apply_scout_source_feedback_deprioritizes_low_yield_source_only_when_executed():
     token = uuid.uuid4().hex[:8]
     try:

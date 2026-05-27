@@ -26,6 +26,48 @@ def _reason_for(row: dict[str, Any]) -> str:
     return "excluded_sensitive_target"
 
 
+def _archive_scanner_jobs_for_sensitive_refs(reason: str, lead_id: str | None = None, scout_lead_id: str | None = None) -> int:
+    row = execute(
+        """
+        WITH candidates AS (
+          SELECT id
+          FROM scanner_jobs
+          WHERE status IN ('queued', 'completed', 'failed')
+            AND (
+              (%s::text IS NOT NULL AND result_json->>'lead_id' = %s::text)
+              OR (%s::text IS NOT NULL AND result_json->>'scout_lead_id' = %s::text)
+            )
+        ),
+        updated_jobs AS (
+          UPDATE scanner_jobs sj
+          SET status = 'archived_sensitive_target',
+              result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb,
+              updated_at = now()
+          FROM candidates
+          WHERE sj.id = candidates.id
+          RETURNING sj.id, sj.audit_id
+        ),
+        updated_audits AS (
+          UPDATE audits a
+          SET status = 'archived_sensitive_target'
+          FROM updated_jobs uj
+          WHERE uj.audit_id IS NOT NULL
+            AND a.id = uj.audit_id
+          RETURNING a.id
+        )
+        SELECT count(*) AS count FROM updated_jobs
+        """,
+        (
+            lead_id,
+            lead_id,
+            scout_lead_id,
+            scout_lead_id,
+            Jsonb({"scout_sensitive_hygiene": {**SAFE_FLAGS, "reason": reason}}),
+        ),
+    )
+    return int(row["count"] or 0) if row else 0
+
+
 def scout_sensitive_target_snapshot(limit: int = 200) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 200), 500))
     rows = fetch_all(
@@ -92,17 +134,7 @@ def archive_sensitive_scout_targets(limit: int = 200, apply: bool = False) -> di
             )
             if lead_id:
                 execute("UPDATE leads SET status = 'excluded_sensitive_target', score = 0, updated_at = now() WHERE id = %s", (lead_id,))
-                execute(
-                    """
-                    UPDATE scanner_jobs
-                    SET status = 'archived_sensitive_target',
-                        result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb,
-                        updated_at = now()
-                    WHERE status = 'queued'
-                      AND result_json->>'lead_id' = %s
-                    """,
-                    (Jsonb({"scout_sensitive_hygiene": {**SAFE_FLAGS, "reason": reason}}), lead_id),
-                )
+                archived_scanner_jobs += _archive_scanner_jobs_for_sensitive_refs(reason, lead_id=lead_id, scout_lead_id=scout_lead_id)
                 execute(
                     """
                     UPDATE campaign_leads
@@ -114,17 +146,8 @@ def archive_sensitive_scout_targets(limit: int = 200, apply: bool = False) -> di
                     """,
                     (Jsonb({"scout_sensitive_hygiene": {**SAFE_FLAGS, "reason": reason}}), lead_id),
                 )
-            execute(
-                """
-                UPDATE scanner_jobs
-                SET status = 'archived_sensitive_target',
-                    result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb,
-                    updated_at = now()
-                WHERE status = 'queued'
-                  AND result_json->>'scout_lead_id' = %s
-                """,
-                (Jsonb({"scout_sensitive_hygiene": {**SAFE_FLAGS, "reason": reason}}), scout_lead_id),
-            )
+            if not lead_id:
+                archived_scanner_jobs += _archive_scanner_jobs_for_sensitive_refs(reason, scout_lead_id=scout_lead_id)
             if business_id:
                 execute("UPDATE businesses SET status = 'excluded_sensitive_target', updated_at = now() WHERE id = %s", (business_id,))
             archived.append(item)
@@ -135,7 +158,7 @@ def archive_sensitive_scout_targets(limit: int = 200, apply: bool = False) -> di
               FROM scanner_jobs sj
               LEFT JOIN leads l ON l.id::text = sj.result_json->>'lead_id'
               LEFT JOIN scout_leads sl ON sl.id::text = sj.result_json->>'scout_lead_id'
-              WHERE sj.status = 'queued'
+              WHERE sj.status IN ('queued', 'completed', 'failed')
                 AND (
                   l.status = 'excluded_sensitive_target'
                   OR sl.rejection_reason = 'excluded_sensitive_target'
@@ -149,13 +172,21 @@ def archive_sensitive_scout_targets(limit: int = 200, apply: bool = False) -> di
                   updated_at = now()
               FROM candidates
               WHERE sj.id = candidates.id
-              RETURNING sj.id
+              RETURNING sj.id, sj.audit_id
+            ),
+            updated_audits AS (
+              UPDATE audits a
+              SET status = 'archived_sensitive_target'
+              FROM updated
+              WHERE updated.audit_id IS NOT NULL
+                AND a.id = updated.audit_id
+              RETURNING a.id
             )
             SELECT count(*) AS count FROM updated
             """,
             (Jsonb({"scout_sensitive_hygiene": {**SAFE_FLAGS, "reason": "existing_excluded_sensitive_target"}}),),
         )
-        archived_scanner_jobs = int(scanner_row["count"] or 0) if scanner_row else 0
+        archived_scanner_jobs += int(scanner_row["count"] or 0) if scanner_row else 0
     execute(
         """
         INSERT INTO system_events(type, severity, message, payload_json)
