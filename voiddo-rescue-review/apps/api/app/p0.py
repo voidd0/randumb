@@ -766,14 +766,40 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
     args: dict[str, Any] = {}
     command = normalized
 
+    russian_aliases = {
+        "СТАТУС": "STATUS",
+        "ОТЧЕТ СЕГОДНЯ": "REPORT TODAY",
+        "ОТЧЁТ СЕГОДНЯ": "REPORT TODAY",
+        "ПАУЗА ВСЕ": "PAUSE ALL",
+        "ПАУЗА ВСЁ": "PAUSE ALL",
+        "ПАУЗА РАССЫЛКИ": "PAUSE OUTREACH",
+        "ПАУЗА ПРОГРЕВА": "PAUSE WARMUP",
+        "ПАУЗА СКАНЕРА": "PAUSE SCANNER",
+        "ПАУЗА АВТООТВЕТОВ": "PAUSE AUTO REPLIES",
+        "ПОКАЖИ ПРОГРЕВ": "SHOW WARMUP",
+        "ПОКАЖИ КАЛЕНДАРЬ ПРОГРЕВА": "SHOW WARMUP CALENDAR",
+        "ПОКАЖИ СИГНАЛЫ ПОЧТЫ": "SHOW MAIL SIGNALS",
+        "ПОКАЖИ ОТВЕТЫ": "SHOW REPLIES",
+        "ПОКАЖИ ПЛАТЕЖИ": "SHOW PAYMENTS",
+        "ПОКАЖИ РУЧНУЮ ПРОВЕРКУ": "SHOW HUMAN REVIEW",
+        "ЗАПУСТИ MAIL QA": "RUN MAIL QA",
+        "ЗАПУСТИ ВИЗУАЛ QA": "RUN VISUAL QA",
+        "ПОДГОТОВЬ ПРОГРЕВ": "PREPARE WARMUP",
+        "ВОЗОБНОВИ ПРОГРЕВ": "RESUME WARMUP",
+    }
+    if normalized in russian_aliases:
+        command = russian_aliases[normalized]
+
     if normalized.startswith("PREPARE LEADS"):
         command = "PREPARE LEADS"
         for key, value in re.findall(r"(COUNTRY|NICHE|LIMIT)=([^\s]+)", first_line, flags=re.I):
             args[key.lower()] = value
-    elif normalized.startswith("START WARMUP"):
+    elif normalized.startswith("START WARMUP") or normalized.startswith("ЗАПУСТИ ПРОГРЕВ"):
         command = "START WARMUP"
-        for key, value in re.findall(r"(DAY)=([0-9]+)", first_line, flags=re.I):
+        for key, value in re.findall(r"(DAY|ДЕНЬ)=([0-9]+)", first_line, flags=re.I):
             args[key.lower()] = int(value)
+        if "день" in args:
+            args["day"] = args.pop("день")
 
     safe = {
         "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",

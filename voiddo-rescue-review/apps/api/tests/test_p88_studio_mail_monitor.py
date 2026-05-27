@@ -65,6 +65,23 @@ def test_studio_mail_owner_command_routes_to_global_owner_commands(monkeypatch):
         get_settings.cache_clear()
 
 
+def test_studio_mail_owner_command_accepts_russian_alias(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    owner = f"owner-{token}@example.test"
+    monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)
+    get_settings.cache_clear()
+    try:
+        result = ingest_studio_mail_messages([_message(token, owner, "ПОКАЖИ ПРОГРЕВ", f"ПОКАЖИ ПРОГРЕВ {token}")])
+        assert result["owner_command_count"] == 1
+        command = fetch_one("SELECT command, risk_level, status FROM owner_commands WHERE message_id = %s", (f"<msg-{token}@example.test>",))
+        assert command["command"] == "SHOW WARMUP"
+        assert command["risk_level"] == "SAFE_AUTO"
+        assert command["status"] == "executed"
+    finally:
+        _cleanup(token)
+        get_settings.cache_clear()
+
+
 def test_studio_mail_classifies_unsubscribe_and_suppresses_without_reply():
     token = uuid.uuid4().hex[:8]
     sender = f"stop-{token}@example.test"
