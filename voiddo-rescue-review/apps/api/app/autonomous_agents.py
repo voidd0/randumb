@@ -33,6 +33,7 @@ from .p0 import (
     write_daily_business_report,
 )
 from .quality_plugins import latest_quality_summary
+from .campaign_actions import run_campaign_operator_cycle
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .campaign_preview_quality import campaign_preview_quality_pack
@@ -151,6 +152,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "deliverability_agent": lambda: {"dry_run": True, "signals": mail_signal_summary()},
         "warmup_agent": lambda: run_warmup_calendar_due(limit=2),
         "campaign_agent": lambda: prepare_outreach_preview(int(payload.get("limit", 20))),
+        "campaign_operator_agent": lambda: run_campaign_operator_cycle(int(payload.get("limit", 25))),
         "campaign_control_room_agent": lambda: campaign_control_room_snapshot(int(payload.get("limit", 100))),
         "campaign_control_room_prepare_agent": lambda: prepare_campaign_control_room(int(payload.get("limit", 100)), dry_run=True),
         "campaign_pipeline_gap_agent": lambda: campaign_pipeline_gap_snapshot(int(payload.get("limit", 100))),
@@ -225,6 +227,7 @@ def run_daily_loop() -> dict[str, Any]:
         "visual_qa_agent",
         "deliverability_agent",
         "campaign_agent",
+        "campaign_operator_agent",
         "campaign_control_room_agent",
         "campaign_control_room_prepare_agent",
         "campaign_pipeline_gap_agent",

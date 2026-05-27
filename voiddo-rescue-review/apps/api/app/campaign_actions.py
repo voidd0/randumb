@@ -172,3 +172,26 @@ def run_campaign_action(action: str, campaign_id: str | None = None, limit: int 
     row = _record(action, result["status"], result, campaign_id)
     result["run_id"] = str(row["id"])
     return json_safe(result)
+
+
+def run_campaign_operator_cycle(limit: int = 25) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 25), 100))
+    refresh = run_campaign_action("refresh_previews", limit=safe_limit, dry_run=False)
+    quality = run_campaign_action("run_quality", limit=min(safe_limit, 20), dry_run=False)
+    summary = campaign_actions_summary(8)
+    return json_safe(
+        {
+            "status": "completed",
+            "agent": "campaign_operator_agent",
+            "refresh_status": refresh.get("status"),
+            "quality_status": quality.get("status"),
+            "ready_candidate_count": summary.get("control_room", {}).get("ready_candidate_count", 0),
+            "candidate_count": summary.get("control_room", {}).get("candidate_count", 0),
+            "latest_action_runs": len(summary.get("latest_runs", [])),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )

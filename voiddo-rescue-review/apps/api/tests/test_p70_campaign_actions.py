@@ -5,6 +5,7 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+from app.autonomous_agents import run_agent
 from app.campaign_actions import campaign_actions_summary, run_campaign_action
 from app.db import execute, fetch_one
 from app.main import app
@@ -121,3 +122,16 @@ def test_refresh_previews_action_is_no_send_even_when_executed():
     assert payload["send_mail"] is False
     assert payload["smtp_called"] is False
     assert payload["live_outreach_allowed"] is False
+
+
+def test_campaign_operator_agent_refreshes_and_qa_without_send():
+    run = run_agent("campaign_operator_agent", {"limit": 5})
+    result = run["result_json"]
+    assert run["status"] == "completed"
+    assert result["status"] == "completed"
+    assert result["refresh_status"] in {"completed", "dry_run"}
+    assert result["quality_status"] == "completed"
+    assert result["send_mail"] is False
+    assert result["smtp_called"] is False
+    assert result["live_outreach_allowed"] is False
+    assert result["raw_recipient_addresses_included"] is False
