@@ -61,6 +61,7 @@ from .campaign_remediation_feedback import campaign_remediation_feedback, latest
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, latest_campaign_preview_refresh_runs, refresh_campaign_previews_if_needed
 from .post_scan_campaign_cycle import latest_post_scan_campaign_cycles, post_scan_campaign_cycle
 from .campaign_preview_quality import campaign_preview_quality_pack
+from .studio_mail_monitor import ingest_studio_mail_messages, latest_studio_mail_messages, latest_studio_mail_runs
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
 from .clean_window_recheck import clean_window_recheck, clean_window_recheck_summary, post_window_recheck_scheduler, post_window_recheck_summary
 from .economics import calculate_unit_economics, latest_economics_summary, run_economics_audit
@@ -1348,6 +1349,23 @@ async def audit_refresh_retry_failures_run(request: Request):
             int(payload.get("priority", 260)),
         ),
     }
+
+
+@app.get("/admin/studio-mail/messages", dependencies=[Depends(require_admin)])
+def studio_mail_messages_get(limit: int = 20):
+    return {"ok": True, "studio_mail": latest_studio_mail_messages(limit)}
+
+
+@app.get("/admin/studio-mail/runs", dependencies=[Depends(require_admin)])
+def studio_mail_runs_get(limit: int = 10):
+    return {"ok": True, "runs": latest_studio_mail_runs(limit)}
+
+
+@app.post("/admin/studio-mail/ingest", dependencies=[Depends(require_admin)])
+async def studio_mail_ingest_run(request: Request):
+    payload = await request.json()
+    messages = payload.get("messages") if isinstance(payload.get("messages"), list) else []
+    return {"ok": True, "ingest": ingest_studio_mail_messages(messages, bool(payload.get("dry_run", False)))}
 
 
 @app.get("/admin/post-scan-campaign-cycles", dependencies=[Depends(require_admin)])

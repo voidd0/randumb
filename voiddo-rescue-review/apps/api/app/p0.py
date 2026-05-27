@@ -368,6 +368,8 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "audit_refresh_drain_runs": scalar("SELECT count(*) FROM audit_refresh_drain_runs"),
         "audit_refresh_completion_watches": scalar("SELECT count(*) FROM audit_refresh_completion_watches"),
         "audit_refresh_failure_runs": scalar("SELECT count(*) FROM audit_refresh_failure_runs"),
+        "studio_mail_messages": scalar("SELECT count(*) FROM studio_mail_messages"),
+        "studio_mail_monitor_runs": scalar("SELECT count(*) FROM studio_mail_monitor_runs"),
         "mail_clean_window_checks": scalar("SELECT count(*) FROM mail_clean_window_checks"),
         "mailer_drafts": scalar("SELECT count(*) FROM mailer_drafts"),
         "scout_self_checks": scalar("SELECT count(*) FROM scout_self_checks"),
@@ -749,7 +751,13 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
 
 
 def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = "", auth_results: str = "") -> dict[str, Any]:
-    owner_email = (get_settings().owner_command_email or OWNER_EMAIL_FALLBACK).lower()
+    settings = get_settings()
+    owner_email = (settings.owner_command_email or OWNER_EMAIL_FALLBACK).lower()
+    owner_emails = {
+        item.strip().lower()
+        for item in ",".join([owner_email, settings.studio_owner_command_emails or ""]).split(",")
+        if item.strip()
+    }
     sender_email = parseaddr(sender)[1].lower()
     reply_email = parseaddr(reply_to)[1].lower() if reply_to else sender_email
     text = f"{subject}\n{body}".strip()
@@ -784,8 +792,8 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         risk = "HIGH_RISK"
 
     authenticated_hint = "pass" in auth_results.lower() or "dkim=pass" in auth_results.lower() or not auth_results
-    authorized = bool(owner_email) and sender_email == owner_email and reply_email in {owner_email, sender_email} and authenticated_hint
-    status = "rejected_sender" if sender_email != owner_email else "received"
+    authorized = bool(owner_emails) and sender_email in owner_emails and reply_email in owner_emails | {sender_email} and authenticated_hint
+    status = "rejected_sender" if sender_email not in owner_emails else "received"
     if authorized and risk == "SAFE_AUTO":
         status = "executed"
     elif authorized and risk == "MEDIUM_RISK":

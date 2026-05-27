@@ -46,6 +46,7 @@ from .campaign_remediation import campaign_remediation_plan, execute_campaign_re
 from .campaign_remediation_feedback import campaign_remediation_feedback
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, refresh_campaign_previews_if_needed
 from .campaign_preview_quality import campaign_preview_quality_pack
+from .studio_mail_monitor import latest_studio_mail_messages
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
 from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, regional_lead_discovery_cycle
 from .revenue_simulation import run_synthetic_lead_simulation
@@ -213,6 +214,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             dry_run=bool(payload.get("dry_run", True)),
             priority=int(payload.get("priority", 260)),
         ),
+        "studio_mail_monitor_agent": lambda: latest_studio_mail_messages(int(payload.get("limit", 20))),
         "visual_qa_agent": lambda: {"dry_run": True, "status": "huanshu_required", "routes": ["/", "/r/demo", "/admin", "/customer", "/status"]},
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
         "deliverability_agent": lambda: {"dry_run": True, "signals": mail_signal_summary()},
@@ -347,6 +349,7 @@ def run_daily_loop() -> dict[str, Any]:
         "audit_refresh_completion_watch_agent",
         "audit_refresh_failure_agent",
         "audit_refresh_retry_failures_agent",
+        "studio_mail_monitor_agent",
         "post_scan_campaign_cycle_agent",
         "campaign_preview_quality_agent",
         "buyer_journey_scoreboard_agent",

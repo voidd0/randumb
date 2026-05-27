@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     visual_qa_required: bool = True
     admin_auth_token: str = ""
     owner_command_email: str = ""
+    studio_owner_command_emails: str = ""
+    studio_mail_monitor_enabled: bool = False
+    studio_mail_imap_host: str = "127.0.0.1"
+    studio_mail_imap_port: int = 993
+    studio_mail_username: str = ""
     test_inboxes: str = ""
     test_inbox_pool: str = ""
     warmup_recipient_pool: str = ""
