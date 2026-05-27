@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 def _script_path() -> Path:
     here = Path(__file__).resolve()
@@ -10,7 +12,7 @@ def _script_path() -> Path:
         candidate = root / "scripts" / "rescue_autonomous_loop.py"
         if candidate.exists():
             return candidate
-    raise AssertionError("rescue_autonomous_loop.py not found")
+    pytest.skip("host rescue_autonomous_loop.py is outside the API image build context", allow_module_level=True)
 
 
 SCRIPT_PATH = _script_path()
