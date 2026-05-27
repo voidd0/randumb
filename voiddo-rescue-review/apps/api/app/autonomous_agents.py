@@ -51,6 +51,7 @@ from .campaign_preview_refresh import campaign_preview_refresh_snapshot, refresh
 from .campaign_preview_hygiene import archive_campaign_preview_artifacts, campaign_preview_hygiene_snapshot
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .campaign_preview_reviews import auto_review_campaign_previews
+from .campaign_review_remediation import held_preview_remediation_candidates, remediate_held_preview_reviews
 from .studio_mail_monitor import latest_studio_mail_messages
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
 from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, regional_lead_discovery_cycle
@@ -311,6 +312,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             apply=bool(payload.get("apply", True)),
             campaign_id=payload.get("campaign_id"),
         ),
+        "campaign_review_remediation_snapshot_agent": lambda: held_preview_remediation_candidates(int(payload.get("limit", 25))),
+        "campaign_review_remediation_agent": lambda: remediate_held_preview_reviews(
+            int(payload.get("limit", 25)),
+            dry_run=bool(payload.get("dry_run", True)),
+        ),
         "buyer_journey_scoreboard_agent": lambda: buyer_journey_readiness_scoreboard(),
         "buyer_journey_scenario_agent": lambda: run_buyer_journey_scenario(cleanup=True),
         "source_campaign_operator_agent": lambda: source_campaign_operator_snapshot(int(payload.get("limit", 25)), payload.get("source_id")),
@@ -438,6 +444,8 @@ def run_daily_loop() -> dict[str, Any]:
         "campaign_preview_hygiene_agent",
         "campaign_preview_hygiene_snapshot_agent",
         "campaign_preview_self_review_agent",
+        "campaign_review_remediation_snapshot_agent",
+        "campaign_review_remediation_agent",
         "campaign_preflight_agent",
         "campaign_remediation_agent",
         "campaign_remediation_executor_agent",

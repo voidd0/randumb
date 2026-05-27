@@ -58,6 +58,7 @@ from .campaign_control import campaign_readiness_snapshot
 from .campaign_actions import campaign_actions_summary, run_campaign_action
 from .campaign_control_room import campaign_control_room_snapshot, campaign_preview_rows, prepare_campaign_control_room
 from .campaign_preview_reviews import auto_review_campaign_previews, latest_campaign_preview_reviews, review_campaign_preview
+from .campaign_review_remediation import held_preview_remediation_candidates, remediate_held_preview_reviews
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .campaign_preflight import campaign_preflight_batch, latest_campaign_preflight_runs
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation, latest_campaign_remediation_executions, latest_campaign_remediation_plans
@@ -1257,6 +1258,21 @@ async def campaign_control_room_auto_review_post(request: Request):
         campaign_id=payload.get("campaign_id") or None,
     )
     return {"ok": True, "auto_review": result}
+
+
+@app.get("/admin/campaign-control-room/held-remediation", dependencies=[Depends(require_admin)])
+def campaign_control_room_held_remediation_get(limit: int = 25):
+    return {"ok": True, "held_remediation": held_preview_remediation_candidates(limit)}
+
+
+@app.post("/admin/campaign-control-room/remediate-held", dependencies=[Depends(require_admin)])
+async def campaign_control_room_remediate_held_post(request: Request):
+    payload = await request.json()
+    result = remediate_held_preview_reviews(
+        int(payload.get("limit", 25)),
+        dry_run=bool(payload.get("dry_run", True)),
+    )
+    return {"ok": True, "held_remediation": result}
 
 
 @app.post("/admin/campaign-control-room/prepare", dependencies=[Depends(require_admin)])
