@@ -12,6 +12,7 @@ from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
 from app.language_gate import check_no_ai_public_language
 from app.main import app
+import app.scouts as scouts_module
 from app.scout_quality import run_scout_self_check
 from app.scouts import create_scout_run, create_scout_source, prepare_scout_source_from_adapter, process_scout_run, queue_ready_scout_source_runs, ready_scout_source_queue_candidates
 from app.source_adapters import directory_rows_to_csv, domain_list_to_csv, normalize_domain
@@ -76,13 +77,13 @@ def test_ready_source_queue_candidates_are_redacted_and_preview_only():
         },
     )
     try:
-        candidates = ready_scout_source_queue_candidates(10)
+        candidates = ready_scout_source_queue_candidates(10, result["source"]["id"])
         matching = [item for item in candidates["candidates"] if item["source"]["id"] == result["source"]["id"]]
         assert matching
         assert matching[0]["source"]["config_redacted"] is True
         assert candidates["send_mail"] is False
         assert candidates["raw_recipient_addresses_included"] is False
-        preview = queue_ready_scout_source_runs(10, dry_run=True)
+        preview = queue_ready_scout_source_runs(10, dry_run=True, source_id=result["source"]["id"])
         assert preview["status"] == "preview_only"
         assert preview["queued_count"] == 0
         assert preview["created_scanner_jobs"] == 0
@@ -94,6 +95,45 @@ def test_ready_source_queue_candidates_are_redacted_and_preview_only():
         assert agent["result_json"]["raw_recipient_addresses_included"] is False
     finally:
         execute("DELETE FROM agent_runs WHERE agent = 'scout_source_queue_preview_agent'")
+        execute("DELETE FROM scout_runs WHERE source_id = %s", (result["source"]["id"],))
+        execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (result["source"]["id"],))
+        execute("DELETE FROM scout_sources WHERE id = %s", (result["source"]["id"],))
+
+
+def test_ready_source_queue_activation_is_idempotent(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    result = prepare_scout_source_from_adapter(
+        "domain_list",
+        {
+            "name": f"p85-source-{token}",
+            "text": f"p85-{token}.example.test",
+            "country": "EE",
+            "language": "en",
+            "niche": "dentists",
+        },
+    )
+    monkeypatch.setattr(
+        scouts_module,
+        "scout_campaign_expansion_gate",
+        lambda: {
+            "allowed": True,
+            "blockers": [],
+            "send_mail": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        },
+    )
+    try:
+        first = queue_ready_scout_source_runs(10, dry_run=False, source_id=result["source"]["id"])
+        second = queue_ready_scout_source_runs(10, dry_run=False, source_id=result["source"]["id"])
+        assert first["queued_count"] == 1
+        assert second["queued_count"] == 0
+        assert first["created_scanner_jobs"] == 0
+        assert second["created_scanner_jobs"] == 0
+        assert first["send_mail"] is False
+        assert fetch_one("SELECT count(*) AS c FROM scout_runs WHERE source_id = %s", (result["source"]["id"],))["c"] == 1
+    finally:
         execute("DELETE FROM scout_runs WHERE source_id = %s", (result["source"]["id"],))
         execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (result["source"]["id"],))
         execute("DELETE FROM scout_sources WHERE id = %s", (result["source"]["id"],))

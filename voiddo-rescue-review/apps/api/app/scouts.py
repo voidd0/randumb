@@ -712,10 +712,12 @@ def process_scout_run_gated(run_id: str) -> dict[str, Any]:
     return result
 
 
-def ready_scout_source_queue_candidates(limit: int = 20) -> dict[str, Any]:
+def ready_scout_source_queue_candidates(limit: int = 20, source_id: str | None = None) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 20), 100))
+    source_filter = "AND s.id = %s" if source_id else ""
+    params: tuple[Any, ...] = (source_id, safe_limit) if source_id else (safe_limit,)
     rows = fetch_all(
-        """
+        f"""
         WITH latest AS (
           SELECT DISTINCT ON (source_id) *
           FROM scout_source_readiness_checks
@@ -729,6 +731,7 @@ def ready_scout_source_queue_candidates(limit: int = 20) -> dict[str, Any]:
         JOIN latest ON latest.source_id = s.id
         WHERE latest.status = 'PASS_SOURCE_READY'
           AND s.status IN ('active', 'preflight_ready')
+          {source_filter}
           AND NOT EXISTS (
             SELECT 1 FROM scout_runs sr
             WHERE sr.source_id = s.id
@@ -737,7 +740,7 @@ def ready_scout_source_queue_candidates(limit: int = 20) -> dict[str, Any]:
         ORDER BY latest.created_at DESC, s.created_at DESC
         LIMIT %s
         """,
-        (safe_limit,),
+        params,
     )
     candidates = []
     for row in rows:
@@ -766,10 +769,11 @@ def ready_scout_source_queue_candidates(limit: int = 20) -> dict[str, Any]:
     }
 
 
-def queue_ready_scout_source_runs(limit: int = 10, dry_run: bool = True) -> dict[str, Any]:
-    candidates = ready_scout_source_queue_candidates(limit)
+def queue_ready_scout_source_runs(limit: int = 10, dry_run: bool = True, source_id: str | None = None) -> dict[str, Any]:
+    candidates = ready_scout_source_queue_candidates(limit, source_id)
     gate = scout_campaign_expansion_gate()
     queued: list[dict[str, Any]] = []
+    duplicates_skipped = 0
     if dry_run or not gate["allowed"]:
         return {
             "status": "preview_only" if dry_run else "blocked",
@@ -779,6 +783,7 @@ def queue_ready_scout_source_runs(limit: int = 10, dry_run: bool = True) -> dict
             "candidates": candidates["candidates"],
             "queued_count": 0,
             "queued": queued,
+            "duplicates_skipped": duplicates_skipped,
             "gate": gate,
             "created_scanner_jobs": 0,
             "send_mail": False,
@@ -789,8 +794,23 @@ def queue_ready_scout_source_runs(limit: int = 10, dry_run: bool = True) -> dict
         }
     for item in candidates["candidates"]:
         source = item["source"]
-        run = create_scout_run(source["id"], {"country": source.get("country"), "niche": source.get("niche"), "language": source.get("language")})
-        queued.append({"id": str(run["id"]), "source_id": source["id"], "status": run["status"]})
+        run = execute(
+            """
+            INSERT INTO scout_runs(source_id, status, country, niche, language)
+            SELECT %s, 'queued', %s, %s, %s
+            WHERE NOT EXISTS (
+              SELECT 1 FROM scout_runs
+              WHERE source_id = %s
+                AND status IN ('queued', 'running', 'completed', 'review_required')
+            )
+            RETURNING *
+            """,
+            (source["id"], source.get("country"), source.get("niche"), source.get("language"), source["id"]),
+        )
+        if run:
+            queued.append({"id": str(run["id"]), "source_id": source["id"], "status": run["status"]})
+        else:
+            duplicates_skipped += 1
     return {
         "status": "queued" if queued else "idle",
         "reason": "",
@@ -798,6 +818,7 @@ def queue_ready_scout_source_runs(limit: int = 10, dry_run: bool = True) -> dict
         "candidate_count": candidates["candidate_count"],
         "queued_count": len(queued),
         "queued": queued,
+        "duplicates_skipped": duplicates_skipped,
         "gate": gate,
         "created_scanner_jobs": 0,
         "send_mail": False,

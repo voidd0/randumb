@@ -390,14 +390,14 @@ def scout_expansion_gate_get():
 
 
 @app.get("/admin/scouts/source-queue-candidates", dependencies=[Depends(require_admin)])
-def scout_source_queue_candidates_get(limit: int = 20):
-    return {"ok": True, "queue": ready_scout_source_queue_candidates(limit)}
+def scout_source_queue_candidates_get(limit: int = 20, source_id: str | None = None):
+    return {"ok": True, "queue": ready_scout_source_queue_candidates(limit, source_id)}
 
 
 @app.post("/admin/scouts/source-queue", dependencies=[Depends(require_admin)])
 async def scout_source_queue_run(request: Request):
     payload = await request.json()
-    return {"ok": True, "queue": queue_ready_scout_source_runs(int(payload.get("limit", 10)), bool(payload.get("dry_run", True)))}
+    return {"ok": True, "queue": queue_ready_scout_source_runs(int(payload.get("limit", 10)), bool(payload.get("dry_run", True)), payload.get("source_id"))}
 
 
 @app.post("/admin/scouts/sources/{source_id}/readiness", dependencies=[Depends(require_admin)])
