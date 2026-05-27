@@ -13,7 +13,7 @@ from app.mailer_control import evaluate_outbound_message
 from app.main import app
 from app.reply_actions import plan_reply_action
 from app.scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, run_scout_quality_gate, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
-from app.scouts import create_campaign, create_scout_run, create_scout_source, prepare_campaign, process_scout_run
+from app.scouts import create_campaign, create_scout_run, create_scout_source, latest_scout_source_readiness, prepare_campaign, process_scout_run, run_scout_source_readiness, scout_source_readiness_summary
 
 
 client = TestClient(app)
@@ -137,6 +137,51 @@ def test_scout_provenance_scores_source_quality():
     assert score["score"] >= 75
 
 
+def test_scout_source_readiness_scores_source_before_run():
+    token = uuid.uuid4().hex[:8]
+    csv_text = (
+        "business_name,website_url,email,country,niche,source_url,confidence\n"
+        f"Ready,https://ready-{token}.example.test,owner@ready-{token}.example.test,P9,dentists,https://directory.example.test/ready,95\n"
+    )
+    source = create_scout_source({"name": f"ready-source-{token}", "source_type": "manual_csv_scout", "country": "P9", "niche": "dentists", "config_json": {"csv": csv_text}})
+    readiness = run_scout_source_readiness(str(source["id"]))
+    latest = latest_scout_source_readiness(str(source["id"]))
+    assert readiness["status"] == "PASS_SOURCE_READY"
+    assert readiness["allowed_for_scout_run"] is True
+    assert readiness["send_mail"] is False
+    assert latest["status"] == "PASS_SOURCE_READY"
+
+
+def test_scout_source_readiness_blocks_weak_or_sensitive_source_without_sending():
+    token = uuid.uuid4().hex[:8]
+    email = f"suppressed-source-{token}@example.test"
+    execute("INSERT INTO suppression_list(email, reason, source) VALUES (%s, 'pytest', 'p9')", (email,))
+    csv_text = (
+        "business_name,website_url,email,country,niche,confidence\n"
+        f"Bad,,{email},P9,crypto,30\n"
+    )
+    source = create_scout_source({"name": f"blocked-source-{token}", "source_type": "manual_csv_scout", "country": "P9", "niche": "dentists", "config_json": {"csv": csv_text}})
+    readiness = run_scout_source_readiness(str(source["id"]))
+    issue_codes = {issue["code"] for issue in readiness["issues"]}
+    assert readiness["status"] == "REVIEW_SOURCE_BEFORE_RUN"
+    assert readiness["allowed_for_scout_run"] is False
+    assert "weak_domain_coverage" in issue_codes
+    assert "excluded_niche_rows" in issue_codes
+    assert "suppressed_emails_in_source" in issue_codes
+    assert readiness["send_mail"] is False
+    assert readiness["live_outreach_allowed"] is False
+
+
+def test_scout_source_readiness_summary_and_agent_are_no_send():
+    summary = scout_source_readiness_summary()
+    assert summary["send_mail"] is False
+    assert summary["smtp_called"] is False
+    assert summary["live_outreach_allowed"] is False
+    agent = run_agent("scout_source_readiness_summary_agent")
+    assert agent["status"] == "completed"
+    assert agent["result_json"]["send_mail"] is False
+
+
 def test_p9_admin_endpoints_require_auth_and_work():
     campaign_id = _campaign_with_audit(uuid.uuid4().hex[:8])
     assert client.post(f"/admin/campaigns/{campaign_id}/readiness").status_code == 401
@@ -145,6 +190,8 @@ def test_p9_admin_endpoints_require_auth_and_work():
     assert client.get("/admin/scouts/campaign-quality-summary", headers=admin_headers()).status_code == 200
     assert client.get("/admin/scouts/campaign-quality-history").status_code == 401
     assert client.get("/admin/scouts/campaign-quality-history", headers=admin_headers()).status_code == 200
+    assert client.get("/admin/scouts/source-readiness-summary").status_code == 401
+    assert client.get("/admin/scouts/source-readiness-summary", headers=admin_headers()).status_code == 200
     assert client.post("/admin/scouts/campaign-quality-regression-guard", headers=admin_headers()).status_code == 200
     assert client.post("/admin/mailer/outbound-decision", json={"email": "lead@example.test"}, headers=admin_headers()).status_code == 200
     assert client.post("/admin/replies/action-plan", json={"subject": "Price", "body": "cost?"}, headers=admin_headers()).status_code == 200
@@ -203,6 +250,6 @@ def test_scout_campaign_quality_retention_and_regression_are_no_send():
 
 
 def test_p9_tables_exist():
-    for table in ["campaign_readiness_snapshots", "outbound_mailer_decisions", "reply_action_plans", "scout_provenance_scores"]:
+    for table in ["campaign_readiness_snapshots", "outbound_mailer_decisions", "reply_action_plans", "scout_provenance_scores", "scout_source_readiness_checks"]:
         row = fetch_one("SELECT to_regclass(%s) AS name", (table,))
         assert row["name"] == table

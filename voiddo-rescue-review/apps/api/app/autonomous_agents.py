@@ -35,7 +35,7 @@ from .p0 import (
 from .quality_plugins import latest_quality_summary
 from .revenue_simulation import run_synthetic_lead_simulation
 from .language_gate import check_no_ai_public_language
-from .scouts import process_queued_scout_runs, process_scout_run_gated
+from .scouts import process_queued_scout_runs, process_scout_run_gated, run_scout_source_readiness, scout_source_readiness_summary
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_quality_gate, record_scout_campaign_quality_history, run_scout_quality_gate, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .self_operating import run_self_audit, self_operating_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
@@ -95,9 +95,20 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         quality["scout_run_id"] = str(row["id"])
         return quality
 
+    def scout_source_readiness_agent():
+        source_id = payload.get("source_id")
+        if source_id:
+            return run_scout_source_readiness(source_id)
+        row = fetch_one("SELECT id FROM scout_sources WHERE status = 'active' ORDER BY updated_at DESC, created_at DESC LIMIT 1")
+        if not row:
+            return {"status": "idle", "reason": "no_active_scout_sources", "send_mail": False, "live_outreach_allowed": False}
+        return run_scout_source_readiness(str(row["id"]))
+
     agents: dict[str, Callable[[], dict[str, Any]]] = {
         "scout_agent": scout_agent,
         "scout_quality_agent": scout_quality_agent,
+        "scout_source_readiness_agent": scout_source_readiness_agent,
+        "scout_source_readiness_summary_agent": lambda: scout_source_readiness_summary(),
         "scout_campaign_quality_summary_agent": lambda: scout_campaign_quality_summary(),
         "scout_campaign_quality_retention_agent": lambda: cleanup_scout_campaign_quality_history(),
         "scout_campaign_quality_regression_guard_agent": lambda: scout_campaign_quality_regression_guard(),
@@ -182,6 +193,7 @@ def run_daily_loop() -> dict[str, Any]:
         "policy_trend_reporting_agent",
         "mailer_business_kpi_agent",
         "mailer_self_audit_matrix_agent",
+        "scout_source_readiness_summary_agent",
         "scout_campaign_quality_summary_agent",
         "scout_campaign_quality_retention_agent",
         "scout_campaign_quality_regression_guard_agent",

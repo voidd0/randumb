@@ -65,7 +65,7 @@ from .quality_plugins import latest_quality_summary, quality_plugin_manifest, re
 from .revenue_simulation import run_synthetic_lead_simulation
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, latest_scout_quality_gate, run_scout_quality_gate, run_scout_self_check, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
-from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, prepare_campaign, prepare_campaign_gated, process_scout_run, process_scout_run_gated, scout_campaign_expansion_gate
+from .scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, latest_scout_source_readiness, prepare_campaign, prepare_campaign_gated, process_scout_run, process_scout_run_gated, run_scout_source_readiness, scout_campaign_expansion_gate, scout_source_readiness_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup, rollback_latest_spacing_repair
 from .self_operating import (
     create_self_fix_task,
@@ -387,6 +387,21 @@ async def campaign_prepare(campaign_id: str, request: Request):
 @app.get("/admin/scouts/expansion-gate", dependencies=[Depends(require_admin)])
 def scout_expansion_gate_get():
     return {"ok": True, "gate": scout_campaign_expansion_gate()}
+
+
+@app.post("/admin/scouts/sources/{source_id}/readiness", dependencies=[Depends(require_admin)])
+def scout_source_readiness_run(source_id: str):
+    return {"ok": True, "readiness": run_scout_source_readiness(source_id)}
+
+
+@app.get("/admin/scouts/sources/{source_id}/readiness", dependencies=[Depends(require_admin)])
+def scout_source_readiness_get(source_id: str):
+    return {"ok": True, "readiness": latest_scout_source_readiness(source_id)}
+
+
+@app.get("/admin/scouts/source-readiness-summary", dependencies=[Depends(require_admin)])
+def scout_source_readiness_summary_get():
+    return {"ok": True, "summary": scout_source_readiness_summary()}
 
 
 @app.get("/admin/scouts/campaign-quality-summary", dependencies=[Depends(require_admin)])
