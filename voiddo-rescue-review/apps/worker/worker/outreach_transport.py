@@ -18,6 +18,38 @@ def _latest_decision(table: str) -> str:
             return row["decision"] if row else "MISSING"
 
 
+def _count(cur, sql: str, params: tuple = ()) -> int:
+    cur.execute(sql, params)
+    row = cur.fetchone()
+    return int(row["count"] or 0) if row else 0
+
+
+def _warmup_maturity(cur) -> dict:
+    min_clean = max(1, int(os.environ.get("WARMUP_MIN_CLEAN_SENDS_BEFORE_OUTREACH", "5") or "5"))
+    warmup_sent = _count(cur, "SELECT count(*) AS count FROM email_events WHERE event_type = 'warmup_sent'")
+    recent_bounce = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type IN ('bounce','dsn') AND created_at >= now() - interval '24 hours'")
+    recent_rate = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'smtp_rate_limit' AND created_at >= now() - interval '24 hours'")
+    recent_spam = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'spam_signal' AND created_at >= now() - interval '24 hours'")
+    blockers = []
+    if warmup_sent < min_clean:
+        blockers.append("warmup_clean_send_count_below_threshold")
+    if recent_bounce:
+        blockers.append("recent_bounce_or_dsn")
+    if recent_rate:
+        blockers.append("recent_rate_limit")
+    if recent_spam:
+        blockers.append("recent_spam_signal")
+    return {
+        "allowed": not blockers,
+        "warmup_sent_count": warmup_sent,
+        "min_clean_sends_required": min_clean,
+        "recent_bounce_count": recent_bounce,
+        "recent_rate_limit_count": recent_rate,
+        "recent_spam_signal_count": recent_spam,
+        "blockers": blockers,
+    }
+
+
 def _latest_campaign_preflight(cur, campaign_id: str | None) -> dict:
     if not campaign_id:
         return {"allowed": False, "reason": "campaign_preflight_campaign_id_missing", "decision": "MISSING", "fresh": False}
@@ -59,12 +91,14 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None) -> tup
         "has_unsubscribe": "unsubscribe" in body.lower(),
         "suppressed": False,
         "campaign_preflight": {"allowed": False, "reason": "not_checked"},
+        "warmup_maturity": {"allowed": False, "reason": "not_checked"},
     }
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,))
             checks["suppressed"] = bool(cur.fetchone())
             checks["campaign_preflight"] = _latest_campaign_preflight(cur, campaign_id)
+            checks["warmup_maturity"] = _warmup_maturity(cur)
     if checks["outreach_dry_run"]:
         return False, "outreach_dry_run_enabled", checks
     if checks["outreach_paused"] or not checks["first_live_send_flag"]:
@@ -75,6 +109,8 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None) -> tup
         return False, "visual_qa_not_passed", checks
     if not checks["campaign_preflight"]["allowed"]:
         return False, checks["campaign_preflight"]["reason"], checks
+    if not checks["warmup_maturity"]["allowed"]:
+        return False, ",".join(checks["warmup_maturity"]["blockers"]), checks
     if checks["suppressed"]:
         return False, "recipient_suppressed", checks
     if not checks["has_unsubscribe"]:

@@ -51,6 +51,7 @@ def _insert_preflight(campaign_id: str, token: str, decision: str = "PASS_NO_SEN
 def _patch_outbound_dependencies(monkeypatch) -> None:
     monkeypatch.setattr(mailer_control, "transport_gate_status", lambda payload=None: {"allowed": True, "reason": "all_gates_passed"})
     monkeypatch.setattr(mailer_control, "throttle_decision", lambda *args, **kwargs: {"allowed": True, "reason": "ok"})
+    monkeypatch.setattr(mailer_control, "warmup_domain_maturity_status", lambda: {"allowed": True, "blockers": [], "warmup_sent_count": 5, "min_clean_sends_required": 5})
     monkeypatch.setattr(
         mailer_control,
         "render_email_template",
@@ -97,6 +98,30 @@ def test_send_outreach_queue_keeps_preflight_as_hard_gate():
         assert processed2["status"] == "blocked"
         assert "high_risk_action_requires_review" in processed2["gate_result_json"]["blockers"]
         assert result2["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_outbound_message_requires_warmed_domain_before_campaign_send(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        campaign_id = _campaign(token)
+        _patch_outbound_dependencies(monkeypatch)
+        monkeypatch.setattr(
+            mailer_control,
+            "warmup_domain_maturity_status",
+            lambda: {
+                "allowed": False,
+                "blockers": ["warmup_clean_send_count_below_threshold"],
+                "warmup_sent_count": 1,
+                "min_clean_sends_required": 5,
+            },
+        )
+        _insert_preflight(campaign_id, token)
+        result = evaluate_outbound_message({"email": f"lead-{token}@example.test", "campaign_id": campaign_id})
+        assert result["status"] == "blocked"
+        assert "warmup_clean_send_count_below_threshold" in result["reason"]
+        assert result["checks_json"]["warmup_maturity"]["warmup_sent_count"] == 1
     finally:
         _cleanup(token)
 

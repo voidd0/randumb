@@ -884,6 +884,37 @@ def mail_signal_summary(hours: int = 24) -> dict[str, Any]:
     }
 
 
+def warmup_domain_maturity_status(settings: Settings | None = None) -> dict[str, Any]:
+    settings = settings or get_settings()
+    min_clean = max(1, int(settings.warmup_min_clean_sends_before_outreach or 5))
+    warmup_sent = _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'")
+    recent_bounce = recent_mail_signal_count(["bounce", "dsn"], 24)
+    recent_rate_limit = recent_mail_signal_count(["smtp_rate_limit"], 24)
+    recent_spam = recent_mail_signal_count(["spam_signal"], 24)
+    latest_mail = latest_mail_qa_decision()
+    blockers: list[str] = []
+    if warmup_sent < min_clean:
+        blockers.append("warmup_clean_send_count_below_threshold")
+    if recent_bounce:
+        blockers.append("recent_bounce_or_dsn")
+    if recent_rate_limit:
+        blockers.append("recent_rate_limit")
+    if recent_spam:
+        blockers.append("recent_spam_signal")
+    if latest_mail != "PASS":
+        blockers.append("mail_qa_not_pass")
+    return {
+        "allowed": not blockers,
+        "warmup_sent_count": warmup_sent,
+        "min_clean_sends_required": min_clean,
+        "recent_bounce_count": recent_bounce,
+        "recent_rate_limit_count": recent_rate_limit,
+        "recent_spam_signal_count": recent_spam,
+        "latest_mail_qa_decision": latest_mail,
+        "blockers": blockers,
+    }
+
+
 def warmup_calendar_health() -> dict[str, Any]:
     next_due = fetch_one(
         """

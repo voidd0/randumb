@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     test_inboxes: str = ""
     test_inbox_pool: str = ""
     warmup_recipient_pool: str = ""
+    warmup_min_clean_sends_before_outreach: int = 5
     huanshu_cli: str = ""
 
 
