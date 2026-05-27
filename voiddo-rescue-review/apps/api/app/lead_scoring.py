@@ -136,3 +136,61 @@ def score_lead(lead_id: str, audit_id: str | None = None) -> dict[str, Any]:
     )
     execute("UPDATE leads SET score = %s, updated_at = now() WHERE id = %s", (result.final_score, lead_id))
     return dict(row)
+
+
+def backfill_post_scan_lead_scores(limit: int = 50, dry_run: bool = True) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 50), 250))
+    rows = fetch_all(
+        """
+        SELECT a.id AS audit_id, a.lead_id, a.domain, l.email, l.score AS current_score
+        FROM audits a
+        JOIN leads l ON l.id = a.lead_id
+        WHERE a.status = 'completed'
+          AND a.lead_id IS NOT NULL
+          AND l.email IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM lead_scores ls
+            WHERE ls.lead_id = a.lead_id
+              AND ls.audit_id = a.id
+          )
+        ORDER BY a.checked_at DESC NULLS LAST, a.created_at DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    if dry_run:
+        return {
+            "status": "dry_run",
+            "candidate_count": len(rows),
+            "scored_count": 0,
+            "qualified_count": 0,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    scored = []
+    for row in rows:
+        result = score_lead(str(row["lead_id"]), str(row["audit_id"]))
+        scored.append(
+            {
+                "lead_id": str(row["lead_id"]),
+                "audit_id": str(row["audit_id"]),
+                "domain": row["domain"],
+                "final_score": int(result["final_score"] or 0),
+                "qualified": int(result["final_score"] or 0) >= 70,
+            }
+        )
+    return {
+        "status": "scored" if scored else "idle",
+        "candidate_count": len(rows),
+        "scored_count": len(scored),
+        "qualified_count": len([item for item in scored if item["qualified"]]),
+        "scores": scored[:25],
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }

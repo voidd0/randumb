@@ -39,7 +39,7 @@ from .security import verify_paddle_signature
 from .visual_quality import check_visual_publish_gate
 from .autonomous_agents import run_agent, run_daily_loop
 from .email_templates import render_email_template, qa_email_template, render_all_samples
-from .lead_scoring import score_lead
+from .lead_scoring import backfill_post_scan_lead_scores, score_lead
 from .audit_strength import score_audit_strength
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
@@ -497,6 +497,18 @@ def campaign_get(campaign_id: str):
 async def lead_score_create(lead_id: str, request: Request):
     payload = await request.json()
     return {"ok": True, "score": score_lead(lead_id, payload.get("audit_id"))}
+
+
+@app.post("/admin/leads/backfill-post-scan-scores", dependencies=[Depends(require_admin)])
+async def lead_score_backfill_create(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "backfill": backfill_post_scan_lead_scores(
+            int(payload.get("limit", 50)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
 
 
 @app.post("/admin/agents/{agent}", dependencies=[Depends(require_admin)])

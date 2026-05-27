@@ -293,6 +293,21 @@ def admin_metrics_from_db() -> dict[str, Any]:
             "failed": sum(int(r["count"]) for r in scan_rows if r["status"] == "failed"),
         },
         "qualified_leads": scalar("SELECT count(*) FROM leads WHERE score >= 70"),
+        "post_scan_score_candidates": scalar(
+            """
+            SELECT count(*)
+            FROM audits a
+            JOIN leads l ON l.id = a.lead_id
+            WHERE a.status = 'completed'
+              AND a.lead_id IS NOT NULL
+              AND l.email IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM lead_scores ls
+                WHERE ls.lead_id = a.lead_id
+                  AND ls.audit_id = a.id
+              )
+            """
+        ),
         "audit_pages_generated": scalar("SELECT count(*) FROM audits WHERE public_slug IS NOT NULL"),
         "scanner_retryable_transient": scalar(
             """
