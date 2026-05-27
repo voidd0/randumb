@@ -87,6 +87,28 @@ def test_audit_refresh_failure_retry_does_not_retry_exhausted_jobs():
         _cleanup(token)
 
 
+def test_audit_refresh_failure_scanner_fix_retry_requeues_exhausted_once():
+    token = uuid.uuid4().hex[:8]
+    try:
+        job_id = _failed_job(token, retry_count=1)
+        dry = retry_failed_audit_refresh_jobs(10, dry_run=True, priority=300, allow_scanner_fix_retry=True)
+        assert dry["requeued_count"] == 0
+        assert dry["scanner_fix_retryable_count"] >= 1
+        result = retry_failed_audit_refresh_jobs(10, dry_run=False, priority=300, allow_scanner_fix_retry=True)
+        assert any(item["job_id"] == job_id for item in result["requeued"])
+        row = fetch_one("SELECT status, priority, error, result_json FROM scanner_jobs WHERE id = %s", (job_id,))
+        assert row["status"] == "queued"
+        assert row["priority"] == 300
+        assert row["error"] is None
+        assert row["result_json"]["scanner_retry_count"] == 1
+        assert row["result_json"]["scanner_fix_retry_count"] == 1
+        assert row["result_json"]["scanner_retry_reason"] == "audit_evidence_remediation_after_scanner_navigation_fix"
+        second = retry_failed_audit_refresh_jobs(10, dry_run=False, priority=300, allow_scanner_fix_retry=True)
+        assert not any(item["job_id"] == job_id for item in second["requeued"])
+    finally:
+        _cleanup(token)
+
+
 def test_audit_refresh_failure_endpoints_and_agents_are_admin_gated():
     token = uuid.uuid4().hex[:8]
     try:

@@ -1331,6 +1331,7 @@ async def audit_refresh_completion_watch_run(request: Request):
             int(payload.get("limit", 25)),
             int(payload.get("min_new_completed", 1)),
             bool(payload.get("dry_run", True)),
+            bool(payload.get("force", False)),
         ),
     }
 
@@ -1354,6 +1355,7 @@ async def audit_refresh_retry_failures_run(request: Request):
             int(payload.get("limit", 10)),
             bool(payload.get("dry_run", True)),
             int(payload.get("priority", 260)),
+            bool(payload.get("allow_scanner_fix_retry", False)),
         ),
     }
 

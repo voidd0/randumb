@@ -33,6 +33,20 @@ def _retry_count(value: Any) -> int:
         return 0
 
 
+def _scanner_fix_retry_count(value: Any) -> int:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            value = {}
+    if not isinstance(value, dict):
+        return 0
+    try:
+        return int(value.get("scanner_fix_retry_count") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _failed_jobs(limit: int) -> list[dict[str, Any]]:
     rows = fetch_all(
         """
@@ -48,7 +62,13 @@ def _failed_jobs(limit: int) -> list[dict[str, Any]]:
     jobs = []
     for row in rows:
         retry_count = _retry_count(row.get("result_json"))
+        fix_retry_count = _scanner_fix_retry_count(row.get("result_json"))
         retryable = str(row.get("error") or "") in TRANSIENT_SCANNER_ERRORS and retry_count < 1
+        scanner_fix_retryable = (
+            str(row.get("error") or "") in TRANSIENT_SCANNER_ERRORS
+            and retry_count >= 1
+            and fix_retry_count < 1
+        )
         jobs.append(
             {
                 "job_id": str(row["id"]),
@@ -56,7 +76,9 @@ def _failed_jobs(limit: int) -> list[dict[str, Any]]:
                 "priority": int(row["priority"] or 0),
                 "error": row.get("error") or "unknown",
                 "retry_count": retry_count,
+                "scanner_fix_retry_count": fix_retry_count,
                 "retryable": retryable,
+                "scanner_fix_retryable": scanner_fix_retryable,
                 "exhausted": retry_count >= 1,
                 "completed_at": row["completed_at"].isoformat() if row.get("completed_at") else None,
             }
@@ -67,12 +89,14 @@ def _failed_jobs(limit: int) -> list[dict[str, Any]]:
 def audit_refresh_failure_snapshot(limit: int = 25) -> dict[str, Any]:
     jobs = _failed_jobs(limit)
     retryable = [job for job in jobs if job["retryable"]]
+    scanner_fix_retryable = [job for job in jobs if job["scanner_fix_retryable"]]
     exhausted = [job for job in jobs if job["exhausted"] or not job["retryable"]]
     return json_safe(
         {
             "status": "ready",
             "failed_count": len(jobs),
             "retryable_count": len(retryable),
+            "scanner_fix_retryable_count": len(scanner_fix_retryable),
             "exhausted_count": len(exhausted),
             "errors": sorted({job["error"] for job in jobs}),
             "jobs": jobs,
@@ -81,22 +105,38 @@ def audit_refresh_failure_snapshot(limit: int = 25) -> dict[str, Any]:
     )
 
 
-def retry_failed_audit_refresh_jobs(limit: int = 10, dry_run: bool = True, priority: int = 260) -> dict[str, Any]:
+def retry_failed_audit_refresh_jobs(
+    limit: int = 10,
+    dry_run: bool = True,
+    priority: int = 260,
+    allow_scanner_fix_retry: bool = False,
+) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 10), 25))
     safe_priority = max(100, min(int(priority or 260), 300))
     snapshot = audit_refresh_failure_snapshot(safe_limit * 2)
     candidates = [job for job in snapshot["jobs"] if job["retryable"]][:safe_limit]
+    if allow_scanner_fix_retry and len(candidates) < safe_limit:
+        remaining = safe_limit - len(candidates)
+        candidates.extend([job for job in snapshot["jobs"] if job["scanner_fix_retryable"]][:remaining])
     requeued: list[dict[str, Any]] = []
     if not dry_run:
         for job in candidates:
             current = fetch_all("SELECT result_json FROM scanner_jobs WHERE id = %s", (job["job_id"],))
             meta = current[0]["result_json"] if current and isinstance(current[0].get("result_json"), dict) else {}
-            retry_count = _retry_count(meta) + 1
             merged = dict(meta or {})
+            if job.get("scanner_fix_retryable") and not job.get("retryable"):
+                retry_count = _retry_count(meta)
+                fix_retry_count = _scanner_fix_retry_count(meta) + 1
+                scanner_retry_reason = "audit_evidence_remediation_after_scanner_navigation_fix"
+            else:
+                retry_count = _retry_count(meta) + 1
+                fix_retry_count = _scanner_fix_retry_count(meta)
+                scanner_retry_reason = "audit_evidence_remediation_transient_failure"
             merged.update(
                 {
                     "scanner_retry_count": retry_count,
-                    "scanner_retry_reason": "audit_evidence_remediation_transient_failure",
+                    "scanner_fix_retry_count": fix_retry_count,
+                    "scanner_retry_reason": scanner_retry_reason,
                     "scanner_last_error": job["error"],
                     **SAFE_FLAGS,
                 }
@@ -131,10 +171,12 @@ def retry_failed_audit_refresh_jobs(limit: int = 10, dry_run: bool = True, prior
         {
             "status": "dry_run" if dry_run else ("requeued" if requeued else "idle_no_retryable_failures"),
             "dry_run": dry_run,
+            "allow_scanner_fix_retry": allow_scanner_fix_retry,
             "failed_count": snapshot["failed_count"],
             "retryable_count": len(candidates),
             "requeued_count": 0 if dry_run else len(requeued),
             "exhausted_count": snapshot["exhausted_count"],
+            "scanner_fix_retryable_count": snapshot["scanner_fix_retryable_count"],
             "candidate_errors": sorted({job["error"] for job in candidates}),
             "requeued": requeued,
             **SAFE_FLAGS,

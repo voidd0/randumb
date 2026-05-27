@@ -1,8 +1,8 @@
 # Vøiddo Rescue Runtime State
 
-- generated_at: 2026-05-27T02:53:54.149084+00:00
-- current_branch_head: b5c864488e289c87ef3ea1830757a65d03b374ac
-- current_zip_sha: pending-p62-export
+- generated_at: 2026-05-27T16:43:45.239875+00:00
+- current_branch_head: 
+- current_zip_sha: 
 - checkout_status: READY
 - mail_auth_status: PASS
 - latest_mail_qa_decision: PASS
@@ -10,28 +10,49 @@
 - warmup_recipient_count: 7
 - scheduled_warmup_count: 28
 - deliverability_diagnostic_sent_count: 8
-- warmup_sent_count: 0
+- warmup_sent_count: 1
 - live_outreach_sent_count: 0
 - bounce_count_24h: 0
 - rate_limit_signal_count_24h: 0
 - next_allowed_action: wait_until_recent_bounce_and_rate_limit_window_clears_then_recheck_mail_qa
-- launch_readiness_state: WARMUP_SCHEDULED_NO_OUTREACH
-- mailer_policy_score_history_count: 2
-- mailer_policy_latest_score: 100
-- mailer_policy_latest_decision: NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW
-- mailer_policy_latest_blockers: 0
-- mailer_policy_score_trend_direction: stable
-- mailer_policy_regression_guard_decision: PASS_NO_SEND
-- mailer_policy_regression_count: 0
-- mailer_policy_regression_score_drop: 0
-- mailer_policy_regression_review_task_created: false
+- launch_readiness_state: WARMUP_ACTIVE_NO_OUTREACH
+- mailer_policy_score_history_count: 5
+- mailer_policy_latest_score: 45
+- mailer_policy_latest_decision: NO_SEND_BLOCKED_REPAIR
+- mailer_policy_latest_blockers: 2
+- mailer_policy_score_trend_direction: degrading
+- mailer_policy_regression_guard_decision: FAIL_BLOCK_LAUNCH
+- mailer_policy_regression_count: 3
+- mailer_policy_regression_score_drop: 55
+- mailer_policy_regression_review_task_created: true
 - mailer_policy_raw_recipients: false
 - mailer_policy_secrets: false
-- mailer_business_kpi_history_count: 1
-- mailer_business_kpi_latest_replies: 170
-- mailer_business_kpi_latest_safe_actions: 0
+- mailer_business_kpi_history_count: 193
+- mailer_business_kpi_latest_replies: 188
+- mailer_business_kpi_latest_safe_actions: 31
 - mailer_business_kpi_latest_blocked_actions: 0
-- mailer_business_kpi_latest_queue_rows: 0
+- mailer_business_kpi_latest_queue_rows: 31
 - mailer_business_kpi_latest_send_mail: false
+- scout_campaign_quality_history_count: 4
+- scout_campaign_quality_latest_status: PASS_NO_SEND
+- scout_campaign_quality_latest_failed_count: 0
+- scout_campaign_quality_trend_direction: stable
+- scout_campaign_quality_regression_guard_decision: PASS_NO_SEND
+- scout_campaign_quality_latest_send_mail: false
+- scout_source_readiness_check_count: 96
+- scout_source_readiness_sources_checked: 84
+- scout_source_readiness_sources_ready: 53
+- scout_source_readiness_sources_blocked: 31
+- scout_source_readiness_latest_status: REVIEW_SOURCE_BEFORE_RUN
+- scout_source_readiness_latest_score: 16
+- scout_source_readiness_trend_direction: stable
+- scout_source_readiness_regression_guard_decision: FAIL_REVIEW_REQUIRED_NO_SEND
+- scout_source_readiness_regression_count: 2
+- scout_source_readiness_latest_send_mail: false
+- scout_source_queue_candidate_count: 20
+- scout_source_queue_top_score: 99
+- scout_source_queue_created_scout_runs: 0
+- scout_source_queue_created_scanner_jobs: 0
+- scout_source_queue_send_mail: false
 
 Raw recipient addresses are intentionally omitted.

@@ -1,15 +1,13 @@
 # Warmup Calendar Health Report
 
-Generated: 2026-05-27 01:47 IDT
-
-- scheduled total: `28`
-- due now: see protected runtime endpoint before execution
-- sent today: `0`
-- warmup sent count: `0`
-- blocked today: current DB cleanup left no synthetic blocked rows
-- latest mail QA decision: `PASS`
-- recent bounce count: `0`
-- recent rate-limit count: `0`
-- launch readiness state: `WARMUP_SCHEDULED_NO_OUTREACH`
-- live outreach sent count: `0`
-- policy: warmup can only proceed through normal pre-send gates; this pass did not force sends.
+- scheduled_total: 28
+- due_now: 0
+- sent_today: 1
+- blocked_today: 1
+- skipped_suppressed: 0
+- latest_mail_qa_decision: PASS
+- recent_bounce_count: 0
+- recent_rate_limit_count: 0
+- next_scheduled_send_at: 2026-05-28T07:15:00+00:00
+- launch_readiness_state: WARMUP_ACTIVE_NO_OUTREACH
+- live_outreach_sent_count: 0

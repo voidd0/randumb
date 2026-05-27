@@ -43,7 +43,7 @@ def _baseline(token: str) -> None:
         """
         SELECT count(*) AS count
         FROM scanner_jobs
-        WHERE result_json->>'reason' = 'audit_evidence_remediation'
+        WHERE COALESCE(result_json->>'reason', result_json->'job_meta'->>'reason') = 'audit_evidence_remediation'
           AND status = 'completed'
         """
     )
@@ -169,5 +169,58 @@ def test_audit_refresh_completion_watch_endpoints_and_agent_are_admin_gated_no_s
         agent = run_agent("audit_refresh_completion_watch_agent", {"limit": 25, "dry_run": True})
         assert agent["status"] == "completed"
         assert agent["result_json"]["live_outreach_allowed"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_audit_refresh_completion_watch_tracks_completed_job_meta_reason():
+    token = uuid.uuid4().hex[:8]
+    try:
+        _baseline(token)
+        domain = f"p86-meta-{token}.clinic"
+        audit = execute(
+            """
+            INSERT INTO audits(domain, url, status, score, public_slug, checked_at)
+            VALUES (%s, %s, 'completed', 75, %s, now())
+            RETURNING id
+            """,
+            (domain, f"https://{domain}", f"p86-meta-{token}"),
+        )
+        execute(
+            """
+            INSERT INTO scanner_jobs(url, business_name, dry_run, status, priority, audit_id, result_json, completed_at)
+            VALUES (%s, %s, false, 'completed', 220, %s, %s, now())
+            """,
+            (
+                f"https://{domain}",
+                f"P86 Meta {token}",
+                audit["id"],
+                Jsonb({"job_meta": {"reason": "audit_evidence_remediation", "token": token}, "send_mail": False}),
+            ),
+        )
+        result = audit_refresh_completion_watch(25, 1, dry_run=True)
+        assert result["completed_count"] >= 1
+        assert any(item["audit_id"] == str(audit["id"]) for item in result["jobs"])
+        assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_audit_refresh_completion_watch_force_rescores_without_new_count(monkeypatch):
+    import app.campaign_preflight as preflight
+
+    token = uuid.uuid4().hex[:8]
+    try:
+        _baseline(token)
+        campaign_id, audit_id = _campaign_with_completed_refresh_job(token)
+        monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        first = audit_refresh_completion_watch(25, 1, dry_run=False, force=True)
+        second = audit_refresh_completion_watch(25, 1, dry_run=False, force=True)
+        assert first["status"] == "force_refreshed_no_send"
+        assert second["status"] == "force_refreshed_no_send"
+        assert any(item["audit_id"] == audit_id for item in second["rescored_audits"])
+        assert any(item["campaign_id"] == campaign_id for item in second["preflight_runs"])
+        assert second["send_mail"] is False
+        assert second["live_outreach_allowed"] is False
     finally:
         _cleanup(token)

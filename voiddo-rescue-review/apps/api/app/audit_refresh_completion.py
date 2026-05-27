@@ -24,7 +24,7 @@ def _counts() -> dict[str, int]:
         """
         SELECT status, count(*) AS count
         FROM scanner_jobs
-        WHERE result_json->>'reason' = 'audit_evidence_remediation'
+        WHERE COALESCE(result_json->>'reason', result_json->'job_meta'->>'reason') = 'audit_evidence_remediation'
         GROUP BY status
         """
     )
@@ -42,7 +42,7 @@ def _latest_processed_completed_count() -> int:
         SELECT completed_count
         FROM audit_refresh_completion_watches
         WHERE dry_run = false
-          AND status IN ('refreshed_no_send', 'refresh_failed_or_blocked')
+          AND status IN ('refreshed_no_send', 'force_refreshed_no_send', 'refresh_failed_or_blocked')
         ORDER BY created_at DESC
         LIMIT 1
         """
@@ -55,7 +55,7 @@ def _completed_jobs(limit: int) -> list[dict[str, Any]]:
         """
         SELECT id, audit_id, status, priority, completed_at
         FROM scanner_jobs
-        WHERE result_json->>'reason' = 'audit_evidence_remediation'
+        WHERE COALESCE(result_json->>'reason', result_json->'job_meta'->>'reason') = 'audit_evidence_remediation'
           AND status = 'completed'
           AND audit_id IS NOT NULL
         ORDER BY completed_at DESC NULLS LAST, updated_at DESC
@@ -91,25 +91,28 @@ def _campaign_ids_for_audits(audit_ids: list[str]) -> list[str]:
     return [str(row["campaign_id"]) for row in rows]
 
 
-def audit_refresh_completion_watch(limit: int = 25, min_new_completed: int = 1, dry_run: bool = True) -> dict[str, Any]:
+def audit_refresh_completion_watch(limit: int = 25, min_new_completed: int = 1, dry_run: bool = True, force: bool = False) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 25), 100))
     threshold = max(1, min(int(min_new_completed or 1), safe_limit))
     counts = _counts()
     previous_completed = _latest_processed_completed_count()
     new_completed = max(0, counts["completed"] - previous_completed)
-    should_trigger = new_completed >= threshold
     jobs = _completed_jobs(safe_limit)
+    should_trigger = (new_completed >= threshold) or (force and bool(jobs))
     status = "dry_run_ready" if should_trigger else "idle_waiting_for_completions"
     if counts["completed"] <= previous_completed:
         status = "idle_no_new_completions"
     if counts["completed"] == 0:
         status = "idle_no_completed_refresh_jobs"
+    if force and jobs:
+        status = "force_ready"
 
     rescored: list[dict[str, Any]] = []
     preflights: list[dict[str, Any]] = []
     if should_trigger and not dry_run:
         audit_ids = []
-        for job in jobs[:new_completed or safe_limit]:
+        batch_size = safe_limit if force else (new_completed or safe_limit)
+        for job in jobs[:batch_size]:
             if job["audit_id"] not in audit_ids:
                 audit_ids.append(job["audit_id"])
         for audit_id in audit_ids:
@@ -133,6 +136,8 @@ def audit_refresh_completion_watch(limit: int = 25, min_new_completed: int = 1, 
                 }
             )
         status = "refreshed_no_send"
+        if force:
+            status = "force_refreshed_no_send"
         if any(item.get("decision") not in {"PASS_NO_SEND_PREFLIGHT", "FAIL_BLOCK_LAUNCH"} for item in preflights):
             status = "refresh_failed_or_blocked"
 
@@ -140,6 +145,7 @@ def audit_refresh_completion_watch(limit: int = 25, min_new_completed: int = 1, 
         {
             "status": status,
             "dry_run": dry_run,
+            "force": force,
             "tracked_count": len(jobs),
             "queued_count": counts["queued"],
             "running_count": counts["running"],

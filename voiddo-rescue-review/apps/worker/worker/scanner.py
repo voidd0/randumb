@@ -8,7 +8,7 @@ import json
 import time
 
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Error as PlaywrightError, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 
 @dataclass
@@ -66,7 +66,12 @@ def safe_public_scan(url: str, storage_root: str, timeout_ms: int = 15000) -> di
         browser = p.chromium.launch()
         try:
             page = browser.new_page(viewport={"width": 1440, "height": 1100})
-            response = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            navigation_error = ""
+            response = None
+            try:
+                response = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            except (PlaywrightTimeoutError, PlaywrightError) as exc:
+                navigation_error = type(exc).__name__
             status = response.status if response else 0
             page.wait_for_timeout(800)
             desktop_path = shot_dir / "desktop.png"
@@ -74,7 +79,10 @@ def safe_public_scan(url: str, storage_root: str, timeout_ms: int = 15000) -> di
             screenshots.append({"type": "desktop", "file_path": str(desktop_path), "viewport": "1440x1100"})
 
             mobile = browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True)
-            mobile.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            try:
+                mobile.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            except (PlaywrightTimeoutError, PlaywrightError) as exc:
+                navigation_error = navigation_error or type(exc).__name__
             mobile.wait_for_timeout(800)
             mobile_path = shot_dir / "mobile.png"
             mobile.screenshot(path=str(mobile_path), full_page=True)
@@ -95,7 +103,7 @@ def safe_public_scan(url: str, storage_root: str, timeout_ms: int = 15000) -> di
             forms = soup.find_all("form")
 
             if status >= 500 or status == 0:
-                issues.append(SafeIssue("availability", "critical", "Homepage may be unavailable", "The homepage did not return a usable public browser response.", "Check hosting, DNS, and server health.", {"status": status}))
+                issues.append(SafeIssue("availability", "critical", "Homepage may be unavailable", "The homepage did not return a usable public browser response.", "Check hosting, DNS, and server health.", {"status": status, "navigation_error": navigation_error}))
             if parsed.scheme != "https":
                 issues.append(SafeIssue("https", "critical", "Site is not loaded over HTTPS", "The public URL uses HTTP rather than HTTPS.", "Redirect all public pages to HTTPS.", {}))
             if not title:
