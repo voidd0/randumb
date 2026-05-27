@@ -58,6 +58,7 @@ from .scouts import cleanup_scout_source_readiness_checks, process_queued_scout_
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_quality_gate, record_scout_campaign_quality_history, run_scout_quality_gate, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .self_operating import run_self_audit, self_operating_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
+from .warmup_post_send import observe_warmup_post_send
 
 
 def _record_agent(agent: str, func: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -252,6 +253,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "sender_rotation_readiness_agent": lambda: sender_rotation_ready(),
         "warmup_spacing_planner_agent": lambda: plan_provider_spaced_warmup(50, False),
         "warmup_spacing_apply_gate_agent": lambda: apply_provider_spacing_when_safe(50),
+        "warmup_post_send_observer_agent": lambda: observe_warmup_post_send(int(payload.get("limit", 10)), pause_on_blocker=True),
         "public_language_gate_agent": lambda: check_no_ai_public_language(),
     }
     if agent not in agents:
@@ -331,6 +333,7 @@ def run_daily_loop() -> dict[str, Any]:
         "sender_rotation_readiness_agent",
         "warmup_spacing_planner_agent",
         "warmup_spacing_apply_gate_agent",
+        "warmup_post_send_observer_agent",
         "self_audit_agent",
     ]
     runs = [run_agent(agent) for agent in selected]

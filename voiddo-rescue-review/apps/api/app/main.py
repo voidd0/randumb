@@ -85,6 +85,7 @@ from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, latest_scout_quality_gate, run_scout_quality_gate, run_scout_self_check, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, get_campaign, get_scout_run, latest_scout_source_readiness, latest_scout_source_readiness_regression_guard_summary, prepare_campaign, prepare_campaign_gated, prepare_scout_source_from_adapter, process_scout_run, process_scout_run_gated, queue_ready_scout_source_runs, ready_scout_source_queue_candidates, run_scout_source_readiness, scout_campaign_expansion_gate, scout_source_readiness_gate, scout_source_readiness_regression_guard, scout_source_readiness_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup, rollback_latest_spacing_repair
+from .warmup_post_send import latest_warmup_post_send_checks, observe_warmup_post_send
 from .self_operating import (
     create_self_fix_task,
     queue_self_build,
@@ -997,6 +998,23 @@ async def warmup_provider_spacing_apply(request: Request):
 @app.post("/admin/warmup/provider-spacing-rollback", dependencies=[Depends(require_admin)])
 def warmup_provider_spacing_rollback():
     return {"ok": True, "rollback": rollback_latest_spacing_repair()}
+
+
+@app.get("/admin/warmup/post-send-checks", dependencies=[Depends(require_admin)])
+def warmup_post_send_checks_get(limit: int = 10):
+    return {"ok": True, "checks": latest_warmup_post_send_checks(limit)}
+
+
+@app.post("/admin/warmup/post-send-observe", dependencies=[Depends(require_admin)])
+async def warmup_post_send_observe_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "observation": observe_warmup_post_send(
+            int(payload.get("limit", 10)),
+            bool(payload.get("pause_on_blocker", True)),
+        ),
+    }
 
 
 @app.post("/admin/replies/action-plan", dependencies=[Depends(require_admin)])
