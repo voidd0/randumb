@@ -48,6 +48,7 @@ from .campaign_control import campaign_readiness_snapshot
 from .campaign_actions import campaign_actions_summary, run_campaign_action
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
+from .post_scan_campaign_cycle import latest_post_scan_campaign_cycles, post_scan_campaign_cycle
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
 from .clean_window_recheck import clean_window_recheck, clean_window_recheck_summary, post_window_recheck_scheduler, post_window_recheck_summary
@@ -1078,6 +1079,23 @@ def campaign_pipeline_gaps_get(limit: int = 100):
 async def campaign_pipeline_repair_run(request: Request):
     payload = await request.json()
     return {"ok": True, "pipeline": repair_campaign_pipeline(int(payload.get("limit", 100)), bool(payload.get("dry_run", True)))}
+
+
+@app.get("/admin/post-scan-campaign-cycles", dependencies=[Depends(require_admin)])
+def post_scan_campaign_cycles_get(limit: int = 10):
+    return {"ok": True, "cycles": latest_post_scan_campaign_cycles(limit)}
+
+
+@app.post("/admin/post-scan-campaign-cycle", dependencies=[Depends(require_admin)])
+async def post_scan_campaign_cycle_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "cycle": post_scan_campaign_cycle(
+            int(payload.get("limit", 100)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
 
 
 @app.get("/admin/source-campaign-operator", dependencies=[Depends(require_admin)])
