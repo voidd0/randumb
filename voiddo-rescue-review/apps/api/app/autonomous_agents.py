@@ -36,7 +36,7 @@ from .quality_plugins import latest_quality_summary
 from .revenue_simulation import run_synthetic_lead_simulation
 from .language_gate import check_no_ai_public_language
 from .scouts import process_queued_scout_runs, process_scout_run_gated
-from .scout_quality import latest_scout_quality_gate, run_scout_quality_gate
+from .scout_quality import latest_scout_quality_gate, run_scout_quality_gate, scout_campaign_quality_summary
 from .self_operating import run_self_audit, self_operating_summary
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
 
@@ -96,6 +96,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
     agents: dict[str, Callable[[], dict[str, Any]]] = {
         "scout_agent": scout_agent,
         "scout_quality_agent": scout_quality_agent,
+        "scout_campaign_quality_summary_agent": lambda: scout_campaign_quality_summary(),
         "scanner_agent": lambda: {"dry_run": True, "status": "scanner_worker_processes_existing_queue"},
         "audit_page_agent": lambda: {"dry_run": True, "status": "audit_pages_api_backed"},
         "visual_qa_agent": lambda: {"dry_run": True, "status": "huanshu_required", "routes": ["/", "/r/demo", "/admin", "/customer", "/status"]},
@@ -177,6 +178,7 @@ def run_daily_loop() -> dict[str, Any]:
         "policy_trend_reporting_agent",
         "mailer_business_kpi_agent",
         "mailer_self_audit_matrix_agent",
+        "scout_campaign_quality_summary_agent",
         "outbound_mailer_gate_agent",
         "reply_action_agent",
         "mail_clean_window_transition_agent",

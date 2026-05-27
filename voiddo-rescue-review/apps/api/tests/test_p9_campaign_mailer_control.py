@@ -6,12 +6,13 @@ import uuid
 from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
+from app.autonomous_agents import run_agent
 from app.campaign_control import campaign_readiness_snapshot
 from app.db import execute, fetch_one
 from app.mailer_control import evaluate_outbound_message
 from app.main import app
 from app.reply_actions import plan_reply_action
-from app.scout_quality import run_scout_quality_gate, score_scout_provenance
+from app.scout_quality import run_scout_quality_gate, score_scout_provenance, scout_campaign_quality_summary
 from app.scouts import create_campaign, create_scout_run, create_scout_source, prepare_campaign, process_scout_run
 
 
@@ -140,8 +141,22 @@ def test_p9_admin_endpoints_require_auth_and_work():
     campaign_id = _campaign_with_audit(uuid.uuid4().hex[:8])
     assert client.post(f"/admin/campaigns/{campaign_id}/readiness").status_code == 401
     assert client.post(f"/admin/campaigns/{campaign_id}/readiness", headers=admin_headers()).status_code == 200
+    assert client.get("/admin/scouts/campaign-quality-summary").status_code == 401
+    assert client.get("/admin/scouts/campaign-quality-summary", headers=admin_headers()).status_code == 200
     assert client.post("/admin/mailer/outbound-decision", json={"email": "lead@example.test"}, headers=admin_headers()).status_code == 200
     assert client.post("/admin/replies/action-plan", json={"subject": "Price", "body": "cost?"}, headers=admin_headers()).status_code == 200
+
+
+def test_scout_campaign_quality_summary_and_agent_are_no_send():
+    summary = scout_campaign_quality_summary()
+    assert summary["send_mail"] is False
+    assert summary["smtp_called"] is False
+    assert summary["live_outreach_allowed"] is False
+    assert summary["raw_recipient_addresses_included"] is False
+    assert "campaign_quality" in summary
+    agent = run_agent("scout_campaign_quality_summary_agent")
+    assert agent["status"] == "completed"
+    assert agent["result_json"]["send_mail"] is False
 
 
 def test_p9_tables_exist():

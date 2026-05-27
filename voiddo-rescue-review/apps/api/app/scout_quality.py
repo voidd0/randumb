@@ -161,3 +161,86 @@ def lead_scout_quality_gate(lead_id: str) -> dict[str, Any]:
         gate = run_scout_quality_gate(str(row["scout_run_id"]))
     gate["scout_run_id"] = str(row["scout_run_id"])
     return gate
+
+
+def scout_campaign_quality_summary() -> dict[str, Any]:
+    run_counts = fetch_all(
+        """
+        SELECT status, count(*) AS count
+        FROM scout_runs
+        GROUP BY status
+        ORDER BY status
+        """
+    )
+    latest_provenance = fetch_one(
+        """
+        SELECT status, score, source_url_coverage, confidence_average, duplicate_or_rejected_count, created_at
+        FROM scout_provenance_scores
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    latest_self_check = fetch_one(
+        """
+        SELECT status, accepted_count, rejected_count, dedupe_count, excluded_count, created_at
+        FROM scout_self_checks
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    readiness = fetch_one(
+        """
+        SELECT status, lead_count, qualified_count, summary_json, blockers_json, created_at
+        FROM campaign_readiness_snapshots
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    campaign_leads = fetch_one("SELECT count(*) AS count FROM campaign_leads")
+    scout_campaign_leads = fetch_one(
+        """
+        SELECT count(*) AS count
+        FROM campaign_leads cl
+        JOIN leads l ON l.id = cl.lead_id
+        WHERE l.source = 'scout_agent'
+        """
+    )
+    latest_quality = (readiness or {}).get("summary_json", {}).get("scout_quality", {}) if readiness else {}
+    blockers = []
+    if latest_provenance and latest_provenance["status"] != "pass":
+        blockers.append({"code": "latest_scout_provenance_not_pass", "severity": "medium"})
+    if latest_self_check and latest_self_check["status"] != "pass":
+        blockers.append({"code": "latest_scout_self_check_not_pass", "severity": "medium"})
+    if int(latest_quality.get("failed_count") or 0) > 0:
+        blockers.append({"code": "latest_campaign_scout_quality_failed", "severity": "high", "failed_count": int(latest_quality.get("failed_count") or 0)})
+    return {
+        "status": "PASS_NO_SEND" if not blockers else "REVIEW_REQUIRED_NO_SEND",
+        "blockers": blockers,
+        "scout_runs_by_status": {row["status"]: int(row["count"]) for row in run_counts},
+        "latest_self_check": {
+            "status": latest_self_check["status"] if latest_self_check else "missing",
+            "accepted_count": int(latest_self_check["accepted_count"]) if latest_self_check else 0,
+            "rejected_count": int(latest_self_check["rejected_count"]) if latest_self_check else 0,
+            "dedupe_count": int(latest_self_check["dedupe_count"]) if latest_self_check else 0,
+            "excluded_count": int(latest_self_check["excluded_count"]) if latest_self_check else 0,
+        },
+        "latest_provenance": {
+            "status": latest_provenance["status"] if latest_provenance else "missing",
+            "score": int(latest_provenance["score"]) if latest_provenance else 0,
+            "source_url_coverage": float(latest_provenance["source_url_coverage"] or 0) if latest_provenance else 0,
+            "confidence_average": float(latest_provenance["confidence_average"] or 0) if latest_provenance else 0,
+            "duplicate_or_rejected_count": int(latest_provenance["duplicate_or_rejected_count"]) if latest_provenance else 0,
+        },
+        "campaign_quality": {
+            "campaign_leads": int(campaign_leads["count"]) if campaign_leads else 0,
+            "scout_campaign_leads": int(scout_campaign_leads["count"]) if scout_campaign_leads else 0,
+            "latest_checked_count": int(latest_quality.get("checked_count") or 0),
+            "latest_passed_count": int(latest_quality.get("passed_count") or 0),
+            "latest_failed_count": int(latest_quality.get("failed_count") or 0),
+        },
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
