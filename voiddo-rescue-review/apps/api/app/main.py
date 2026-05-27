@@ -48,6 +48,7 @@ from .audit_strength import score_audit_strength
 from .audit_evidence_remediation import audit_evidence_candidates, audit_evidence_remediation, latest_audit_evidence_remediation_runs
 from .audit_refresh_completion import audit_refresh_completion_watch, latest_audit_refresh_completion_watches
 from .audit_refresh_drain import audit_refresh_drain_snapshot, latest_audit_refresh_drain_runs, prioritize_audit_refresh_jobs
+from .audit_refresh_failures import audit_refresh_failure_snapshot, latest_audit_refresh_failure_runs, retry_failed_audit_refresh_jobs
 from .mailer_throttle import throttle_decision
 from .campaign_economics import run_campaign_economics_check
 from .campaign_control import campaign_readiness_snapshot
@@ -1322,6 +1323,29 @@ async def audit_refresh_completion_watch_run(request: Request):
             int(payload.get("limit", 25)),
             int(payload.get("min_new_completed", 1)),
             bool(payload.get("dry_run", True)),
+        ),
+    }
+
+
+@app.get("/admin/audit-refresh/failures", dependencies=[Depends(require_admin)])
+def audit_refresh_failures_get(limit: int = 25):
+    return {"ok": True, "failures": audit_refresh_failure_snapshot(limit)}
+
+
+@app.get("/admin/audit-refresh/failure-runs", dependencies=[Depends(require_admin)])
+def audit_refresh_failure_runs_get(limit: int = 10):
+    return {"ok": True, "runs": latest_audit_refresh_failure_runs(limit)}
+
+
+@app.post("/admin/audit-refresh/retry-failures", dependencies=[Depends(require_admin)])
+async def audit_refresh_retry_failures_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "retry": retry_failed_audit_refresh_jobs(
+            int(payload.get("limit", 10)),
+            bool(payload.get("dry_run", True)),
+            int(payload.get("priority", 260)),
         ),
     }
 

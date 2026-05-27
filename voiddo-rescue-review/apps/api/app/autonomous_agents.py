@@ -12,6 +12,7 @@ from .economics import run_economics_audit
 from .audit_evidence_remediation import audit_evidence_candidates, audit_evidence_remediation
 from .audit_refresh_completion import audit_refresh_completion_watch
 from .audit_refresh_drain import audit_refresh_drain_snapshot, prioritize_audit_refresh_jobs
+from .audit_refresh_failures import audit_refresh_failure_snapshot, retry_failed_audit_refresh_jobs
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
 from .mailer_control_room import cleanup_mailer_digest_history, cleanup_mailer_policy_score_history, mailer_business_kpi_snapshot, mailer_digest_trend_guard, mailer_policy_score, mailer_policy_score_regression_guard, mailer_self_audit_matrix_snapshot, record_mailer_business_kpi_history, record_mailer_policy_score_history, record_mailer_self_audit_matrix_history, write_mailer_digest_agent_report, write_owner_status_report
@@ -206,6 +207,12 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("min_new_completed", 1)),
             dry_run=bool(payload.get("dry_run", True)),
         ),
+        "audit_refresh_failure_agent": lambda: audit_refresh_failure_snapshot(int(payload.get("limit", 25))),
+        "audit_refresh_retry_failures_agent": lambda: retry_failed_audit_refresh_jobs(
+            int(payload.get("limit", 10)),
+            dry_run=bool(payload.get("dry_run", True)),
+            priority=int(payload.get("priority", 260)),
+        ),
         "visual_qa_agent": lambda: {"dry_run": True, "status": "huanshu_required", "routes": ["/", "/r/demo", "/admin", "/customer", "/status"]},
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
         "deliverability_agent": lambda: {"dry_run": True, "signals": mail_signal_summary()},
@@ -338,6 +345,8 @@ def run_daily_loop() -> dict[str, Any]:
         "audit_refresh_drain_agent",
         "audit_refresh_prioritize_agent",
         "audit_refresh_completion_watch_agent",
+        "audit_refresh_failure_agent",
+        "audit_refresh_retry_failures_agent",
         "post_scan_campaign_cycle_agent",
         "campaign_preview_quality_agent",
         "buyer_journey_scoreboard_agent",
