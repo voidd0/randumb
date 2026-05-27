@@ -12,6 +12,7 @@ from app.p0 import (
     record_mail_signal,
     run_deliverability_diagnostics,
     run_warmup_calendar_due,
+    scout_campaign_quality_trend_snapshot,
     write_blockers_report,
     write_daily_business_report,
     write_runtime_state_report,
@@ -142,15 +143,25 @@ def test_runtime_state_report_generated(tmp_path):
     assert "mailer_policy_secrets: false" in text
     assert "mailer_business_kpi_history_count" in text
     assert "mailer_business_kpi_latest_send_mail: false" in text
+    assert "scout_campaign_quality_history_count" in text
+    assert "scout_campaign_quality_latest_send_mail: false" in text
     assert result["current_branch_head"] == "head-test"
     assert result["mailer_policy_trend"]["raw_recipient_addresses_included"] is False
     assert result["mailer_policy_trend"]["secrets_included"] is False
     assert result["mailer_business_kpi"]["latest_send_mail"] is False
+    assert result["scout_campaign_quality_trend"]["latest_send_mail"] is False
 
 
 def test_policy_trend_snapshot_is_redacted():
     trend = mailer_policy_trend_snapshot()
     assert "policy_score_trend_direction" in trend
+    assert trend["raw_recipient_addresses_included"] is False
+    assert trend["secrets_included"] is False
+
+
+def test_scout_campaign_quality_trend_snapshot_is_redacted():
+    trend = scout_campaign_quality_trend_snapshot()
+    assert "failed_count_trend_direction" in trend
     assert trend["raw_recipient_addresses_included"] is False
     assert trend["secrets_included"] is False
 
@@ -166,6 +177,8 @@ def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
     assert "mailer_policy_regression_guard_decision" in blockers_text
     assert "mailer_business_kpi_history_count" in business_text
     assert "mailer_business_kpi_latest_send_mail" in blockers_text
+    assert "scout_campaign_quality_history_count" in business_text
+    assert "scout_campaign_quality_regression_guard_decision" in blockers_text
     assert "No raw recipient addresses" in business_text
     assert "No raw recipient addresses" in blockers_text
 

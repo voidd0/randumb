@@ -969,6 +969,59 @@ def mailer_business_kpi_report_snapshot() -> dict[str, Any]:
     }
 
 
+def scout_campaign_quality_trend_snapshot(limit: int = 8) -> dict[str, Any]:
+    safe_limit = max(2, min(int(limit or 8), 30))
+    rows = fetch_all(
+        """
+        SELECT status, blocker_count, campaign_quality_json, send_mail, smtp_called,
+               live_outreach_allowed, raw_recipient_addresses_included, secrets_included, created_at
+        FROM scout_campaign_quality_history
+        ORDER BY created_at DESC, id DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    history_count = _count("SELECT count(*) FROM scout_campaign_quality_history")
+    latest = dict(rows[0]) if rows else {}
+    failed_counts = [int((row.get("campaign_quality_json") or {}).get("latest_failed_count") or 0) for row in rows]
+    if len(failed_counts) < 2:
+        direction = "insufficient_history"
+    elif failed_counts[0] > failed_counts[-1]:
+        direction = "degrading"
+    elif failed_counts[0] < failed_counts[-1]:
+        direction = "improving"
+    else:
+        direction = "stable"
+    guard_row = fetch_one(
+        """
+        SELECT result_json
+        FROM agent_runs
+        WHERE agent = 'scout_campaign_quality_regression_guard_agent'
+          AND status = 'completed'
+        ORDER BY completed_at DESC NULLS LAST, started_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+        """
+    )
+    guard = dict(guard_row["result_json"]) if guard_row and isinstance(guard_row.get("result_json"), dict) else {}
+    latest_quality = latest.get("campaign_quality_json") or {}
+    return {
+        "history_count": history_count,
+        "latest_status": latest.get("status", "MISSING"),
+        "latest_blocker_count": int(latest.get("blocker_count", 0) or 0),
+        "latest_checked_count": int(latest_quality.get("latest_checked_count") or 0),
+        "latest_passed_count": int(latest_quality.get("latest_passed_count") or 0),
+        "latest_failed_count": int(latest_quality.get("latest_failed_count") or 0),
+        "failed_count_trend_direction": direction,
+        "regression_guard_decision": guard.get("decision", "MISSING"),
+        "regression_count": len(guard.get("regressions", [])) if isinstance(guard.get("regressions"), list) else 0,
+        "regression_review_task_created": bool(guard.get("review_task_created", False)),
+        "latest_send_mail": bool(latest.get("send_mail", False)),
+        "latest_live_outreach_allowed": bool(latest.get("live_outreach_allowed", False)),
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
 def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> dict[str, Any]:
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -989,6 +1042,7 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
         "launch_readiness_state": launch_readiness_state(),
         "mailer_policy_trend": mailer_policy_trend_snapshot(),
         "mailer_business_kpi": mailer_business_kpi_report_snapshot(),
+        "scout_campaign_quality_trend": scout_campaign_quality_trend_snapshot(),
     }
 
 
@@ -996,6 +1050,7 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
     snapshot = runtime_state_snapshot(branch_head, current_zip_sha)
     policy_trend = snapshot["mailer_policy_trend"]
     business_kpi = snapshot["mailer_business_kpi"]
+    scout_quality = snapshot["scout_campaign_quality_trend"]
     lines = [
         "# Vøiddo Rescue Runtime State",
         "",
@@ -1032,6 +1087,12 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
         f"- mailer_business_kpi_latest_blocked_actions: {business_kpi['latest_blocked_actions']}",
         f"- mailer_business_kpi_latest_queue_rows: {business_kpi['latest_action_queue_rows']}",
         f"- mailer_business_kpi_latest_send_mail: {str(business_kpi['latest_send_mail']).lower()}",
+        f"- scout_campaign_quality_history_count: {scout_quality['history_count']}",
+        f"- scout_campaign_quality_latest_status: {scout_quality['latest_status']}",
+        f"- scout_campaign_quality_latest_failed_count: {scout_quality['latest_failed_count']}",
+        f"- scout_campaign_quality_trend_direction: {scout_quality['failed_count_trend_direction']}",
+        f"- scout_campaign_quality_regression_guard_decision: {scout_quality['regression_guard_decision']}",
+        f"- scout_campaign_quality_latest_send_mail: {str(scout_quality['latest_send_mail']).lower()}",
         "",
         "Raw recipient addresses are intentionally omitted.",
     ]
@@ -1046,6 +1107,7 @@ def write_daily_business_report(path: str | Path | None = None) -> dict[str, Any
     metrics = admin_metrics_from_db()
     policy_trend = snapshot["mailer_policy_trend"]
     business_kpi = snapshot["mailer_business_kpi"]
+    scout_quality = snapshot["scout_campaign_quality_trend"]
     target = Path(path) if path else Path(get_settings().storage_root) / "reports" / "daily_business_report.md"
     lines = [
         "# Vøiddo Rescue Daily Business Report",
@@ -1075,6 +1137,11 @@ def write_daily_business_report(path: str | Path | None = None) -> dict[str, Any
         f"- mailer_business_kpi_latest_blocked_actions: {business_kpi['latest_blocked_actions']}",
         f"- mailer_business_kpi_latest_queue_rows: {business_kpi['latest_action_queue_rows']}",
         f"- mailer_business_kpi_latest_send_mail: {str(business_kpi['latest_send_mail']).lower()}",
+        f"- scout_campaign_quality_history_count: {scout_quality['history_count']}",
+        f"- scout_campaign_quality_latest_status: {scout_quality['latest_status']}",
+        f"- scout_campaign_quality_latest_failed_count: {scout_quality['latest_failed_count']}",
+        f"- scout_campaign_quality_trend_direction: {scout_quality['failed_count_trend_direction']}",
+        f"- scout_campaign_quality_regression_guard_decision: {scout_quality['regression_guard_decision']}",
         f"- mailer_policy_raw_recipients: {str(policy_trend['raw_recipient_addresses_included']).lower()}",
         f"- mailer_policy_secrets: {str(policy_trend['secrets_included']).lower()}",
         "",
@@ -1089,6 +1156,7 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
     snapshot = runtime_state_snapshot()
     policy_trend = snapshot["mailer_policy_trend"]
     business_kpi = snapshot["mailer_business_kpi"]
+    scout_quality = snapshot["scout_campaign_quality_trend"]
     blockers: list[str] = []
     if snapshot["bounce_count"] > 0:
         blockers.append("recent_bounce_or_dsn_signal")
@@ -1102,6 +1170,10 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
         blockers.append("mailer_policy_not_ready")
     if business_kpi["latest_send_mail"] or business_kpi["latest_live_outreach_allowed"]:
         blockers.append("mailer_business_kpi_send_state_not_safe")
+    if scout_quality["regression_guard_decision"] not in {"PASS_NO_SEND", "MISSING"}:
+        blockers.append("scout_campaign_quality_regression_guard_not_pass")
+    if scout_quality["latest_status"] not in {"PASS_NO_SEND", "MISSING"}:
+        blockers.append("scout_campaign_quality_not_pass")
     target = Path(path) if path else Path(get_settings().storage_root) / "reports" / "blockers_report.md"
     lines = [
         "# Vøiddo Rescue Blockers Report",
@@ -1121,6 +1193,11 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
         f"- mailer_business_kpi_latest_blocked_actions: {business_kpi['latest_blocked_actions']}",
         f"- mailer_business_kpi_latest_queue_rows: {business_kpi['latest_action_queue_rows']}",
         f"- mailer_business_kpi_latest_send_mail: {str(business_kpi['latest_send_mail']).lower()}",
+        f"- scout_campaign_quality_history_count: {scout_quality['history_count']}",
+        f"- scout_campaign_quality_latest_status: {scout_quality['latest_status']}",
+        f"- scout_campaign_quality_latest_failed_count: {scout_quality['latest_failed_count']}",
+        f"- scout_campaign_quality_trend_direction: {scout_quality['failed_count_trend_direction']}",
+        f"- scout_campaign_quality_regression_guard_decision: {scout_quality['regression_guard_decision']}",
         f"- live_outreach_sent_count: {snapshot['live_outreach_sent_count']}",
         f"- warmup_sent_count: {snapshot['warmup_sent_count']}",
         "",
@@ -1473,6 +1550,7 @@ def run_warmup_calendar_due(limit: int = 2) -> dict[str, Any]:
 def write_owner_daily_report() -> dict[str, Any]:
     metrics = admin_metrics_from_db()
     policy_trend = mailer_policy_trend_snapshot()
+    scout_quality = scout_campaign_quality_trend_snapshot()
     report_dir = Path(get_settings().storage_root) / "reports" / "owner"
     report_dir.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
@@ -1481,6 +1559,7 @@ def write_owner_daily_report() -> dict[str, Any]:
         "created_at": now.isoformat(),
         "metrics": metrics,
         "mailer_policy_trend": policy_trend,
+        "scout_campaign_quality_trend": scout_quality,
         "launch_decision": "NOT_LAUNCH_READY",
         "live_outreach_sent": 0,
         "warmup_sent": 0,
