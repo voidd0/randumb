@@ -26,7 +26,8 @@ def _count(cur, sql: str, params: tuple = ()) -> int:
 
 def _warmup_maturity(cur) -> dict:
     min_clean = max(1, int(os.environ.get("WARMUP_MIN_CLEAN_SENDS_BEFORE_OUTREACH", "5") or "5"))
-    warmup_sent = _count(cur, "SELECT count(*) AS count FROM email_events WHERE event_type = 'warmup_sent'")
+    warmup_sent = _count(cur, "SELECT count(*) AS count FROM warmup_schedule WHERE status = 'sent'")
+    legacy_event_count = _count(cur, "SELECT count(*) AS count FROM email_events WHERE event_type = 'warmup_sent'")
     recent_bounce = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type IN ('bounce','dsn') AND created_at >= now() - interval '24 hours'")
     recent_rate = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'smtp_rate_limit' AND created_at >= now() - interval '24 hours'")
     recent_spam = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'spam_signal' AND created_at >= now() - interval '24 hours'")
@@ -42,6 +43,8 @@ def _warmup_maturity(cur) -> dict:
     return {
         "allowed": not blockers,
         "warmup_sent_count": warmup_sent,
+        "legacy_warmup_event_count": legacy_event_count,
+        "maturity_source": "warmup_schedule_sent",
         "min_clean_sends_required": min_clean,
         "recent_bounce_count": recent_bounce,
         "recent_rate_limit_count": recent_rate,

@@ -8,7 +8,7 @@ from .campaign_control_room import campaign_control_room_snapshot
 from .config import get_settings
 from .db import fetch_one
 from .mailer_control_room import latest_mailer_policy_score_history, mailer_policy_score
-from .p0 import json_safe, latest_decision, mail_signal_summary, transport_gate_status, warmup_calendar_health
+from .p0 import json_safe, latest_decision, mail_signal_summary, transport_gate_status, warmup_calendar_health, warmup_domain_maturity_status
 from .quality_plugins import latest_quality_summary
 from .revenue_loop import revenue_loop_snapshot
 from .source_campaign_operator import source_campaign_operator_snapshot
@@ -45,10 +45,12 @@ def _visual_quality_evidence() -> dict[str, Any]:
 def _state(score: int, blockers: list[dict[str, Any]], evidence: dict[str, Any]) -> str:
     settings = evidence["settings"]
     if blockers:
+        if any(row.get("code") == "warmup_maturity_not_verified" for row in blockers) and evidence["checkout"]["ready"]:
+            return "WARMUP_SCHEDULED_NO_OUTREACH"
         if evidence["checkout"]["ready"] and evidence["mail"]["mail_qa_decision"] == "PASS":
             return "CHECKOUT_READY_NOT_WARMED"
         return "NOT_LAUNCH_READY"
-    if int(evidence["warmup"].get("scheduled_total", 0) or 0) > 0 and int(evidence["warmup"].get("sent_today", 0) or 0) == 0:
+    if not evidence["warmup_maturity"].get("allowed") and int(evidence["warmup"].get("scheduled_total", 0) or 0) > 0:
         return "WARMUP_SCHEDULED_NO_OUTREACH"
     if int(evidence["campaigns"].get("ready_candidate_count", 0) or 0) > 0:
         return "PREVIEW_PIPELINE_READY_NO_OUTREACH"
@@ -72,6 +74,7 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
     campaigns = campaign_control_room_snapshot(safe_limit, 70)
     buyer_journey = buyer_journey_readiness_scoreboard()
     warmup = warmup_calendar_health()
+    warmup_maturity = warmup_domain_maturity_status(settings)
     signals = mail_signal_summary(24)
     visual = _visual_quality_evidence()
     policy_score = mailer_policy_score()
@@ -135,6 +138,9 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
     if int(warmup.get("scheduled_total", 0) or 0) <= 0:
         _add_blocker(blockers, "warmup_schedule_missing", "medium")
         score -= 5
+    if not warmup_maturity.get("allowed"):
+        _add_blocker(blockers, "warmup_maturity_not_verified", "medium", warmup_maturity.get("blockers", []))
+        score -= 10
     if int(buyer_journey.get("campaign_preview_count", 0) or 0) <= 0:
         _add_blocker(blockers, "buyer_journey_campaign_preview_missing", "medium")
         score -= 5
@@ -158,6 +164,7 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
         "mail": mail,
         "visual": visual,
         "warmup": warmup,
+        "warmup_maturity": warmup_maturity,
         "campaigns": {
             "candidate_count": campaigns.get("candidate_count", 0),
             "ready_candidate_count": campaigns.get("ready_candidate_count", 0),
@@ -179,7 +186,8 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
         "transport_gate": transport,
         "counts": {
             "live_outreach_sent": _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'"),
-            "warmup_sent": _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'"),
+            "warmup_sent": _count("SELECT count(*) FROM warmup_schedule WHERE status = 'sent'"),
+            "legacy_warmup_event_count": _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'"),
             "mailer_action_queue": _count("SELECT count(*) FROM mailer_action_queue"),
             "mailer_send_ledger": _count("SELECT count(*) FROM mailer_send_ledger"),
         },

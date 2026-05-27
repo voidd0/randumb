@@ -914,13 +914,14 @@ def mail_signal_summary(hours: int = 24) -> dict[str, Any]:
 def warmup_domain_maturity_status(settings: Settings | None = None) -> dict[str, Any]:
     settings = settings or get_settings()
     min_clean = max(1, int(settings.warmup_min_clean_sends_before_outreach or 5))
-    warmup_sent = _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'")
+    verified_warmup_sent = _count("SELECT count(*) FROM warmup_schedule WHERE status = 'sent'")
+    legacy_event_count = _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'")
     recent_bounce = recent_mail_signal_count(["bounce", "dsn"], 24)
     recent_rate_limit = recent_mail_signal_count(["smtp_rate_limit"], 24)
     recent_spam = recent_mail_signal_count(["spam_signal"], 24)
     latest_mail = latest_mail_qa_decision()
     blockers: list[str] = []
-    if warmup_sent < min_clean:
+    if verified_warmup_sent < min_clean:
         blockers.append("warmup_clean_send_count_below_threshold")
     if recent_bounce:
         blockers.append("recent_bounce_or_dsn")
@@ -932,7 +933,9 @@ def warmup_domain_maturity_status(settings: Settings | None = None) -> dict[str,
         blockers.append("mail_qa_not_pass")
     return {
         "allowed": not blockers,
-        "warmup_sent_count": warmup_sent,
+        "warmup_sent_count": verified_warmup_sent,
+        "legacy_warmup_event_count": legacy_event_count,
+        "maturity_source": "warmup_schedule_sent",
         "min_clean_sends_required": min_clean,
         "recent_bounce_count": recent_bounce,
         "recent_rate_limit_count": recent_rate_limit,
@@ -956,6 +959,14 @@ def warmup_calendar_health() -> dict[str, Any]:
         "scheduled_total": _count("SELECT count(*) FROM warmup_schedule"),
         "due_now": _count("SELECT count(*) FROM warmup_schedule WHERE status = 'scheduled' AND scheduled_for <= now()"),
         "sent_today": _count(
+            """
+            SELECT count(*)
+            FROM warmup_schedule
+            WHERE status = 'sent'
+              AND sent_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+            """
+        ),
+        "legacy_event_sent_today": _count(
             """
             SELECT count(*)
             FROM email_events
@@ -982,7 +993,7 @@ def warmup_calendar_health() -> dict[str, Any]:
 
 
 def launch_readiness_state() -> str:
-    warmup_sent = _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'")
+    warmup_sent = _count("SELECT count(*) FROM warmup_schedule WHERE status = 'sent'")
     scheduled = _count("SELECT count(*) FROM warmup_schedule WHERE status = 'scheduled'")
     if warmup_sent > 0:
         return "WARMUP_ACTIVE_NO_OUTREACH"
