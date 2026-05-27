@@ -711,6 +711,7 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
             INSERT INTO scout_leads(scout_run_id, business_name, domain, website_url, email, phone, country, city,
                                     language, niche, source_url, confidence, status, rejection_reason)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
             RETURNING id
             """,
             (
@@ -730,6 +731,11 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
                 rejection_reason or None,
             ),
         )
+        if not scout_lead:
+            rejected += 1
+            if status == "accepted":
+                accepted -= 1
+            continue
         if status != "accepted":
             continue
         business = execute(
@@ -809,7 +815,37 @@ def process_scout_run_gated(run_id: str) -> dict[str, Any]:
             "send_mail": False,
             "live_outreach_allowed": False,
         }
-    result = process_scout_run(run_id)
+    try:
+        result = process_scout_run(run_id)
+    except Exception as exc:
+        execute(
+            """
+            UPDATE scout_runs
+            SET status = 'failed',
+                error = %s,
+                result_json = COALESCE(result_json, '{}'::jsonb) || %s::jsonb,
+                completed_at = now()
+            WHERE id = %s
+            """,
+            (
+                type(exc).__name__,
+                Jsonb(
+                    {
+                        "error": type(exc).__name__,
+                        "send_mail": False,
+                        "live_outreach_allowed": False,
+                    }
+                ),
+                run_id,
+            ),
+        )
+        return {
+            "processed": False,
+            "status": "failed",
+            "error": type(exc).__name__,
+            "send_mail": False,
+            "live_outreach_allowed": False,
+        }
     quality_gate = run_scout_quality_gate(run_id)
     if not quality_gate["allowed_for_campaign_preview"]:
         execute(

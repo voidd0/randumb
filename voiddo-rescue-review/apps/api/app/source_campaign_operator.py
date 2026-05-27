@@ -81,10 +81,18 @@ def advance_source_to_campaign(
     queue_result: dict[str, Any] = {"status": "skipped", "queued_count": 0, "created_scanner_jobs": 0}
     process_result: dict[str, Any] = {"status": "skipped", "processed": 0}
     campaign_result: dict[str, Any] = {"status": "skipped"}
+    requested_source_id = source_id
 
     if not source_id:
-        blockers.append("explicit_source_id_required")
+        candidates = ready_scout_source_queue_candidates(1)
+        if candidates["candidates"]:
+            source_id = candidates["candidates"][0]["source"]["id"]
+        else:
+            blockers.append("no_ready_scout_sources")
     else:
+        candidates = {"candidate_count": 1, "candidates": []}
+
+    if source_id:
         readiness = run_scout_source_readiness(source_id)
         readiness_gate = scout_source_readiness_gate(source_id)
         expansion_gate = scout_campaign_expansion_gate()
@@ -116,6 +124,7 @@ def advance_source_to_campaign(
             "status": status,
             "dry_run": dry_run,
             "source_id": source_id,
+            "auto_selected_source": bool(source_id and not requested_source_id),
             "blockers": blockers,
             "readiness": readiness,
             "source_queue": queue_result,

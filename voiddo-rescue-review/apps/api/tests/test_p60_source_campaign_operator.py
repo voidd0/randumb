@@ -111,11 +111,20 @@ def test_source_campaign_operator_can_advance_explicit_ready_source_without_send
         _cleanup(source_id, token)
 
 
-def test_source_campaign_operator_blocks_without_source_id():
-    result = advance_source_to_campaign(None, 10, dry_run=False)
-    assert result["status"] == "blocked"
-    assert "explicit_source_id_required" in result["blockers"]
-    assert result["send_mail"] is False
+def test_source_campaign_operator_auto_selects_ready_source_without_sending(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    source_id = _source(token)
+    try:
+        _allow_expansion(monkeypatch)
+        result = advance_source_to_campaign(None, 10, dry_run=False, process_scout=False, prepare_campaigns=False)
+        assert result["status"] == "advanced"
+        assert result["auto_selected_source"] is True
+        assert result["source_id"] == source_id
+        assert result["source_queue"]["queued_count"] == 1
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup(source_id, token)
 
 
 def test_source_campaign_operator_admin_and_agents_are_no_send():
@@ -125,7 +134,7 @@ def test_source_campaign_operator_admin_and_agents_are_no_send():
     assert response.status_code == 200
     assert response.json()["operator"]["send_mail"] is False
     agent = run_agent("source_campaign_operator_agent", {"limit": 5})
-    advance = run_agent("source_campaign_operator_advance_agent", {"limit": 5})
+    advance = run_agent("source_campaign_operator_advance_agent", {"limit": 5, "dry_run": True})
     assert agent["status"] == "completed"
     assert advance["status"] == "completed"
     assert agent["result_json"]["send_mail"] is False
