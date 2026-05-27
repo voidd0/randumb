@@ -54,6 +54,14 @@ def test_target_plan_prioritizes_first_tier_english_markets():
     assert {"IL", "EE"}.issubset(secondary_countries)
 
 
+def test_overpass_query_uses_regional_area_aliases_for_au_nz():
+    gold_coast_query = discovery_module._overpass_query("AU", "Gold Coast", "dentists", 10)
+    tauranga_query = discovery_module._overpass_query("NZ", "Tauranga", "dentists", 10)
+    assert 'area["name"="City of Gold Coast"]' in gold_coast_query
+    assert 'area["name"="Tauranga City"]' in tauranga_query
+    assert "out center tags 10" in gold_coast_query
+
+
 def test_overpass_lead_discovery_creates_redacted_source_from_public_rows(monkeypatch):
     token = uuid.uuid4().hex[:8]
     city = f"TestCity{token}"
