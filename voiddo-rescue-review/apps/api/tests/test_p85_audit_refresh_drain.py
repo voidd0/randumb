@@ -55,16 +55,16 @@ def _job(token: str, priority: int = 120) -> str:
 def test_audit_refresh_drain_prioritizes_remediation_jobs_without_send():
     token = uuid.uuid4().hex[:8]
     try:
-        job_id = _job(token)
+        job_id = _job(token, priority=299)
         snapshot = audit_refresh_drain_snapshot(25)
         assert any(item["id"] == job_id for item in snapshot["jobs"])
-        dry = prioritize_audit_refresh_jobs(25, dry_run=True, priority=220)
+        dry = prioritize_audit_refresh_jobs(25, dry_run=True, priority=300)
         assert dry["prioritized_count"] == 0
-        result = prioritize_audit_refresh_jobs(25, dry_run=False, priority=220)
+        result = prioritize_audit_refresh_jobs(25, dry_run=False, priority=300)
         assert result["send_mail"] is False
         assert result["live_outreach_allowed"] is False
         row = fetch_one("SELECT priority, result_json FROM scanner_jobs WHERE id = %s", (job_id,))
-        assert row["priority"] == 220
+        assert row["priority"] == 300
         assert row["result_json"]["audit_refresh_drain_prioritized"] is True
     finally:
         _cleanup(token)
