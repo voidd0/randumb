@@ -165,6 +165,7 @@ def test_campaign_prepare_selects_top_scored_leads():
 
 def test_admin_scout_and_campaign_endpoints_require_auth():
     assert client.post("/admin/scouts/sources", json={}).status_code == 401
+    assert client.get("/admin/campaigns/control-room", headers=admin_headers()).status_code == 404
     assert client.post("/admin/campaigns", json={"name": "x"}, headers=admin_headers()).status_code == 200
 
 

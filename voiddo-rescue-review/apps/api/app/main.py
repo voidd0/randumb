@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from uuid import UUID
 
 from .billing import checkout_config_status, hosted_checkout_url, product_checkout_config, PRODUCTS
 from .codex_tasks import create_task
@@ -634,6 +635,10 @@ def scout_campaign_quality_regression_guard_run(limit: int = 12):
 
 @app.get("/admin/campaigns/{campaign_id}", dependencies=[Depends(require_admin)])
 def campaign_get(campaign_id: str):
+    try:
+        UUID(campaign_id)
+    except ValueError:
+        return Response(status_code=404, content="campaign not found")
     campaign = get_campaign(campaign_id)
     if not campaign:
         return Response(status_code=404, content="campaign not found")
