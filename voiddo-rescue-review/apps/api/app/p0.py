@@ -30,6 +30,7 @@ from .billing import PRODUCTS, price_id_for
 from .config import Settings, get_settings
 from .db import connect_dict, execute, fetch_all, fetch_one
 from .inbox import classify_reply
+from .security import lead_id_from_unsubscribe_token, unsubscribe_token_for_lead
 
 
 ONETIME_FIX_PRODUCTS = {"audit_onetime", "contact_form_repair", "emergency_fix"}
@@ -42,6 +43,11 @@ RUNTIME_PAUSE_KEYS = {
     "auto_replies": "pause_auto_replies",
     "workers": "pause_workers",
 }
+
+
+def _unsubscribe_secret() -> str:
+    settings = get_settings()
+    return settings.unsubscribe_secret or settings.admin_auth_token or "voiddo-rescue-local-unsubscribe-secret"
 WARMUP_SENDER_ROTATION = [
     "audit@voiddorescue.com",
     "support@voiddorescue.com",
@@ -2533,6 +2539,7 @@ def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
                 "main_issue_short": row["summary"],
                 "final_score": int(row["final_score"] or 0),
                 "source": "approved_campaign_preview",
+                "unsubscribe_url": f"{get_settings().go_base_url}/unsubscribe/{unsubscribe_token_for_lead(str(row['lead_id']), _unsubscribe_secret())}",
                 "dry_run": True,
                 "send_mail": False,
                 "live_outreach_allowed": False,
@@ -2561,7 +2568,7 @@ def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
         body = (
             f"Hi team,\n\nI checked {item['domain']} today and found a possible issue that may affect customer enquiries:\n\n"
             f"{item['main_issue_short']}\n\nScreenshots and test details:\n{item['audit_url']}\n\n"
-            "Public non-invasive website check.\nUnsubscribe: https://go.rescue.voiddo.com/unsubscribe/preview"
+            f"Public non-invasive website check.\nUnsubscribe: {item['unsubscribe_url']}"
         )
         execute(
             """
@@ -2577,6 +2584,44 @@ def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
         "preview_batch_id": str(preview_batch["id"]),
         "send_mail": False,
         "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+    }
+
+
+def suppress_unsubscribe_token(token: str) -> dict[str, Any]:
+    try:
+        lead_id = lead_id_from_unsubscribe_token(token, _unsubscribe_secret())
+    except ValueError:
+        return {"ok": False, "status": "invalid_token", "suppressed": False, "send_mail": False, "live_outreach_allowed": False}
+    lead = fetch_one(
+        """
+        SELECT l.id, l.email, b.domain
+        FROM leads l
+        JOIN businesses b ON b.id = l.business_id
+        WHERE l.id = %s
+        """,
+        (lead_id,),
+    )
+    if not lead or not lead["email"]:
+        return {"ok": False, "status": "lead_not_found", "suppressed": False, "send_mail": False, "live_outreach_allowed": False}
+    execute(
+        """
+        INSERT INTO suppression_list(email, domain, reason, source)
+        VALUES (%s, %s, 'one_click_unsubscribe', 'unsubscribe_token')
+        ON CONFLICT DO NOTHING
+        """,
+        (lead["email"], lead["domain"]),
+    )
+    execute("UPDATE leads SET status = 'unsubscribed', updated_at = now() WHERE id = %s", (lead_id,))
+    return {
+        "ok": True,
+        "status": "suppressed",
+        "suppressed": True,
+        "lead_id": lead_id,
+        "recipient_hash": hashlib.sha256(str(lead["email"]).strip().lower().encode("utf-8")).hexdigest()[:24],
+        "domain": lead["domain"],
+        "send_mail": False,
         "live_outreach_allowed": False,
         "raw_recipient_addresses_included": False,
     }

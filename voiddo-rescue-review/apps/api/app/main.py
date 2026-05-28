@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +31,7 @@ from .p0 import (
     queue_outreach_preview,
     run_warmup_calendar_due,
     store_owner_command,
+    suppress_unsubscribe_token,
     transport_gate_status,
     effective_pause_state,
 )
@@ -325,7 +326,10 @@ def suppression(request: SuppressionRequest):
 
 @app.get("/unsubscribe/{token}")
 def unsubscribe(token: str):
-    return {"ok": True, "status": "suppressed", "token": token, "dry_run": True}
+    result = suppress_unsubscribe_token(token)
+    if not result["ok"]:
+        raise HTTPException(status_code=404, detail=result["status"])
+    return {"ok": True, **result}
 
 
 @app.post("/inbox/classify")

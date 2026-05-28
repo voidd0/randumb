@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     email_qa_required: bool = True
     visual_qa_required: bool = True
     admin_auth_token: str = ""
+    unsubscribe_secret: str = ""
     owner_command_email: str = ""
     studio_owner_command_emails: str = ""
     studio_mail_monitor_enabled: bool = False

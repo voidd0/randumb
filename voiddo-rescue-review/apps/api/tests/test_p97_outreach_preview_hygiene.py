@@ -4,13 +4,14 @@ import uuid
 
 from psycopg.types.json import Jsonb
 
-from app.db import execute
-from app.p0 import prepare_outreach_preview, queue_outreach_preview
+from app.db import execute, fetch_one
+from app.p0 import prepare_outreach_preview, queue_outreach_preview, suppress_unsubscribe_token
 
 
 def _cleanup(token: str) -> None:
     execute("DELETE FROM outreach_messages WHERE body LIKE %s OR subject LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM outreach_preview_batches WHERE preview_json::text LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM suppression_list WHERE email LIKE %s OR domain LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM campaign_preview_reviews WHERE campaign_lead_id IN (SELECT id FROM campaign_leads WHERE preview_json::text LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM campaign_leads WHERE preview_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM campaigns WHERE name LIKE %s", (f"%{token}%",))
@@ -98,6 +99,13 @@ def test_outreach_preview_uses_only_approved_campaign_rows_without_raw_email():
         assert "owner-" not in text
         assert all(item["source"] == "approved_campaign_preview" for item in result["preview_json"])
         assert all("email" not in item for item in result["preview_json"])
+        item = next(row for row in result["preview_json"] if row["domain"] == f"qa97-{approved_token}.clinic")
+        assert "/unsubscribe/preview" not in item["unsubscribe_url"]
+        token = item["unsubscribe_url"].rsplit("/", 1)[-1]
+        suppressed = suppress_unsubscribe_token(token)
+        assert suppressed["suppressed"] is True
+        assert suppressed["raw_recipient_addresses_included"] is False
+        assert fetch_one("SELECT 1 FROM suppression_list WHERE domain = %s", (f"qa97-{approved_token}.clinic",))
     finally:
         _cleanup(approved_token)
         _cleanup(held_token)
