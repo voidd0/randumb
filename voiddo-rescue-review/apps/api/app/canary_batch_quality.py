@@ -6,6 +6,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .db import execute, fetch_all
+from .economics import calculate_unit_economics
 from .p0 import json_safe, recipient_hash
 
 
@@ -83,6 +84,8 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
     recipient_domain_counts: Counter[str] = Counter()
     campaign_counts: Counter[str] = Counter()
     segment_counts: Counter[str] = Counter()
+    offer_counts: Counter[str] = Counter()
+    offer_economics: dict[str, dict[str, Any]] = {}
     blockers: list[str] = []
     warnings: list[str] = []
 
@@ -94,6 +97,14 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
         recipient_domain_counts[recipient_domain] += 1
         campaign_counts[str(row["campaign_id"])] += 1
         segment_counts[segment] += 1
+        offer_key = str(row["offer_key"] or "")
+        offer_counts[offer_key] += 1
+        if offer_key and offer_key not in offer_economics:
+            try:
+                offer_economics[offer_key] = calculate_unit_economics(offer_key)
+            except ValueError:
+                offer_economics[offer_key] = {"product_key": offer_key, "decision": "review", "gross_margin_percent": 0, "price_cents": 0, "gross_margin_cents": 0}
+                blockers.append("unknown_offer_key")
         item_blockers = []
         body = row["body"] or ""
         html_body = row["html_body"] or ""
@@ -111,6 +122,8 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
             item_blockers.append("lead_score_below_70")
         if int(row["audit_strength_score"] or 0) < 70:
             item_blockers.append("audit_strength_below_70")
+        if offer_economics.get(offer_key, {}).get("decision") != "pass":
+            item_blockers.append("offer_economics_not_pass")
         blockers.extend(item_blockers)
         items.append(
             {
@@ -140,6 +153,35 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
         warnings.append("campaign_concentration_above_5")
     if len(segment_counts) < 3 and len(items) >= 10:
         warnings.append("low_segment_diversity")
+    failing_offers = [key for key, value in offer_economics.items() if value.get("decision") != "pass"]
+    if failing_offers:
+        blockers.append("offer_economics_not_pass")
+
+    weighted_price_cents = sum(int(offer_economics.get(key, {}).get("price_cents") or 0) * count for key, count in offer_counts.items())
+    weighted_margin_cents = sum(int(offer_economics.get(key, {}).get("gross_margin_cents") or 0) * count for key, count in offer_counts.items())
+    average_margin_percent = round((weighted_margin_cents / weighted_price_cents) * 100, 2) if weighted_price_cents else 0
+    conservative_conversion_rate = 0.01
+    economics = {
+        "offer_mix": [
+            {
+                "offer_key": key,
+                "count": count,
+                "price_cents": int(offer_economics.get(key, {}).get("price_cents") or 0),
+                "gross_margin_percent": float(offer_economics.get(key, {}).get("gross_margin_percent") or 0),
+                "decision": offer_economics.get(key, {}).get("decision"),
+            }
+            for key, count in sorted(offer_counts.items())
+        ],
+        "weighted_price_cents": weighted_price_cents,
+        "weighted_gross_margin_cents": weighted_margin_cents,
+        "average_gross_margin_percent": average_margin_percent,
+        "conservative_conversion_rate": conservative_conversion_rate,
+        "modeled_expected_revenue_cents": round(weighted_price_cents * conservative_conversion_rate),
+        "modeled_expected_gross_margin_cents": round(weighted_margin_cents * conservative_conversion_rate),
+        "decision": "pass" if not failing_offers and average_margin_percent >= 70 else "review",
+    }
+    if economics["decision"] != "pass":
+        blockers.append("canary_economics_not_pass")
 
     decision = "PASS_CANARY_BATCH_QUALITY" if not blockers else "FAIL_CANARY_BATCH_QUALITY"
     result = json_safe(
@@ -151,6 +193,7 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
             "segment_count": len(segment_counts),
             "campaign_count": len(campaign_counts),
             "recipient_domain_count": len([key for key in recipient_domain_counts if key]),
+            "economics": economics,
             "blockers": sorted(set(blockers)),
             "warnings": sorted(set(warnings)),
             "segments": [{"segment": key, "count": value} for key, value in sorted(segment_counts.items())],

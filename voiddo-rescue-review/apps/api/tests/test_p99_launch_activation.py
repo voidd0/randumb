@@ -160,6 +160,9 @@ def test_canary_batch_quality_passes_redacted_single_candidate():
         result = canary_batch_quality(1, store=True)
         assert result["decision"] == "PASS_CANARY_BATCH_QUALITY"
         assert result["candidate_count"] == 1
+        assert result["economics"]["decision"] == "pass"
+        assert result["economics"]["average_gross_margin_percent"] >= 70
+        assert result["economics"]["offer_mix"][0]["offer_key"] == "contact_form_repair"
         assert result["items"][0]["domain"] == f"p99-canary-{token}.com"
         assert result["send_mail"] is False
         assert result["raw_recipient_addresses_included"] is False
