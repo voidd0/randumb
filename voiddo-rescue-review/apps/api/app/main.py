@@ -111,7 +111,7 @@ from .launch_operating_lane import advance_launch_operating_lane, launch_operati
 from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
 from .quality_plugins import latest_quality_summary, quality_plugin_manifest, record_quality_plugin_run
-from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, regional_lead_discovery_cycle
+from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, quality_aware_regional_target_plan, regional_lead_discovery_cycle
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
@@ -2047,6 +2047,11 @@ async def lead_discovery_regional_cycle_run(request: Request):
 @app.get("/admin/lead-discovery/targets", dependencies=[Depends(require_admin)])
 def lead_discovery_targets(include_secondary: bool = False):
     return {"ok": True, "plan": lead_discovery_target_plan(include_secondary)}
+
+
+@app.get("/admin/lead-discovery/quality-aware-regional-targets", dependencies=[Depends(require_admin)])
+def lead_discovery_quality_aware_regional_targets(limit_targets: int = 5):
+    return {"ok": True, "plan": quality_aware_regional_target_plan(limit_targets)}
 
 
 @app.get("/admin/lead-discovery/performance-guided-targets", dependencies=[Depends(require_admin)])

@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 import app.lead_discovery as discovery_module
 from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
-from app.lead_discovery import apollo_organization_discovery, lead_discovery_target_plan, overpass_lead_discovery, regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle, stockpile_expansion_target_plan
+from app.lead_discovery import apollo_organization_discovery, lead_discovery_target_plan, overpass_lead_discovery, quality_aware_regional_target_plan, regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle, stockpile_expansion_target_plan
 from app.main import app
 
 
@@ -244,6 +244,7 @@ def test_regional_lead_discovery_cycle_selects_unprocessed_targets(monkeypatch):
         assert live["created_sources"] == 2
         assert live["found_count"] == 2
         assert live["with_email_count"] == 2
+        assert live["quality_plan"]["strategy"] == "skip_low_yield_segments_and_rank_remaining_targets_before_public_overpass_fetch"
         assert live["send_mail"] is False
         assert live["smtp_called"] is False
         assert live["raw_recipient_addresses_included"] is False
@@ -251,6 +252,112 @@ def test_regional_lead_discovery_cycle_selects_unprocessed_targets(monkeypatch):
     finally:
         for target in targets:
             _cleanup(f"overpass-EE-{target['city']}-dentists")
+
+
+def test_quality_aware_regional_target_plan_skips_low_yield_segments(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    monkeypatch.setattr(
+        discovery_module,
+        "FIRST_TIER_TARGETS",
+        [
+            {"country": "US", "city": f"WeakLaw{token}", "language": "en", "niche": "law firms", "priority": 100},
+            {"country": "US", "city": f"GoodDental{token}", "language": "en", "niche": "dentists", "priority": 80},
+        ],
+    )
+    monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", [])
+
+    def fake_fetch_all(sql, params=()):
+        if "SELECT name FROM scout_sources" in sql:
+            return []
+        if "FROM scout_source_performance_scores" in sql:
+            return [
+                {
+                    "country": "US",
+                    "niche": "law firms",
+                    "source_count": 4,
+                    "qualified_rate": 0.0,
+                    "average_final_score": 31,
+                    "email_coverage": 0.2,
+                    "issue_signal_rate": 0.1,
+                    "qualified_count": 0,
+                    "promote_count": 0,
+                    "watch_count": 0,
+                    "pause_count": 3,
+                },
+                {
+                    "country": "US",
+                    "niche": "dentists",
+                    "source_count": 2,
+                    "qualified_rate": 0.25,
+                    "average_final_score": 63,
+                    "email_coverage": 0.8,
+                    "issue_signal_rate": 0.7,
+                    "qualified_count": 2,
+                    "promote_count": 1,
+                    "watch_count": 1,
+                    "pause_count": 0,
+                },
+            ]
+        return []
+
+    monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
+    plan = quality_aware_regional_target_plan(2)
+    assert plan["status"] == "ready"
+    assert plan["selected_count"] == 1
+    assert plan["targets"][0]["city"] == f"GoodDental{token}"
+    assert plan["blocked_segment_count"] == 1
+    assert plan["blocked_segments"][0]["reason"] == "low_yield_segment"
+    assert plan["send_mail"] is False
+    assert plan["live_outreach_allowed"] is False
+
+
+def test_quality_aware_regional_target_endpoint_and_agent_are_safe():
+    assert client.get("/admin/lead-discovery/quality-aware-regional-targets").status_code == 401
+    response = client.get("/admin/lead-discovery/quality-aware-regional-targets", headers=admin_headers())
+    assert response.status_code == 200
+    assert response.json()["plan"]["send_mail"] is False
+    agent = run_agent("quality_aware_regional_target_plan_agent", {"limit_targets": 2})
+    assert agent["status"] == "completed"
+    assert agent["result_json"]["send_mail"] is False
+    assert agent["result_json"]["live_outreach_allowed"] is False
+
+
+def test_quality_aware_regional_target_plan_uses_reserve_bank_when_primary_is_exhausted(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    primary = [{"country": "US", "city": f"UsedPrimary{token}", "language": "en", "niche": "dentists", "priority": 100}]
+    reserve = [{"country": "US", "city": f"FreshReserve{token}", "language": "en", "niche": "dentists", "priority": 35, "tier": "reserve"}]
+    monkeypatch.setattr(discovery_module, "FIRST_TIER_TARGETS", primary)
+    monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", reserve)
+
+    def fake_fetch_all(sql, params=()):
+        if "SELECT name FROM scout_sources" in sql:
+            return [{"name": f"overpass-US-UsedPrimary{token}-dentists"}]
+        if "FROM scout_source_performance_scores" in sql:
+            return [
+                {
+                    "country": "US",
+                    "niche": "dentists",
+                    "source_count": 1,
+                    "qualified_rate": 0.5,
+                    "average_final_score": 74,
+                    "email_coverage": 0.8,
+                    "issue_signal_rate": 0.7,
+                    "qualified_count": 2,
+                    "promote_count": 1,
+                    "watch_count": 0,
+                    "pause_count": 0,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
+    plan = quality_aware_regional_target_plan(3)
+    assert plan["status"] == "ready"
+    assert plan["selected_count"] == 1
+    assert plan["targets"][0]["city"] == f"FreshReserve{token}"
+    assert plan["targets"][0]["tier"] == "reserve"
+    assert plan["target_pool_count"] == 2
+    assert plan["send_mail"] is False
 
 
 def test_stockpile_expansion_target_plan_uses_approved_preview_segments(monkeypatch):

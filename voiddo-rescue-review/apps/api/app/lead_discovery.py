@@ -189,6 +189,54 @@ FIRST_TIER_TARGETS: list[dict[str, Any]] = [
     for index, (country, city, niche) in enumerate(FIRST_TIER_MARKETS)
 ]
 
+RESERVE_REGIONAL_MARKETS: list[tuple[str, str, str]] = [
+    ("US", "Omaha", "dentists"),
+    ("US", "Lincoln", "dentists"),
+    ("US", "Wichita", "dentists"),
+    ("US", "Topeka", "law firms"),
+    ("US", "Springfield", "law firms"),
+    ("US", "Peoria", "contractors"),
+    ("US", "Green Bay", "contractors"),
+    ("US", "Appleton", "dentists"),
+    ("US", "Provo", "dentists"),
+    ("US", "Ogden", "contractors"),
+    ("US", "Macon", "law firms"),
+    ("US", "Augusta", "dentists"),
+    ("US", "Pensacola", "clinics"),
+    ("US", "Huntsville", "clinics"),
+    ("US", "Davenport", "contractors"),
+    ("US", "Lansing", "dentists"),
+    ("UK", "Derby", "dentists"),
+    ("UK", "Nottingham", "law firms"),
+    ("UK", "Leicester", "clinics"),
+    ("UK", "Coventry", "contractors"),
+    ("UK", "Southampton", "dentists"),
+    ("UK", "Bournemouth", "beauty salons"),
+    ("UK", "Swindon", "clinics"),
+    ("UK", "Ipswich", "law firms"),
+    ("UK", "Maidstone", "dentists"),
+    ("UK", "Colchester", "contractors"),
+    ("CA", "Burlington", "dentists"),
+    ("CA", "Oakville", "dentists"),
+    ("CA", "Markham", "dentists"),
+    ("CA", "Vaughan", "contractors"),
+    ("CA", "Richmond Hill", "clinics"),
+    ("CA", "Cambridge", "dentists"),
+    ("CA", "Oshawa", "dentists"),
+    ("CA", "Whitby", "beauty salons"),
+    ("CA", "Ajax", "contractors"),
+    ("IE", "Dundalk", "dentists"),
+    ("IE", "Portlaoise", "dentists"),
+    ("IE", "Tullamore", "dentists"),
+    ("IE", "Castlebar", "law firms"),
+    ("IE", "Naas", "beauty salons"),
+]
+
+RESERVE_REGIONAL_TARGETS: list[dict[str, Any]] = [
+    {"country": country, "city": city, "language": "en", "niche": niche, "priority": 35 - index, "tier": "reserve"}
+    for index, (country, city, niche) in enumerate(RESERVE_REGIONAL_MARKETS)
+]
+
 SECONDARY_TEST_TARGETS: list[dict[str, Any]] = [
     {"country": "IL", "city": "Tel Aviv", "language": "he", "niche": "dentists", "priority": 45},
     {"country": "EE", "city": "Tallinn", "language": "en", "niche": "dentists", "priority": 40},
@@ -324,6 +372,141 @@ def lead_discovery_target_plan(include_secondary: bool = False) -> dict[str, Any
         "secondary_targets_included": include_secondary,
         "israel_is_secondary_local_only": True,
         "estonia_is_secondary_test_only": True,
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def _source_segment_performance_summary() -> dict[tuple[str, str], dict[str, Any]]:
+    rows = fetch_all(
+        """
+        WITH latest AS (
+          SELECT DISTINCT ON (source_id)
+            source_id, recommendation, qualified_count, qualified_rate,
+            average_final_score, email_coverage, issue_signal_rate, created_at
+          FROM scout_source_performance_scores
+          WHERE source_id IS NOT NULL
+          ORDER BY source_id, created_at DESC
+        )
+        SELECT
+          ss.country,
+          ss.niche,
+          count(*) AS source_count,
+          avg(latest.qualified_rate) AS qualified_rate,
+          avg(latest.average_final_score) AS average_final_score,
+          avg(latest.email_coverage) AS email_coverage,
+          avg(latest.issue_signal_rate) AS issue_signal_rate,
+          sum(latest.qualified_count) AS qualified_count,
+          count(*) FILTER (WHERE latest.recommendation = 'PROMOTE_SOURCE_FOR_MORE_SCOUTING') AS promote_count,
+          count(*) FILTER (WHERE latest.recommendation = 'KEEP_TESTING_WITH_SMALL_BATCHES') AS watch_count,
+          count(*) FILTER (WHERE latest.recommendation = 'PAUSE_SOURCE_UNTIL_REVIEW') AS pause_count
+        FROM latest
+        JOIN scout_sources ss ON ss.id = latest.source_id
+        WHERE upper(COALESCE(ss.country, '')) !~ %s
+          AND ss.country IS NOT NULL
+          AND ss.niche IS NOT NULL
+        GROUP BY ss.country, ss.niche
+        """,
+        (TEST_COUNTRY_PATTERN,),
+    )
+    return {
+        (str(row["country"] or "").upper(), str(row["niche"] or "")): {
+            "source_count": int(row["source_count"] or 0),
+            "qualified_count": int(row["qualified_count"] or 0),
+            "qualified_rate": float(row["qualified_rate"] or 0),
+            "average_final_score": float(row["average_final_score"] or 0),
+            "email_coverage": float(row["email_coverage"] or 0),
+            "issue_signal_rate": float(row["issue_signal_rate"] or 0),
+            "promote_count": int(row["promote_count"] or 0),
+            "watch_count": int(row["watch_count"] or 0),
+            "pause_count": int(row["pause_count"] or 0),
+        }
+        for row in rows
+    }
+
+
+def _segment_blocked(perf: dict[str, Any]) -> bool:
+    source_count = int(perf.get("source_count") or 0)
+    pause_count = int(perf.get("pause_count") or 0)
+    promote_count = int(perf.get("promote_count") or 0)
+    qualified_count = int(perf.get("qualified_count") or 0)
+    return bool(
+        source_count >= 2
+        and pause_count >= max(2, promote_count + 1)
+        and qualified_count <= 0
+        and float(perf.get("qualified_rate") or 0) < 0.05
+        and float(perf.get("average_final_score") or 0) < 40
+    )
+
+
+def quality_aware_regional_target_plan(limit_targets: int = 5) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit_targets or 5), 20))
+    existing_source_names = {str(row["name"]) for row in fetch_all("SELECT name FROM scout_sources WHERE name LIKE %s", ("overpass-%",))}
+    performance = _source_segment_performance_summary()
+    candidates: list[dict[str, Any]] = []
+    blocked_segments: list[dict[str, Any]] = []
+    target_pool = [*lead_discovery_target_plan(False)["targets"], *RESERVE_REGIONAL_TARGETS]
+    for target in target_pool:
+        source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
+        if source_name in existing_source_names:
+            continue
+        key = (str(target["country"]).upper(), str(target["niche"]))
+        perf = performance.get(
+            key,
+            {
+                "source_count": 0,
+                "qualified_count": 0,
+                "qualified_rate": 0.0,
+                "average_final_score": 0.0,
+                "email_coverage": 0.0,
+                "issue_signal_rate": 0.0,
+                "promote_count": 0,
+                "watch_count": 0,
+                "pause_count": 0,
+            },
+        )
+        if _segment_blocked(perf):
+            blocked_segments.append({"country": key[0], "niche": key[1], "source_name": source_name, "reason": "low_yield_segment"})
+            continue
+        quality_score = round(
+            float(target.get("priority", 0))
+            + NICHE_EXPANSION_PRIORITY.get(str(target["niche"]), 5)
+            + (float(perf["qualified_rate"]) * 120)
+            + (float(perf["email_coverage"]) * 30)
+            + (float(perf["issue_signal_rate"]) * 35)
+            + (float(perf["average_final_score"]) * 0.25)
+            + (int(perf["promote_count"]) * 18)
+            + (int(perf["watch_count"]) * 8)
+            - (int(perf["pause_count"]) * 14),
+            2,
+        )
+        candidates.append(
+            {
+                **target,
+                "source_name": source_name,
+                "tier": target.get("tier", "primary"),
+                "quality_score": quality_score,
+                "guidance": {
+                    "strategy": "quality_aware_regional_fallback_ranked_by_real_source_performance",
+                    "source_performance": perf,
+                },
+            }
+        )
+    candidates.sort(key=lambda item: (item["quality_score"], item.get("priority", 0)), reverse=True)
+    selected = candidates[:safe_limit]
+    return {
+        "status": "ready" if selected else "no_quality_targets",
+        "selected_count": len(selected),
+        "targets": selected,
+        "candidate_count": len(candidates),
+        "target_pool_count": len(target_pool),
+        "blocked_segment_count": len(blocked_segments),
+        "blocked_segments": blocked_segments[:25],
+        "performance_segment_count": len(performance),
+        "strategy": "skip_low_yield_segments_and_rank_remaining_targets_before_public_overpass_fetch",
         "send_mail": False,
         "smtp_called": False,
         "live_outreach_allowed": False,
@@ -683,16 +866,8 @@ def apollo_organization_discovery(
 def regional_lead_discovery_cycle(limit_targets: int = 2, per_target_limit: int = 30, dry_run: bool = True) -> dict[str, Any]:
     safe_target_limit = max(1, min(int(limit_targets or 2), 8))
     safe_per_target_limit = max(1, min(int(per_target_limit or 30), 50))
-    existing_rows = fetch_all("SELECT name FROM scout_sources WHERE name LIKE %s", ("overpass-%",))
-    existing = {str(row["name"]) for row in existing_rows}
-    targets = []
-    for target in lead_discovery_target_plan(False)["targets"]:
-        source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
-        if source_name in existing:
-            continue
-        targets.append({**target, "source_name": source_name})
-        if len(targets) >= safe_target_limit:
-            break
+    quality_plan = quality_aware_regional_target_plan(safe_target_limit)
+    targets = quality_plan["targets"]
 
     if dry_run:
         return {
@@ -702,6 +877,7 @@ def regional_lead_discovery_cycle(limit_targets: int = 2, per_target_limit: int 
             "created_sources": 0,
             "found_count": 0,
             "with_email_count": 0,
+            "quality_plan": {key: value for key, value in quality_plan.items() if key != "targets"},
             "send_mail": False,
             "smtp_called": False,
             "live_outreach_allowed": False,
@@ -747,6 +923,7 @@ def regional_lead_discovery_cycle(limit_targets: int = 2, per_target_limit: int 
             }
             for item in created
         ],
+        "quality_plan": {key: value for key, value in quality_plan.items() if key != "targets"},
         "send_mail": False,
         "smtp_called": False,
         "live_outreach_allowed": False,
