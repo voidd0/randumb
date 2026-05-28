@@ -12,6 +12,7 @@ from app.p0 import (
     create_scanner_job,
     handle_paddle_event,
     import_lead_batch,
+    latest_production_visual_qa_decision,
     parse_owner_command,
     persist_inbound_message,
     prepare_warmup,
@@ -132,6 +133,15 @@ def test_visual_qa_detects_unresolved_template_vars():
     result = record_visual_qa("email_visual_agent", "inline:test", "<html>{{business_name}}</html>")
     assert result["decision"] == "FAIL_BLOCK_LAUNCH"
     assert "unresolved_template_vars" in result["issues_json"]
+
+
+def test_production_visual_decision_ignores_inline_test_artifacts():
+    token = uuid.uuid4().hex[:8]
+    prod = record_visual_qa("app_visual_agent", f"/admin-test-{token}", "<html><body>Ready</body></html>")
+    inline = record_visual_qa("email_visual_agent", "inline:test", "<html>{{business_name}}</html>")
+    assert prod["decision"] == "PASS"
+    assert inline["decision"] == "FAIL_BLOCK_LAUNCH"
+    assert latest_production_visual_qa_decision() == "PASS"
 
 
 def test_mail_qa_blocks_missing_dkim(monkeypatch):

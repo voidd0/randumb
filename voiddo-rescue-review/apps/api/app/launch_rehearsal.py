@@ -13,6 +13,7 @@ from .outreach_live_queue import live_outreach_queue_candidates, stage_live_outr
 from .outreach_post_send_observer import outreach_post_send_observer
 from .p0 import json_safe
 from .quality_plugins import latest_quality_summary
+from .reply_safety_rehearsal import run_reply_safety_rehearsal
 
 
 SAFE_FLAGS = {
@@ -44,6 +45,7 @@ def run_launch_rehearsal(limit: int = 20, apply_pause: bool = False) -> dict[str
     observer = outreach_post_send_observer(24, apply_pause=apply_pause)
     mailer = mailer_policy_score()
     visual = latest_quality_summary()
+    reply_safety = run_reply_safety_rehearsal(store=True)
     huanshu_rows = [
         row for row in (visual or {}).get("runs", [])
         if row.get("tool") == "huanshu"
@@ -117,6 +119,20 @@ def run_launch_rehearsal(limit: int = 20, apply_pause: bool = False) -> dict[str
             int(mailer.get("score") or 0) >= 100 and not mailer.get("blockers"),
             {"score": mailer.get("score"), "decision": mailer.get("decision"), "blockers": mailer.get("blockers")},
             "mailer_policy_not_clean",
+        ),
+        _step(
+            "reply_safety_rehearsal_pass",
+            reply_safety.get("decision") == "PASS_REPLY_SAFETY_REHEARSAL"
+            and reply_safety.get("auto_replies_paused") is True
+            and reply_safety.get("send_mail") is False
+            and reply_safety.get("live_outreach_allowed") is False,
+            {
+                "decision": reply_safety.get("decision"),
+                "sample_count": reply_safety.get("sample_count"),
+                "blockers": reply_safety.get("blockers"),
+                "auto_replies_paused": reply_safety.get("auto_replies_paused"),
+            },
+            "reply_safety_rehearsal_not_pass",
         ),
         _step(
             "visual_quality_clean",

@@ -8,7 +8,7 @@ from .campaign_control_room import campaign_control_room_snapshot
 from .config import get_settings
 from .db import fetch_one
 from .mailer_control_room import latest_mailer_policy_score_history, mailer_policy_score
-from .p0 import json_safe, latest_decision, latest_preview_transport_gate_status, mail_signal_summary, warmup_calendar_health, warmup_domain_maturity_status
+from .p0 import json_safe, latest_decision, latest_preview_transport_gate_status, latest_production_visual_qa_decision, mail_signal_summary, warmup_calendar_health, warmup_domain_maturity_status
 from .quality_plugins import latest_quality_summary
 from .revenue_loop import revenue_loop_snapshot
 from .source_campaign_operator import source_campaign_operator_snapshot
@@ -32,7 +32,7 @@ def _visual_quality_evidence() -> dict[str, Any]:
     huanshu_runs = [row for row in runs if row.get("tool") == "huanshu"]
     additional_tools = sorted({row.get("tool") for row in runs if row.get("tool") != "huanshu" and row.get("tool")})
     return {
-        "visual_qa_decision": latest_decision("visual_qa_runs"),
+        "visual_qa_decision": latest_production_visual_qa_decision(),
         "huanshu_latest_status": huanshu_runs[-1].get("status") if huanshu_runs else "MISSING",
         "huanshu_run_count": len(huanshu_runs),
         "additional_tool_count": len(additional_tools),

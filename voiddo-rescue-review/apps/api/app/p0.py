@@ -2574,6 +2574,20 @@ def latest_decision(table: str) -> str:
     return row["decision"] if row else "MISSING"
 
 
+def latest_production_visual_qa_decision() -> str:
+    row = fetch_one(
+        """
+        SELECT decision
+        FROM visual_qa_runs
+        WHERE COALESCE(target_url, '') NOT LIKE %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        ("inline:test%",),
+    )
+    return row["decision"] if row else "MISSING"
+
+
 def live_outreach_quota_status(email: str = "") -> dict[str, Any]:
     settings = get_settings()
     normalized = (email or "").strip().lower()
@@ -2631,7 +2645,7 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
         "outreach_paused": effective_pause_state("outreach", settings.outreach_paused),
         "first_live_send_flag": settings.first_live_send_flag,
         "mail_qa_decision": latest_decision("mail_qa_runs"),
-        "visual_qa_decision": latest_decision("visual_qa_runs"),
+        "visual_qa_decision": latest_production_visual_qa_decision(),
         "has_unsubscribe": bool(unsubscribe_url),
         "unsubscribe_one_click_ready": bool(unsubscribe_url),
         "html_body_ready": bool(str(html_body).strip().lower().startswith("<!doctype html>")),

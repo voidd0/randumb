@@ -8,7 +8,7 @@ from .audit_strength import score_audit_strength
 from .campaign_economics import run_campaign_economics_check
 from .campaign_preview_reviews import campaign_preview_review_summary
 from .db import execute, fetch_all, fetch_one
-from .p0 import latest_decision, mail_signal_summary
+from .p0 import latest_decision, latest_production_visual_qa_decision, mail_signal_summary
 from .scout_quality import lead_scout_quality_gate
 from .scouts import scout_source_readiness_gate
 
@@ -63,7 +63,7 @@ def campaign_readiness_snapshot(campaign_id: str) -> dict[str, Any]:
     review_summary = campaign_preview_review_summary(campaign_id)
     signals = mail_signal_summary(24)
     mail_qa = latest_decision("mail_qa_runs")
-    visual = latest_decision("visual_qa_runs")
+    visual = latest_production_visual_qa_decision()
     blockers: list[dict[str, Any]] = []
     if not leads:
         blockers.append({"code": "no_campaign_leads", "severity": "high"})
