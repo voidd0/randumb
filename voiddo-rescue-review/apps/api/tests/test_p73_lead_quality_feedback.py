@@ -292,3 +292,55 @@ def test_performance_guided_discovery_uses_real_source_yield_without_sending(mon
         assert agent["result_json"]["send_mail"] is False
     finally:
         _cleanup(token)
+
+
+def test_performance_guided_target_plan_prefers_email_coverage(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        zero_email_source = execute(
+            """
+            INSERT INTO scout_sources(name, source_type, country, language, niche, status, config_json)
+            VALUES (%s, 'manual_csv_scout', 'US', 'en', 'dentists', 'active', '{}'::jsonb)
+            RETURNING id
+            """,
+            (f"p73-zero-email-{token}",),
+        )
+        email_source = execute(
+            """
+            INSERT INTO scout_sources(name, source_type, country, language, niche, status, config_json)
+            VALUES (%s, 'manual_csv_scout', 'CA', 'en', 'dentists', 'active', '{}'::jsonb)
+            RETURNING id
+            """,
+            (f"p73-email-{token}",),
+        )
+        for source, country, email_coverage in [
+            (zero_email_source, "US", 0.0),
+            (email_source, "CA", 0.8),
+        ]:
+            execute(
+                """
+                INSERT INTO scout_source_performance_scores(
+                  source_id, status, scanned_count, scored_count, qualified_count,
+                  qualified_rate, average_final_score, email_coverage, issue_signal_rate,
+                  recommendation, reasoning_json
+                )
+                VALUES (%s, 'PASS_SOURCE_PERFORMANCE_NO_SEND', 5, 5, 2, 0.5, 80, %s, 0.6,
+                        'PROMOTE_SOURCE_FOR_MORE_SCOUTING', %s)
+                """,
+                (source["id"], email_coverage, Jsonb({"token": token, "country": country})),
+            )
+        monkeypatch.setattr(
+            discovery_module,
+            "FIRST_TIER_TARGETS",
+            [
+                {"country": "US", "city": f"ZeroEmail{token}", "language": "en", "niche": "dentists", "priority": 99},
+                {"country": "CA", "city": f"EmailFirst{token}", "language": "en", "niche": "dentists", "priority": 98},
+            ],
+        )
+        plan = performance_guided_target_plan(1)
+        assert plan["selected_count"] == 1
+        assert plan["targets"][0]["country"] == "CA"
+        assert plan["targets"][0]["guidance"]["email_coverage"] == 0.8
+        assert plan["send_mail"] is False
+    finally:
+        _cleanup(token)

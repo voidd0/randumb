@@ -436,6 +436,8 @@ def performance_guided_target_plan(limit_targets: int = 5) -> dict[str, Any]:
           AND latest.qualified_count > 0
         ORDER BY
           CASE latest.recommendation WHEN 'PROMOTE_SOURCE_FOR_MORE_SCOUTING' THEN 0 ELSE 1 END,
+          CASE WHEN latest.email_coverage > 0 THEN 0 ELSE 1 END,
+          latest.email_coverage DESC,
           latest.qualified_rate DESC,
           latest.average_final_score DESC,
           latest.created_at DESC
@@ -482,7 +484,7 @@ def performance_guided_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         "selected_count": len(selected),
         "targets": selected,
         "guidance_sources_checked": len(latest_performance),
-        "strategy": "promote_country_niche_pairs_with_real_qualified_scan_yield",
+        "strategy": "promote_country_niche_pairs_with_real_qualified_scan_yield_and_email_coverage_first",
         "send_mail": False,
         "smtp_called": False,
         "live_outreach_allowed": False,
