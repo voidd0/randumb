@@ -99,15 +99,13 @@ def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
     assert result["loop"]["mode"] == "core"
     assert len(calls) == len(loop_script.CORE_AGENTS)
     assert calls[0][0] == "mail_throttle_agent"
-    assert "lead_supply_buildout_agent" in [agent for agent, _payload in calls]
-    assert [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent") < [agent for agent, _payload in calls].index("lead_supply_buildout_agent")
-    assert [agent for agent, _payload in calls].index("lead_supply_buildout_agent") < [agent for agent, _payload in calls].index("post_scan_campaign_cycle_agent")
+    assert "lead_supply_buildout_agent" not in [agent for agent, _payload in calls]
+    assert [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent") < [agent for agent, _payload in calls].index("post_scan_campaign_cycle_agent")
     assert [agent for agent, _payload in calls].index("post_scan_campaign_cycle_agent") < [agent for agent, _payload in calls].index("outreach_preview_queue_agent")
     assert [agent for agent, _payload in calls].index("outreach_preview_queue_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
     assert [agent for agent, _payload in calls].index("outreach_preview_dedupe_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
     assert [agent for agent, _payload in calls].index("campaign_geo_hygiene_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
     assert [agent for agent, _payload in calls].index("campaign_preflight_orphan_hygiene_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
-    assert dict(calls)["lead_supply_buildout_agent"]["enrichment_limit"] == 5
     assert calls[-1][0] == "mailer_policy_score_agent"
 
 

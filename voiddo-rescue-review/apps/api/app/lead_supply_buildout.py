@@ -166,12 +166,18 @@ def lead_supply_buildout(
             and int(current.get("approved_preview_count") or 0) >= canary
             and int(current.get("source_candidate_count") or 0) == 0
         ):
-            expansion = stockpile_expansion_discovery_cycle(limit_targets=2, per_target_limit=25, dry_run=False, max_seconds=120)
+            remaining_seconds = max(20, int(seconds - (time.monotonic() - started)))
+            expansion = stockpile_expansion_discovery_cycle(
+                limit_targets=1,
+                per_target_limit=20,
+                dry_run=False,
+                max_seconds=min(60, remaining_seconds),
+            )
             actions.append(_action_summary({"name": "stockpile_expansion_discovery_cycle", **expansion}))
             current = lead_stockpile_health_snapshot(target, canary, safe_limit)
 
         if int(current.get("approved_preview_count") or 0) < target and int(current.get("source_candidate_count") or 0) == 0:
-            discovery = regional_lead_discovery_cycle(limit_targets=2, per_target_limit=20, dry_run=False)
+            discovery = regional_lead_discovery_cycle(limit_targets=1, per_target_limit=15, dry_run=False)
             actions.append(_action_summary({"name": "regional_lead_discovery_cycle", **discovery}))
 
         refreshed = lead_stockpile_health_snapshot(target, canary, safe_limit)

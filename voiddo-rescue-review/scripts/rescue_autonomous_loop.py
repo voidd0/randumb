@@ -27,7 +27,6 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),
     ("scanner_completion_watch_agent", {"limit": 100, "min_new_completed": 1, "dry_run": False}),
     ("quality_aware_regional_target_plan_agent", {"limit_targets": 5}),
-    ("lead_supply_buildout_agent", {"target_preview_count": 100, "canary_count": 20, "limit": 120, "max_cycles": 1, "max_seconds": 90, "enrichment_limit": 5, "apply": True}),
     ("post_scan_campaign_cycle_agent", {"limit": 120, "dry_run": False}),
     ("outreach_preview_queue_agent", {"limit": 100}),
     ("outreach_preview_dedupe_agent", {"limit": 500, "apply": True}),
