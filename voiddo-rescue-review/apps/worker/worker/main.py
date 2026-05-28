@@ -14,7 +14,8 @@ def log(event: str, **payload):
 
 
 def main():
-    log("worker_started", dry_run=os.environ.get("OUTREACH_DRY_RUN", "true"))
+    tick_seconds = max(5, min(int(os.environ.get("WORKER_TICK_SECONDS", "20") or "20"), 300))
+    log("worker_started", dry_run=os.environ.get("OUTREACH_DRY_RUN", "true"), tick_seconds=tick_seconds)
     while True:
         if os.environ.get("GLOBAL_KILL_SWITCH", "false").lower() == "true":
             log("worker_paused", reason="global_kill_switch")
@@ -41,7 +42,7 @@ def main():
                         log("outreach_queue_processed", **result)
                 except Exception as exc:
                     log("outreach_queue_failed", error=type(exc).__name__)
-        time.sleep(60)
+        time.sleep(tick_seconds)
 
 
 if __name__ == "__main__":

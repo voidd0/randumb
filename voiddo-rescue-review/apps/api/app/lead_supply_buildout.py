@@ -102,6 +102,48 @@ def _first_ready_source_id(result: dict[str, Any]) -> str | None:
     return None
 
 
+def _wait_for_scanner_worker_progress(
+    target: int,
+    canary: int,
+    safe_limit: int,
+    max_wait_seconds: int,
+) -> dict[str, Any]:
+    wait_budget = max(0, min(int(max_wait_seconds or 0), 180))
+    if wait_budget <= 0:
+        return {"name": "scanner_worker_progress_wait", "status": "skipped_no_budget", **SAFE_FLAGS}
+    before = lead_stockpile_health_snapshot(target, canary, safe_limit)
+    before_active = int(before.get("scanner_active_count") or 0)
+    if before_active <= 0:
+        return {"name": "scanner_worker_progress_wait", "status": "skipped_no_active_scanner_jobs", "before_active": before_active, **SAFE_FLAGS}
+    started = time.monotonic()
+    watches: list[dict[str, Any]] = []
+    after = before
+    while time.monotonic() - started < wait_budget:
+        time.sleep(min(10, max(1, wait_budget - int(time.monotonic() - started))))
+        watch = scanner_completion_watch(safe_limit, min_new_completed=1, dry_run=False)
+        watches.append(_action_summary({"name": "scanner_completion_watch_wait", **watch}))
+        after = lead_stockpile_health_snapshot(target, canary, safe_limit)
+        if int(after.get("scanner_active_count") or 0) < before_active:
+            break
+        if int(after.get("approved_preview_count") or 0) > int(before.get("approved_preview_count") or 0):
+            break
+        if int(after.get("ready_candidate_count") or 0) > int(before.get("ready_candidate_count") or 0):
+            break
+    return {
+        "name": "scanner_worker_progress_wait",
+        "status": "completed",
+        "waited_seconds": int(time.monotonic() - started),
+        "before_active": before_active,
+        "after_active": int(after.get("scanner_active_count") or 0),
+        "before_approved": int(before.get("approved_preview_count") or 0),
+        "after_approved": int(after.get("approved_preview_count") or 0),
+        "before_ready": int(before.get("ready_candidate_count") or 0),
+        "after_ready": int(after.get("ready_candidate_count") or 0),
+        "watches": watches[-3:],
+        **SAFE_FLAGS,
+    }
+
+
 def lead_supply_buildout(
     target_preview_count: int = 100,
     canary_count: int = 20,
@@ -231,6 +273,10 @@ def lead_supply_buildout(
         actions.append(_action_summary({"name": "scanner_completion_watch", **watch}))
 
         refreshed = lead_stockpile_health_snapshot(target, canary, safe_limit)
+        if int(refreshed.get("scanner_active_count") or 0) > 0 and time.monotonic() - started < seconds - 15:
+            wait = _wait_for_scanner_worker_progress(target, canary, safe_limit, min(60, int(seconds - (time.monotonic() - started) - 10)))
+            actions.append(wait)
+            refreshed = lead_stockpile_health_snapshot(target, canary, safe_limit)
         if int(refreshed.get("ready_candidate_count") or 0) > int(refreshed.get("active_preview_count") or 0):
             refresh = refresh_campaign_previews_if_needed(min(safe_limit, 80), stale_hours=12, dry_run=False)
             actions.append(_action_summary({"name": "refresh_campaign_previews_if_needed", **refresh}))

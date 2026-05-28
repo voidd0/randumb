@@ -87,6 +87,7 @@ services:
     env_file: .env
     environment:
       SCANNER_JOBS_PER_TICK: ${SCANNER_JOBS_PER_TICK:-5}
+      WORKER_TICK_SECONDS: ${WORKER_TICK_SECONDS:-20}
     volumes:
       - voiddo_rescue_storage:/app/storage
       - ./codex_tasks:/app/codex_tasks
