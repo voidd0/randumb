@@ -592,7 +592,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
                 "limit": 120,
                 "max_cycles": 1,
                 "max_seconds": 90,
-                "enrichment_limit": 0,
+                "enrichment_limit": 5,
                 "apply": True,
             },
         ),
