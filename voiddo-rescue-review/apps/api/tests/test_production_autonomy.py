@@ -6,8 +6,8 @@ import uuid
 from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
-from app.autonomous_agents import run_agent, run_daily_loop
-from app.db import execute, fetch_all, fetch_one
+from app.autonomous_agents import DAILY_LOOP_ADVISORY_LOCK_KEY, run_agent, run_daily_loop
+from app.db import connect, execute, fetch_all, fetch_one
 from app.email_templates import render_all_samples, render_email_template, qa_email_template
 from app.lead_scoring import score_lead
 from app.main import app
@@ -372,6 +372,22 @@ def test_daily_loop_runs_dry_without_live_outreach():
     result = run_daily_loop()
     assert result["live_outreach"] is False
     assert result["agents"] >= 5
+
+
+def test_daily_loop_skips_when_advisory_lock_is_held():
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_lock(%s)", (DAILY_LOOP_ADVISORY_LOCK_KEY,))
+        try:
+            result = run_daily_loop()
+            assert result["status"] == "skipped_already_running"
+            assert result["lock_acquired"] is False
+            assert result["agents"] == 0
+            assert result["send_mail"] is False
+            assert result["live_outreach_allowed"] is False
+        finally:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_unlock(%s)", (DAILY_LOOP_ADVISORY_LOCK_KEY,))
 
 
 def test_mail_throttle_blocks_recent_rate_limit(monkeypatch):

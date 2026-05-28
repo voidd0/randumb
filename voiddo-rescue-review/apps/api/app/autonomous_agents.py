@@ -8,7 +8,7 @@ from psycopg.types.json import Jsonb
 
 from .clean_window_recheck import clean_window_recheck, post_window_recheck_scheduler
 from .contact_enrichment import contact_enrichment_candidates, run_hunter_contact_enrichment, run_public_contact_page_enrichment
-from .db import execute, fetch_one
+from .db import connect, execute, fetch_one
 from .email_templates import render_all_samples
 from .economics import run_economics_audit
 from .audit_evidence_remediation import audit_evidence_candidates, audit_evidence_remediation
@@ -420,7 +420,10 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
     return _record_agent(agent, agents[agent])
 
 
-def run_daily_loop() -> dict[str, Any]:
+DAILY_LOOP_ADVISORY_LOCK_KEY = 86420057
+
+
+def _run_daily_loop_unlocked() -> dict[str, Any]:
     if os.environ.get("PYTEST_CURRENT_TEST"):
         selected = [
             "mail_throttle_agent",
@@ -570,4 +573,27 @@ def run_daily_loop() -> dict[str, Any]:
         ]
     payload = {"limit": 1, "dry_run": True} if os.environ.get("PYTEST_CURRENT_TEST") else None
     runs = [run_agent(agent, payload) for agent in selected]
-    return {"agents": len(runs), "runs": runs, "live_outreach": False}
+    return {"status": "completed", "agents": len(runs), "runs": runs, "live_outreach": False, "lock_acquired": True}
+
+
+def run_daily_loop() -> dict[str, Any]:
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_lock(%s)", (DAILY_LOOP_ADVISORY_LOCK_KEY,))
+            locked = bool(cur.fetchone()[0])
+        if not locked:
+            return {
+                "status": "skipped_already_running",
+                "agents": 0,
+                "runs": [],
+                "live_outreach": False,
+                "lock_acquired": False,
+                "send_mail": False,
+                "smtp_called": False,
+                "live_outreach_allowed": False,
+            }
+        try:
+            return _run_daily_loop_unlocked()
+        finally:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_unlock(%s)", (DAILY_LOOP_ADVISORY_LOCK_KEY,))
