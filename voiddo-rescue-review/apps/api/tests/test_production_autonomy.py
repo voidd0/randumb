@@ -14,7 +14,21 @@ from app.main import app
 from app.mailer_throttle import throttle_decision
 from app.p0 import handle_paddle_event, record_mail_signal
 from app.scout_quality import latest_scout_quality_gate, lead_scout_quality_gate, run_scout_quality_gate
-from app.scouts import create_campaign, create_scout_run, create_scout_source, get_campaign, prepare_campaign, prepare_campaign_gated, process_queued_scout_runs, process_scout_run, process_scout_run_gated, run_scout_source_readiness, scout_campaign_expansion_gate
+from app.scouts import (
+    create_campaign,
+    create_scout_run,
+    create_scout_source,
+    get_campaign,
+    infer_country_from_domain,
+    normalize_lead_country,
+    prepare_campaign,
+    prepare_campaign_gated,
+    process_queued_scout_runs,
+    process_scout_run,
+    process_scout_run_gated,
+    run_scout_source_readiness,
+    scout_campaign_expansion_gate,
+)
 
 
 client = TestClient(app)
@@ -150,6 +164,40 @@ def test_scout_rejects_large_retailer_domains_from_public_sources():
         assert result["rejected"] == 1
         row = fetch_one("SELECT rejection_reason FROM scout_leads WHERE domain = %s AND scout_run_id = %s", (domain, run["id"]))
         assert row["rejection_reason"] == "excluded_large_enterprise"
+    finally:
+        _cleanup_token(token)
+
+
+def test_scout_normalizes_country_from_public_domain_suffix():
+    assert infer_country_from_domain("https://example.com.au/path") == "AU"
+    assert infer_country_from_domain("lawfirm.co.nz") == "NZ"
+    assert infer_country_from_domain("studio.co.uk") == "UK"
+    assert normalize_lead_country("UK", "example.com.au") == "AU"
+
+
+def test_scout_import_uses_domain_country_when_source_country_is_wrong():
+    token = uuid.uuid4().hex[:8]
+    domain = f"country-fix-{token}.com.au"
+    csv_text = f"business_name,website_url,email,country,niche\nCountry Fix,https://{domain},a@{domain},UK,law firms\n"
+    try:
+        source = create_scout_source({"name": f"country-fix-{token}", "source_type": "manual_csv_scout", "country": "UK", "language": "en", "niche": "law firms", "config_json": {"csv": csv_text}})
+        run = create_scout_run(str(source["id"]))
+        result = process_scout_run(str(run["id"]))
+        assert result["accepted"] == 1
+        scout_lead = fetch_one("SELECT country FROM scout_leads WHERE domain = %s", (domain,))
+        business = fetch_one("SELECT country FROM businesses WHERE domain = %s", (domain,))
+        lead = fetch_one(
+            """
+            SELECT l.country
+            FROM leads l
+            JOIN businesses b ON b.id = l.business_id
+            WHERE b.domain = %s
+            """,
+            (domain,),
+        )
+        assert scout_lead["country"] == "AU"
+        assert business["country"] == "AU"
+        assert lead["country"] == "AU"
     finally:
         _cleanup_token(token)
 

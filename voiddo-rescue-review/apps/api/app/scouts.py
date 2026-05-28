@@ -107,10 +107,57 @@ def website_url_for(value: str) -> str:
     return f"https://{normalize_domain(raw)}"
 
 
+def infer_country_from_domain(domain: str) -> str:
+    normalized = normalize_domain(domain)
+    suffix_map = {
+        ".com.au": "AU",
+        ".net.au": "AU",
+        ".org.au": "AU",
+        ".co.nz": "NZ",
+        ".net.nz": "NZ",
+        ".org.nz": "NZ",
+        ".co.uk": "UK",
+        ".org.uk": "UK",
+        ".ac.uk": "UK",
+        ".gov.uk": "UK",
+        ".co.il": "IL",
+        ".org.il": "IL",
+        ".ac.il": "IL",
+    }
+    for suffix, country in suffix_map.items():
+        if normalized.endswith(suffix):
+            return country
+    tld_map = {
+        ".au": "AU",
+        ".nz": "NZ",
+        ".uk": "UK",
+        ".ie": "IE",
+        ".ca": "CA",
+        ".il": "IL",
+        ".ee": "EE",
+        ".de": "DE",
+        ".nl": "NL",
+    }
+    for suffix, country in tld_map.items():
+        if normalized.endswith(suffix):
+            return country
+    return ""
+
+
+def normalize_lead_country(country: str, domain: str) -> str:
+    inferred = infer_country_from_domain(domain)
+    explicit = (country or "").upper()
+    if inferred:
+        return inferred
+    return explicit
+
+
 def infer_language(country: str, language: str = "") -> str:
     if language:
         return language
-    return {"IL": "he", "EE": "et", "UK": "en", "IE": "en", "US": "en"}.get((country or "").upper(), "en")
+    return {"IL": "he", "EE": "et", "UK": "en", "IE": "en", "US": "en", "AU": "en", "NZ": "en", "CA": "en"}.get(
+        (country or "").upper(), "en"
+    )
 
 
 def create_scout_source(payload: dict[str, Any]) -> dict[str, Any]:
@@ -690,7 +737,7 @@ def process_scout_run(run_id: str) -> dict[str, Any]:
         website = item.get("website_url") or item.get("url") or item.get("domain") or item.get("site") or ""
         domain = normalize_domain(website)
         niche = (item.get("niche") or run["niche"] or source["niche"] or "").strip().lower()
-        country = (item.get("country") or run["country"] or source["country"] or "").upper()
+        country = normalize_lead_country(item.get("country") or run["country"] or source["country"] or "", domain)
         language = infer_language(country, item.get("language") or run["language"] or source["language"] or "")
         email = (item.get("email") or "").strip().lower()
         business_name = item.get("business_name") or item.get("name") or domain
