@@ -91,6 +91,17 @@ def _action_summary(action: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _first_ready_source_id(result: dict[str, Any]) -> str | None:
+    for item in result.get("results") or []:
+        if not isinstance(item, dict):
+            continue
+        source_id = item.get("source_id")
+        readiness = item.get("readiness") or {}
+        if source_id and item.get("source_status") in {"preflight_ready", None} and readiness.get("status") == "PASS_SOURCE_READY":
+            return str(source_id)
+    return None
+
+
 def lead_supply_buildout(
     target_preview_count: int = 100,
     canary_count: int = 20,
@@ -141,6 +152,7 @@ def lead_supply_buildout(
 
         actions: list[dict[str, Any]] = []
         new_source_hint = False
+        source_hint_id: str | None = None
         if safe_enrichment_limit > 0:
             autopilot = lead_supply_autopilot(
                 target,
@@ -176,9 +188,10 @@ def lead_supply_buildout(
             )
             expansion_summary = _action_summary({"name": "stockpile_expansion_discovery_cycle", **expansion})
             actions.append(expansion_summary)
+            source_hint_id = source_hint_id or _first_ready_source_id(expansion)
             new_source_hint = (
                 new_source_hint
-                or int(expansion_summary.get("created_sources") or 0) > 0
+                or bool(source_hint_id)
                 or int(expansion_summary.get("non_empty_sources") or 0) > 0
                 or int(expansion_summary.get("found_count") or 0) > 0
             )
@@ -192,9 +205,10 @@ def lead_supply_buildout(
             discovery = regional_lead_discovery_cycle(limit_targets=1, per_target_limit=15, dry_run=False)
             discovery_summary = _action_summary({"name": "regional_lead_discovery_cycle", **discovery})
             actions.append(discovery_summary)
+            source_hint_id = source_hint_id or _first_ready_source_id(discovery)
             new_source_hint = (
                 new_source_hint
-                or int(discovery_summary.get("created_sources") or 0) > 0
+                or bool(source_hint_id)
                 or int(discovery_summary.get("non_empty_sources") or 0) > 0
                 or int(discovery_summary.get("found_count") or 0) > 0
             )
@@ -205,7 +219,7 @@ def lead_supply_buildout(
             and int(refreshed.get("scanner_active_count") or 0) <= 3
         ):
             advance = advance_source_to_campaign(
-                None,
+                source_hint_id,
                 min(safe_limit, 20),
                 dry_run=False,
                 process_scout=True,

@@ -263,6 +263,7 @@ def test_lead_supply_buildout_refreshes_state_after_enrichment_before_expansion(
 
 
 def test_lead_supply_buildout_advances_immediately_when_discovery_created_sources(monkeypatch):
+    token = "p102-source-hint"
     snapshots = iter([
         _health(72, source_candidates=0),
         _health(72, source_candidates=0),
@@ -276,12 +277,19 @@ def test_lead_supply_buildout_advances_immediately_when_discovery_created_source
     monkeypatch.setattr(
         buildout_module,
         "stockpile_expansion_discovery_cycle",
-        lambda *args, **kwargs: calls.append("stockpile_expansion") or {"status": "completed", "created_sources": 1, "non_empty_sources": 1, "found_count": 5, "send_mail": False},
+        lambda *args, **kwargs: calls.append("stockpile_expansion") or {
+            "status": "completed",
+            "created_sources": 1,
+            "non_empty_sources": 1,
+            "found_count": 5,
+            "results": [{"source_id": f"source-{token}", "source_status": "preflight_ready", "readiness": {"status": "PASS_SOURCE_READY"}}],
+            "send_mail": False,
+        },
     )
     monkeypatch.setattr(
         buildout_module,
         "advance_source_to_campaign",
-        lambda *args, **kwargs: calls.append("advance") or {"status": "advanced", "source_queue": {"queued_count": 1}, "scout_processing": {"processed": 1, "results": [{"found": 5, "accepted": 4, "scanner_jobs": 4}]}, "send_mail": False},
+        lambda source_id, *args, **kwargs: calls.append(f"advance:{source_id}") or {"status": "advanced", "source_queue": {"queued_count": 1}, "scout_processing": {"processed": 1, "results": [{"found": 5, "accepted": 4, "scanner_jobs": 4}]}, "send_mail": False},
     )
     monkeypatch.setattr(buildout_module, "regional_lead_discovery_cycle", lambda *args, **kwargs: calls.append("regional") or {"status": "idle", "send_mail": False})
     monkeypatch.setattr(buildout_module, "scanner_completion_watch", lambda *args, **kwargs: calls.append("watch") or {"status": "idle_no_new_completions", "send_mail": False})
@@ -290,10 +298,48 @@ def test_lead_supply_buildout_advances_immediately_when_discovery_created_source
     monkeypatch.setattr(buildout_module, "campaign_preflight_batch", lambda *args, **kwargs: calls.append("preflight") or {"status": "completed", "send_mail": False})
 
     result = lead_supply_buildout(target_preview_count=110, max_cycles=1, enrichment_limit=0, apply=True)
-    assert calls[:2] == ["stockpile_expansion", "advance"]
+    assert calls[:2] == ["stockpile_expansion", f"advance:source-{token}"]
     assert "regional" not in calls
     assert result["cycles"][0]["actions"][1]["name"] == "advance_source_to_campaign"
     assert result["cycles"][0]["actions"][1]["accepted_count"] == 4
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+
+
+def test_lead_supply_buildout_does_not_advance_empty_source_records(monkeypatch):
+    snapshots = iter([
+        _health(72, source_candidates=0),
+        _health(72, source_candidates=0),
+        _health(72, source_candidates=0),
+        _health(72, source_candidates=0),
+        _health(72, source_candidates=0),
+        _health(72, source_candidates=0),
+    ])
+    calls: list[str] = []
+    monkeypatch.setattr(buildout_module, "lead_stockpile_health_snapshot", lambda *args: next(snapshots))
+    monkeypatch.setattr(
+        buildout_module,
+        "stockpile_expansion_discovery_cycle",
+        lambda *args, **kwargs: calls.append("stockpile_expansion") or {"status": "completed", "created_sources": 1, "non_empty_sources": 0, "found_count": 0, "results": [], "send_mail": False},
+    )
+    monkeypatch.setattr(
+        buildout_module,
+        "regional_lead_discovery_cycle",
+        lambda *args, **kwargs: calls.append("regional") or {"status": "completed", "created_sources": 1, "non_empty_sources": 0, "found_count": 0, "results": [], "send_mail": False},
+    )
+    monkeypatch.setattr(
+        buildout_module,
+        "advance_source_to_campaign",
+        lambda *args, **kwargs: calls.append("advance") or {"status": "blocked", "blockers": ["no_ready_scout_sources"], "send_mail": False},
+    )
+    monkeypatch.setattr(buildout_module, "scanner_completion_watch", lambda *args, **kwargs: calls.append("watch") or {"status": "idle_no_new_completions", "send_mail": False})
+    monkeypatch.setattr(buildout_module, "refresh_campaign_previews_if_needed", lambda *args, **kwargs: {"status": "completed", "send_mail": False})
+    monkeypatch.setattr(buildout_module, "auto_review_campaign_previews", lambda *args, **kwargs: calls.append("review") or {"status": "completed", "send_mail": False})
+    monkeypatch.setattr(buildout_module, "campaign_preflight_batch", lambda *args, **kwargs: calls.append("preflight") or {"status": "completed", "send_mail": False})
+
+    result = lead_supply_buildout(target_preview_count=110, max_cycles=1, enrichment_limit=0, apply=True)
+    assert "advance" not in calls
+    assert calls[:3] == ["stockpile_expansion", "regional", "watch"]
     assert result["send_mail"] is False
     assert result["live_outreach_allowed"] is False
 
