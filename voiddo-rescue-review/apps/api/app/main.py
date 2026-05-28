@@ -90,6 +90,7 @@ from .customer_journey import customer_journey_snapshot
 from .customer_mail_simulation import run_customer_mail_simulation
 from .customer_access import customer_dashboard_by_token, ensure_customer_access_token
 from .monitoring import ensure_monitoring_target, process_due_monitoring_targets, run_monitoring_check
+from .owner_command_control import owner_command_control_summary
 from .language_gate import check_no_ai_public_language
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
@@ -357,6 +358,11 @@ async def inbox_persist(request: Request):
 async def owner_commands(request: Request):
     payload = await request.json()
     return {"ok": True, "command": store_owner_command(payload)}
+
+
+@app.get("/owner/commands", dependencies=[Depends(require_admin)])
+def owner_commands_summary(limit: int = 20):
+    return {"ok": True, "owner_commands": owner_command_control_summary(limit)}
 
 
 @app.get("/billing/config")

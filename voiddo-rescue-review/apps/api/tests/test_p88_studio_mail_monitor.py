@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 from app.config import get_settings
 from app.db import execute, fetch_one
 from app.main import app
+from app.autonomous_agents import run_agent
+from app.owner_command_control import owner_command_control_summary
 from app.studio_mail_monitor import classify_studio_mail, ingest_studio_mail_messages, latest_studio_mail_messages
 
 
@@ -62,6 +64,12 @@ def test_studio_mail_owner_command_routes_to_global_owner_commands(monkeypatch):
         assert row["classification"] == "owner_command_global"
         assert row["priority"] == "critical"
         assert row["owner_command_id"] is not None
+        summary = owner_command_control_summary(5)
+        assert summary["send_mail"] is False
+        assert summary["live_outreach_allowed"] is False
+        assert summary["raw_private_addresses_included"] is False
+        assert summary["commands"][0]["sender_hash"]
+        assert "sender" not in summary["commands"][0]
     finally:
         _cleanup(token)
         get_settings.cache_clear()
@@ -101,6 +109,26 @@ def test_studio_mail_high_risk_owner_command_creates_review_task(monkeypatch):
         task = fetch_one("SELECT type, status FROM codex_tasks WHERE id = %s", (command["result_json"]["codex_task_id"],))
         assert task["type"] == "owner_command_review"
         assert task["status"] == "open"
+    finally:
+        _cleanup(token)
+        get_settings.cache_clear()
+
+
+def test_owner_command_agent_is_redacted_no_send(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    owner = f"owner-{token}@example.test"
+    monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)
+    get_settings.cache_clear()
+    try:
+        ingest_studio_mail_messages([_message(token, owner, "STATUS", f"STATUS {token}")])
+        run = run_agent("owner_command_agent", {"limit": 5})
+        assert run["status"] == "completed"
+        payload = run["result_json"]
+        assert payload["send_mail"] is False
+        assert payload["live_outreach_allowed"] is False
+        assert payload["raw_private_addresses_included"] is False
+        assert payload["commands"][0]["sender_hash"]
+        assert "sender" not in payload["commands"][0]
     finally:
         _cleanup(token)
         get_settings.cache_clear()

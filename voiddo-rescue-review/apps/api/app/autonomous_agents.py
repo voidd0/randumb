@@ -29,6 +29,7 @@ from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
 from .customer_mail_simulation import run_customer_mail_simulation
 from .monitoring import process_due_monitoring_targets, run_monitoring_check
+from .owner_command_control import owner_command_control_summary
 from .p0 import (
     build_warmup_calendar,
     mail_signal_summary,
@@ -353,7 +354,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "launch_operating_lane_agent": lambda: launch_operating_lane_snapshot(int(payload.get("limit", 25))),
         "launch_operating_lane_advance_agent": lambda: advance_launch_operating_lane(int(payload.get("limit", 25)), execute_safe_auto=False),
         "inbox_agent": lambda: {"dry_run": True, "status": "worker_polls_when_enabled"},
-        "owner_command_agent": lambda: {"dry_run": True, "status": "owner_commands_are_gated"},
+        "owner_command_agent": lambda: owner_command_control_summary(int(payload.get("limit", 20))),
         "checkout_agent": lambda: {"dry_run": True, "status": "paddle_webhook_handlers_ready"},
         "reporting_agent": lambda: runtime_state_snapshot(),
         "runtime_state_report_agent": lambda: {**runtime_state_snapshot(), "send_mail": False, "live_outreach_allowed": False},
