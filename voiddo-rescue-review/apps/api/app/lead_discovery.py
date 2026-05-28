@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import time
 from typing import Any
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -838,9 +839,10 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
     }
 
 
-def stockpile_expansion_discovery_cycle(limit_targets: int = 3, per_target_limit: int = 35, dry_run: bool = True) -> dict[str, Any]:
+def stockpile_expansion_discovery_cycle(limit_targets: int = 3, per_target_limit: int = 35, dry_run: bool = True, max_seconds: int = 120) -> dict[str, Any]:
     safe_target_limit = max(1, min(int(limit_targets or 3), 8))
     safe_per_target_limit = max(1, min(int(per_target_limit or 35), 50))
+    safe_max_seconds = max(20, min(int(max_seconds or 120), 300))
     plan = stockpile_expansion_target_plan(safe_target_limit)
     targets = plan["targets"]
     if dry_run or not targets:
@@ -851,6 +853,8 @@ def stockpile_expansion_discovery_cycle(limit_targets: int = 3, per_target_limit
             "created_sources": 0,
             "found_count": 0,
             "with_email_count": 0,
+            "skipped_target_count": 0,
+            "max_seconds": safe_max_seconds,
             "plan": plan,
             "send_mail": False,
             "smtp_called": False,
@@ -860,7 +864,12 @@ def stockpile_expansion_discovery_cycle(limit_targets: int = 3, per_target_limit
         }
     created = []
     errors = []
+    skipped_targets: list[dict[str, Any]] = []
+    started = time.monotonic()
     for target in targets:
+        if time.monotonic() - started >= safe_max_seconds:
+            skipped_targets.append({"country": target["country"], "city": target["city"], "niche": target["niche"], "reason": "time_budget_exhausted"})
+            continue
         try:
             created.append(
                 overpass_lead_discovery(
@@ -919,6 +928,10 @@ def stockpile_expansion_discovery_cycle(limit_targets: int = 3, per_target_limit
         "failed_source_attempts": len([item for item in created if item.get("status") == "source_attempt_failed"]),
         "found_count": sum(int(item.get("found_count", 0)) for item in created),
         "with_email_count": sum(int(item.get("with_email_count", 0)) for item in created),
+        "skipped_target_count": len(skipped_targets),
+        "skipped_targets": skipped_targets,
+        "max_seconds": safe_max_seconds,
+        "elapsed_seconds": round(time.monotonic() - started, 3),
         "errors": errors,
         "targets": [{"country": item["country"], "city": item["city"], "niche": item["niche"], "language": item["language"], "guidance": item.get("guidance", {})} for item in targets],
         "results": [

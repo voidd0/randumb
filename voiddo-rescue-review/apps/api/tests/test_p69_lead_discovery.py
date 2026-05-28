@@ -439,6 +439,33 @@ def test_stockpile_expansion_discovery_records_failed_public_source_attempt(monk
         _cleanup(source_name)
 
 
+def test_stockpile_expansion_discovery_respects_time_budget(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    targets = [
+        {"country": "EE", "city": f"BudgetA{token}", "language": "en", "niche": "dentists", "guidance": {}},
+        {"country": "EE", "city": f"BudgetB{token}", "language": "en", "niche": "dentists", "guidance": {}},
+    ]
+    monkeypatch.setattr(
+        discovery_module,
+        "stockpile_expansion_target_plan",
+        lambda limit_targets=3: {"status": "ready", "selected_count": 2, "targets": targets, "send_mail": False, "live_outreach_allowed": False},
+    )
+    calls = []
+    monkeypatch.setattr(
+        discovery_module,
+        "overpass_lead_discovery",
+        lambda *args, **kwargs: calls.append(args) or {"status": "source_created", "source_id": "safe", "source_name": "safe", "found_count": 1, "with_email_count": 1},
+    )
+    times = iter([0, 0, 25, 25])
+    monkeypatch.setattr(discovery_module.time, "monotonic", lambda: next(times))
+    result = stockpile_expansion_discovery_cycle(2, 5, dry_run=False, max_seconds=20)
+    assert len(calls) == 1
+    assert result["skipped_target_count"] == 1
+    assert result["skipped_targets"][0]["reason"] == "time_budget_exhausted"
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+
+
 def test_regional_lead_discovery_endpoint_and_agent_are_no_send():
     assert client.post("/admin/lead-discovery/regional-cycle", json={"dry_run": True}).status_code == 401
     response = client.post(
