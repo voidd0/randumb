@@ -9,6 +9,8 @@ from .db import execute, fetch_all, fetch_one
 from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary
 from .scouts import create_campaign, prepare_campaign_gated
 
+TEST_COUNTRY_PATTERN = r"^(P7|P8|P9|P10|P11|P12|P59|P60|P61|P62|P63|P68|P72|P73|P74)"
+
 
 def _latest_audit_strength(audit_id: str) -> dict[str, Any] | None:
     row = fetch_one(
@@ -48,6 +50,8 @@ def qualified_campaign_lead_candidates(limit: int = 100, threshold: int = 70) ->
           AND l.email IS NOT NULL
           AND COALESCE(l.country, '') <> ''
           AND COALESCE(l.niche, '') <> ''
+          AND upper(COALESCE(l.country, '')) !~ %s
+          AND lower(COALESCE(l.source, '')) NOT LIKE 'p%%\\_test' ESCAPE '\\'
           AND lower(COALESCE(l.email, '')) NOT LIKE '%%.example.test'
           AND lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
           AND lower(COALESCE(a.domain, '')) NOT LIKE '%%.example.test'
@@ -59,7 +63,7 @@ def qualified_campaign_lead_candidates(limit: int = 100, threshold: int = 70) ->
         ORDER BY COALESCE(ls.final_score, l.score, 0) DESC, a.created_at DESC
         LIMIT %s
         """,
-        (safe_threshold, safe_limit),
+        (safe_threshold, TEST_COUNTRY_PATTERN, safe_limit),
     )
     candidates = []
     for row in rows:
@@ -235,11 +239,13 @@ def campaign_preview_rows(limit: int = 25) -> dict[str, Any]:
         ) latest_review ON true
         WHERE cl.status = 'preview'
           AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
+          AND upper(COALESCE(c.country, '')) !~ %s
+          AND lower(COALESCE(l.source, '')) NOT LIKE 'p%%\\_test' ESCAPE '\\'
           AND lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
         ORDER BY cl.score DESC NULLS LAST, cl.updated_at DESC NULLS LAST, cl.created_at DESC
         LIMIT %s
         """,
-        (safe_limit,),
+        (TEST_COUNTRY_PATTERN, safe_limit),
     )
     payload = [
         {

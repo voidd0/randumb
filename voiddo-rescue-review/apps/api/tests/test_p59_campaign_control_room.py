@@ -30,7 +30,7 @@ def _cleanup(token: str) -> None:
     execute("DELETE FROM campaign_preview_reviews WHERE campaign_lead_id IN (SELECT id FROM campaign_leads WHERE preview_json::text LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM campaign_readiness_snapshots WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM campaign_leads WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s) OR preview_json::text LIKE %s", (f"%{token}%", f"%{token}%"))
-    execute("DELETE FROM campaigns WHERE name LIKE %s OR country = %s", (f"%{token}%", f"P59{token[:3].upper()}"))
+    execute("DELETE FROM campaigns WHERE name LIKE %s OR country = %s", (f"%{token}%", f"QA59{token[:3].upper()}"))
     execute("DELETE FROM audit_strength_scores WHERE audit_id IN (SELECT id FROM audits WHERE public_slug LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM lead_scores WHERE lead_id IN (SELECT id FROM leads WHERE email LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM screenshots WHERE audit_id IN (SELECT id FROM audits WHERE public_slug LIKE %s)", (f"%{token}%",))
@@ -41,20 +41,20 @@ def _cleanup(token: str) -> None:
 
 
 def _qualified_lead(token: str) -> tuple[str, str]:
-    country = f"P59{token[:3].upper()}"
+    country = f"QA59{token[:3].upper()}"
     domain = f"p59-{token}.clinic"
     business = execute(
         """
         INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
-        VALUES (%s, %s, 'Control City', 'en', 'dentists', 'p59_test', %s, %s, %s, 'scouted')
+        VALUES (%s, %s, 'Control City', 'en', 'dentists', 'campaign_fixture', %s, %s, %s, 'scouted')
         RETURNING id
         """,
-        (f"P59 Clinic {token}", country, f"https://{domain}", domain, f"owner-{token}@{domain}"),
+        (f"QA59 Clinic {token}", country, f"https://{domain}", domain, f"owner-{token}@{domain}"),
     )
     lead = execute(
         """
         INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
-        VALUES (%s, %s, 'p59_test', 'scouted', 90, 'en', %s, 'Control City', 'dentists')
+        VALUES (%s, %s, 'campaign_fixture', 'scouted', 90, 'en', %s, 'Control City', 'dentists')
         RETURNING id
         """,
         (business["id"], f"owner-{token}@{domain}", country),
@@ -128,8 +128,8 @@ def test_campaign_control_room_preview_rows_are_redacted_no_send():
         _qualified_lead(token)
         campaign = create_campaign(
             {
-                "name": f"P59 preview rows {token}",
-                "country": f"P59{token[:3].upper()}",
+                "name": f"QA59 preview rows {token}",
+                "country": f"QA59{token[:3].upper()}",
                 "language": "en",
                 "niche": "dentists",
                 "offer_key": "contact_form_repair",
@@ -167,8 +167,8 @@ def test_campaign_preview_self_review_agent_approves_strong_rows_without_send():
         _qualified_lead(token)
         campaign = create_campaign(
             {
-                "name": f"P59 self review {token}",
-                "country": f"P59{token[:3].upper()}",
+                "name": f"QA59 self review {token}",
+                "country": f"QA59{token[:3].upper()}",
                 "language": "en",
                 "niche": "dentists",
                 "offer_key": "contact_form_repair",
@@ -197,8 +197,8 @@ def test_campaign_preview_self_review_approves_specific_two_issue_audits():
         execute("DELETE FROM audit_issues WHERE audit_id = %s AND issue_type = 'metadata'", (audit_id,))
         campaign = create_campaign(
             {
-                "name": f"P59 two issue review {token}",
-                "country": f"P59{token[:3].upper()}",
+                "name": f"QA59 two issue review {token}",
+                "country": f"QA59{token[:3].upper()}",
                 "language": "en",
                 "niche": "dentists",
                 "offer_key": "contact_form_repair",
@@ -223,8 +223,8 @@ def test_campaign_preview_self_review_approves_evidence_strong_local_scores():
         execute("UPDATE lead_scores SET final_score = 73 WHERE lead_id = %s AND audit_id = %s", (lead_id, audit_id))
         campaign = create_campaign(
             {
-                "name": f"P59 evidence review {token}",
-                "country": f"P59{token[:3].upper()}",
+                "name": f"QA59 evidence review {token}",
+                "country": f"QA59{token[:3].upper()}",
                 "language": "en",
                 "niche": "dentists",
                 "offer_key": "contact_form_repair",
@@ -247,8 +247,8 @@ def test_held_preview_remediation_queues_safe_evidence_refresh_without_send():
         execute("DELETE FROM screenshots WHERE audit_id = %s", (audit_id,))
         campaign = create_campaign(
             {
-                "name": f"P59 held remediation {token}",
-                "country": f"P59{token[:3].upper()}",
+                "name": f"QA59 held remediation {token}",
+                "country": f"QA59{token[:3].upper()}",
                 "language": "en",
                 "niche": "dentists",
                 "offer_key": "contact_form_repair",
@@ -276,8 +276,8 @@ def test_self_review_reconsiders_only_agent_held_rows():
         _qualified_lead(token)
         campaign = create_campaign(
             {
-                "name": f"P59 reconsider {token}",
-                "country": f"P59{token[:3].upper()}",
+                "name": f"QA59 reconsider {token}",
+                "country": f"QA59{token[:3].upper()}",
                 "language": "en",
                 "niche": "dentists",
                 "offer_key": "contact_form_repair",
