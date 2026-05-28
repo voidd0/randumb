@@ -31,6 +31,7 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("post_scan_campaign_cycle_agent", {"limit": 120, "dry_run": False}),
     ("outreach_preview_queue_agent", {"limit": 100}),
     ("outreach_preview_dedupe_agent", {"limit": 500, "apply": True}),
+    ("campaign_geo_hygiene_agent", {"limit": 500, "apply": True}),
     ("campaign_preflight_orphan_hygiene_agent", {"limit": 100, "apply": True}),
     ("campaign_preflight_agent", {"limit": 20}),
     ("launch_readiness_scoreboard_agent", {"limit": 25}),

@@ -59,7 +59,7 @@ from .campaign_preflight import campaign_preflight_batch, campaign_preflight_orp
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation
 from .campaign_remediation_feedback import campaign_remediation_feedback
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, refresh_campaign_previews_if_needed
-from .campaign_preview_hygiene import archive_campaign_preview_artifacts, archive_campaign_shell_artifacts, campaign_preview_hygiene_snapshot, campaign_shell_hygiene_snapshot
+from .campaign_preview_hygiene import archive_campaign_preview_artifacts, archive_campaign_shell_artifacts, campaign_geo_hygiene_snapshot, campaign_preview_hygiene_snapshot, campaign_shell_hygiene_snapshot, repair_campaign_geo_mismatches
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .campaign_preview_reviews import auto_review_campaign_previews
 from .campaign_review_remediation import held_preview_remediation_candidates, remediate_held_preview_reviews
@@ -345,6 +345,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             apply=bool(payload.get("apply", True)),
         ),
         "campaign_preview_hygiene_snapshot_agent": lambda: campaign_preview_hygiene_snapshot(int(payload.get("limit", 500))),
+        "campaign_geo_hygiene_agent": lambda: repair_campaign_geo_mismatches(
+            int(payload.get("limit", 500)),
+            apply=bool(payload.get("apply", True)),
+        ),
+        "campaign_geo_hygiene_snapshot_agent": lambda: campaign_geo_hygiene_snapshot(int(payload.get("limit", 500))),
         "campaign_shell_hygiene_agent": lambda: archive_campaign_shell_artifacts(
             int(payload.get("limit", 500)),
             apply=bool(payload.get("apply", True)),
@@ -599,6 +604,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("post_scan_campaign_cycle_agent", {"limit": 120, "dry_run": False}),
         ("outreach_preview_queue_agent", {"limit": 100}),
         ("outreach_preview_dedupe_agent", {"limit": 500, "apply": True}),
+        ("campaign_geo_hygiene_agent", {"limit": 500, "apply": True}),
         ("campaign_preflight_orphan_hygiene_agent", {"limit": 100, "apply": True}),
         ("campaign_preflight_agent", {"limit": 20}),
         ("launch_readiness_scoreboard_agent", {"limit": 25}),
@@ -641,6 +647,7 @@ def test_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("quality_plugin_agent", {}),
         ("warmup_block_recovery_snapshot_agent", {"limit": 1, "dry_run": True}),
         ("campaign_preview_hygiene_snapshot_agent", {"limit": 1, "dry_run": True}),
+        ("campaign_geo_hygiene_snapshot_agent", {"limit": 1, "dry_run": True}),
         ("campaign_shell_hygiene_snapshot_agent", {"limit": 1, "dry_run": True}),
         ("scanner_queue_hygiene_snapshot_agent", {"limit": 1, "dry_run": True}),
         ("scanner_stale_running_snapshot_agent", {"limit": 1, "dry_run": True}),

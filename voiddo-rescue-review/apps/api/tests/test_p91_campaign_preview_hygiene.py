@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
 from app.autonomous_agents import run_agent
-from app.campaign_preview_hygiene import archive_campaign_preview_artifacts, archive_campaign_shell_artifacts, campaign_preview_hygiene_snapshot, campaign_shell_hygiene_snapshot
+from app.campaign_preview_hygiene import archive_campaign_preview_artifacts, archive_campaign_shell_artifacts, campaign_geo_hygiene_snapshot, campaign_preview_hygiene_snapshot, campaign_shell_hygiene_snapshot, repair_campaign_geo_mismatches
 from app.db import execute, fetch_one
 from app.main import app
 
@@ -155,5 +155,38 @@ def test_campaign_shell_hygiene_endpoint_and_agent_are_admin_gated_no_send():
         agent = run_agent("campaign_shell_hygiene_snapshot_agent", {"limit": 50})
         assert agent["status"] == "completed"
         assert agent["result_json"]["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_geo_hygiene_moves_preview_to_inferred_country_campaign():
+    token = uuid.uuid4().hex[:8]
+    try:
+        row = _preview(token, f"geo-{token}.ca", "UK", "scout_agent")
+        snapshot = campaign_geo_hygiene_snapshot(50)
+        assert snapshot["mismatch_count"] >= 1
+        assert any(item["campaign_lead_id"] == str(row["id"]) and item["inferred_country"] == "CA" for item in snapshot["sample"])
+        result = repair_campaign_geo_mismatches(50, apply=True)
+        assert result["repaired_count"] >= 1
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+        moved = fetch_one(
+            """
+            SELECT c.country AS campaign_country, l.country AS lead_country, b.country AS business_country, cl.preview_json
+            FROM campaign_leads cl
+            JOIN campaigns c ON c.id = cl.campaign_id
+            JOIN leads l ON l.id = cl.lead_id
+            JOIN businesses b ON b.id = l.business_id
+            WHERE cl.id = %s
+            """,
+            (row["id"],),
+        )
+        assert moved["campaign_country"] == "CA"
+        assert moved["lead_country"] == "CA"
+        assert moved["business_country"] == "CA"
+        assert moved["preview_json"]["campaign_geo_hygiene"]["live_outreach_allowed"] is False
+        agent = run_agent("campaign_geo_hygiene_snapshot_agent", {"limit": 50})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["raw_recipient_addresses_included"] is False
     finally:
         _cleanup(token)
