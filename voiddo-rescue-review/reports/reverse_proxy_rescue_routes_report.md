@@ -1,6 +1,6 @@
 # Rescue Reverse Proxy Routes Report
 
-Updated: 2026-05-26 IDT
+Updated: 2026-05-29 IDT
 
 ## DNS
 
@@ -19,6 +19,20 @@ Dedicated Rescue-only nginx configs are active:
 
 - `/etc/nginx/sites-available/rescue.voiddo.com`
 - `/etc/nginx/sites-available/rescue-subdomains.voiddo.com`
+
+2026-05-29 verification found the active VPS config had drifted from the
+packaged deployment config: the apex route was still serving static files and
+the nested Rescue subdomain config was not enabled. The fix was limited to
+Rescue nginx server blocks:
+
+- backed up `/etc/nginx/sites-available/rescue.voiddo.com` to
+  `/opt/voiddo-rescue/backups/nginx/rescue.voiddo.com.20260528T225936Z`
+- enabled `/etc/nginx/sites-enabled/rescue-subdomains.voiddo.com`
+- kept `api.rescue.voiddo.com` on the API service
+- routed `app`, `audit`, `go`, and `status` to the web service
+- ran `nginx -t` successfully
+- reloaded only `nginx`
+- did not touch Mailcow or non-Rescue vhosts
 
 The Rescue compose stack now binds only localhost ports:
 
@@ -47,7 +61,7 @@ Issued Let’s Encrypt certificate:
 - `https://api.rescue.voiddo.com/health`: `200`
 - `https://audit.rescue.voiddo.com/r/demo`: `200`
 - `https://go.rescue.voiddo.com/unsubscribe/test`: `200`
-- `https://status.rescue.voiddo.com/`: `200`
+- `https://status.rescue.voiddo.com/status`: `200`
 
 ## Download Compatibility
 
