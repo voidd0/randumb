@@ -136,6 +136,7 @@ def test_warmup_maturity_uses_verified_schedule_sends(monkeypatch):
         return 0
 
     monkeypatch.setattr(p0, "_count", fake_count)
+    monkeypatch.setattr(p0, "verified_warmup_event_count", lambda days=30: 0)
     monkeypatch.setattr(p0, "recent_mail_signal_count", lambda *args, **kwargs: 0)
     monkeypatch.setattr(p0, "latest_mail_qa_decision", lambda: "PASS")
     result = p0.warmup_domain_maturity_status()
@@ -144,6 +145,28 @@ def test_warmup_maturity_uses_verified_schedule_sends(monkeypatch):
     assert result["legacy_warmup_event_count"] == 5
     assert result["maturity_source"] == "warmup_schedule_sent"
     assert "warmup_clean_send_count_below_threshold" in result["blockers"]
+
+
+def test_warmup_maturity_accepts_structured_verified_warmup_events(monkeypatch):
+    def fake_count(sql: str, *args, **kwargs) -> int:
+        if "FROM warmup_schedule" in sql and "status = 'sent'" in sql:
+            return 0
+        if "FROM email_events" in sql and "event_type = 'warmup_sent'" in sql:
+            return 8
+        return 0
+
+    monkeypatch.setattr(p0, "_count", fake_count)
+    monkeypatch.setattr(p0, "verified_warmup_event_count", lambda days=30: 5)
+    monkeypatch.setattr(p0, "recent_mail_signal_count", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(p0, "latest_mail_qa_decision", lambda: "PASS")
+    result = p0.warmup_domain_maturity_status()
+    assert result["allowed"] is True
+    assert result["warmup_sent_count"] == 5
+    assert result["warmup_schedule_sent_count"] == 0
+    assert result["verified_warmup_event_count"] == 5
+    assert result["legacy_warmup_event_count"] == 8
+    assert result["maturity_source"] == "verified_warmup_sent_events"
+    assert result["blockers"] == []
 
 
 def test_latest_campaign_preflight_status_blocks_failed_or_stale_evidence():

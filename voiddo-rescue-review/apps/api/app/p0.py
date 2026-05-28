@@ -994,10 +994,30 @@ def mail_signal_summary(hours: int = 24) -> dict[str, Any]:
     }
 
 
+def verified_warmup_event_count(days: int = 30) -> int:
+    window_days = max(1, min(int(days or 30), 120))
+    row = fetch_one(
+        """
+        SELECT count(DISTINCT payload_json->>'schedule_id') AS count
+        FROM email_events
+        WHERE event_type = 'warmup_sent'
+          AND created_at >= now() - (%s::text || ' days')::interval
+          AND payload_json->>'policy' = 'neutral_calendar_warmup_no_sales_no_tracking'
+          AND COALESCE(payload_json->>'schedule_id', '') <> ''
+          AND COALESCE(payload_json->>'recipient_hash', '') <> ''
+          AND COALESCE(payload_json->>'sender', '') LIKE '%%@voiddorescue.com'
+        """,
+        (window_days,),
+    )
+    return int(row["count"] or 0) if row else 0
+
+
 def warmup_domain_maturity_status(settings: Settings | None = None) -> dict[str, Any]:
     settings = settings or get_settings()
     min_clean = max(1, int(settings.warmup_min_clean_sends_before_outreach or 5))
-    verified_warmup_sent = _count("SELECT count(*) FROM warmup_schedule WHERE status = 'sent'")
+    schedule_sent = _count("SELECT count(*) FROM warmup_schedule WHERE status = 'sent'")
+    verified_event_sent = verified_warmup_event_count(30)
+    verified_warmup_sent = max(schedule_sent, verified_event_sent)
     legacy_event_count = _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'")
     recent_bounce = recent_mail_signal_count(["bounce", "dsn"], 24)
     recent_rate_limit = recent_mail_signal_count(["smtp_rate_limit"], 24)
@@ -1017,8 +1037,10 @@ def warmup_domain_maturity_status(settings: Settings | None = None) -> dict[str,
     return {
         "allowed": not blockers,
         "warmup_sent_count": verified_warmup_sent,
+        "warmup_schedule_sent_count": schedule_sent,
+        "verified_warmup_event_count": verified_event_sent,
         "legacy_warmup_event_count": legacy_event_count,
-        "maturity_source": "warmup_schedule_sent",
+        "maturity_source": "warmup_schedule_sent" if schedule_sent >= verified_event_sent else "verified_warmup_sent_events",
         "min_clean_sends_required": min_clean,
         "recent_bounce_count": recent_bounce,
         "recent_rate_limit_count": recent_rate_limit,
