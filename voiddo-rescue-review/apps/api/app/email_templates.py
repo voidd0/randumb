@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from html import escape
 import re
 from typing import Any
 
@@ -56,6 +57,35 @@ DEFAULT_SAMPLE = {
 }
 
 
+def _html_from_text(subject: str, body: str, language: str) -> str:
+    direction = "rtl" if language == "he" else "ltr"
+    parts = [part.strip() for part in re.split(r"\n{2,}", body.strip()) if part.strip()]
+    paragraphs = []
+    for part in parts:
+        safe = escape(part).replace("\n", "<br>")
+        safe = re.sub(r"(https?://[^\s<]+)", r'<a href="\1">\1</a>', safe)
+        paragraphs.append(f"<p>{safe}</p>")
+    return (
+        "<!doctype html>"
+        f'<html lang="{escape(language)}" dir="{direction}">'
+        "<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+        f"<title>{escape(subject)}</title></head>"
+        "<body style=\"margin:0;padding:0;background:#f6f7f9;color:#111827;font-family:Arial,Helvetica,sans-serif;\">"
+        "<main style=\"max-width:620px;margin:0 auto;padding:28px 18px;\">"
+        "<section style=\"background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:24px;line-height:1.55;font-size:15px;\">"
+        f"{''.join(paragraphs)}"
+        "<hr style=\"border:0;border-top:1px solid #e5e7eb;margin:22px 0;\">"
+        "<p style=\"margin:0;color:#4b5563;font-size:13px;\">"
+        "<strong style=\"color:#111827;\">Vøiddo Rescue</strong><br>"
+        "Managed website rescue by vøiddo<br>"
+        "<span style=\"color:#6b7280;\">Public non-invasive website checks.</span>"
+        "</p>"
+        "</section>"
+        "</main>"
+        "</body></html>"
+    )
+
+
 def render_email_template(template_key: str, language: str = "en", data: dict[str, Any] | None = None) -> dict[str, Any]:
     templates = TEMPLATES.get(template_key)
     if not templates:
@@ -72,22 +102,28 @@ def render_email_template(template_key: str, language: str = "en", data: dict[st
 
     subject = sub(template["subject"])
     body = sub(template["body"])
-    return {"template_key": template_key, "language": language, "subject": subject, "text": body, "html": ""}
+    return {"template_key": template_key, "language": language, "subject": subject, "text": body, "html": _html_from_text(subject, body, language)}
 
 
 def qa_email_template(rendered: dict[str, Any]) -> dict[str, Any]:
     subject = rendered["subject"]
     body = rendered["text"]
+    html = rendered.get("html") or ""
     issues: list[str] = []
     if len(subject) > 78:
         issues.append("subject_too_long")
-    if re.search(r"{{[^}]+}}", subject + body):
+    if re.search(r"{{[^}]+}}", subject + body + html):
         issues.append("unresolved_template_var")
     risky = ["hacked", "vulnerability", "urgent", "security breach", "we scanned your security"]
     lower = body.lower()
+    html_lower = html.lower()
     for word in risky:
-        if word in lower:
+        if word in lower or word in html_lower:
             issues.append(f"risky_phrase:{word}")
+    if not html.strip():
+        issues.append("missing_html_version")
+    if "<script" in html_lower or "javascript:" in html_lower:
+        issues.append("unsafe_html")
     if rendered["template_key"].startswith("first_") or rendered["template_key"].startswith("followup_"):
         if "unsubscribe" not in lower and "הסרה" not in body and "loobu" not in lower:
             issues.append("missing_unsubscribe")

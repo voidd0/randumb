@@ -314,8 +314,11 @@ def test_email_templates_render_all_samples_and_pass_qa():
     samples = render_all_samples()
     assert len(samples) >= 10
     assert all(sample["qa"]["passed"] for sample in samples)
+    assert all(sample["html"].startswith("<!doctype html>") for sample in samples)
+    assert all("Managed website rescue by vøiddo" in sample["html"] for sample in samples)
     rendered = render_email_template("first_audit_notice", "he")
     assert qa_email_template(rendered)["passed"] is True
+    assert 'dir="rtl"' in rendered["html"]
 
 
 def test_agent_runs_are_recorded():

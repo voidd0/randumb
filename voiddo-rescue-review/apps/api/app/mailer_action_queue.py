@@ -364,6 +364,8 @@ def send_customer_mail_via_smtp(action: dict[str, Any], preview: dict[str, Any])
     msg["To"] = recipient
     msg["Message-ID"] = message_id
     msg.set_content(preview["rendered"]["text"])
+    if preview["rendered"].get("html"):
+        msg.add_alternative(preview["rendered"]["html"], subtype="html")
     ctx = ssl.create_default_context()
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
         smtp.ehlo()
