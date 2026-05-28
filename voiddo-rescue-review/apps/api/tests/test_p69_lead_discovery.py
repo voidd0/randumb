@@ -301,6 +301,7 @@ def test_quality_aware_regional_target_plan_skips_low_yield_segments(monkeypatch
         ],
     )
     monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", [])
+    monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", [])
 
     def fake_fetch_all(sql, params=()):
         if "SELECT name FROM scout_sources" in sql:
@@ -364,6 +365,7 @@ def test_quality_aware_regional_target_plan_uses_reserve_bank_when_primary_is_ex
     reserve = [{"country": "US", "city": f"FreshReserve{token}", "language": "en", "niche": "dentists", "priority": 35, "tier": "reserve"}]
     monkeypatch.setattr(discovery_module, "FIRST_TIER_TARGETS", primary)
     monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", reserve)
+    monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", [])
 
     def fake_fetch_all(sql, params=()):
         if "SELECT name FROM scout_sources" in sql:
@@ -396,6 +398,49 @@ def test_quality_aware_regional_target_plan_uses_reserve_bank_when_primary_is_ex
     assert plan["send_mail"] is False
 
 
+def test_quality_aware_regional_target_plan_uses_stockpile_bank_when_primary_and_reserve_exhausted(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    primary = [{"country": "US", "city": f"UsedPrimary{token}", "language": "en", "niche": "dentists", "priority": 100}]
+    reserve = [{"country": "US", "city": f"UsedReserve{token}", "language": "en", "niche": "dentists", "priority": 35, "tier": "reserve"}]
+    stockpile = [{"country": "IE", "city": f"FreshStockpile{token}", "language": "en", "niche": "dentists", "priority": 120}]
+    monkeypatch.setattr(discovery_module, "FIRST_TIER_TARGETS", primary)
+    monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", reserve)
+    monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", stockpile)
+
+    def fake_fetch_all(sql, params=()):
+        if "SELECT name FROM scout_sources" in sql:
+            return [
+                {"name": f"overpass-US-UsedPrimary{token}-dentists"},
+                {"name": f"overpass-US-UsedReserve{token}-dentists"},
+            ]
+        if "FROM scout_source_performance_scores" in sql:
+            return [
+                {
+                    "country": "IE",
+                    "niche": "dentists",
+                    "source_count": 2,
+                    "qualified_rate": 0.25,
+                    "average_final_score": 70,
+                    "email_coverage": 0.8,
+                    "issue_signal_rate": 0.7,
+                    "qualified_count": 2,
+                    "promote_count": 1,
+                    "watch_count": 1,
+                    "pause_count": 0,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
+    plan = quality_aware_regional_target_plan(3)
+    assert plan["status"] == "ready"
+    assert plan["selected_count"] == 1
+    assert plan["targets"][0]["city"] == f"FreshStockpile{token}"
+    assert plan["target_pool_count"] == 3
+    assert plan["send_mail"] is False
+    assert plan["live_outreach_allowed"] is False
+
+
 def test_quality_aware_regional_target_plan_blocks_mature_zero_qualified_segments(monkeypatch):
     token = uuid.uuid4().hex[:8]
     monkeypatch.setattr(
@@ -407,6 +452,7 @@ def test_quality_aware_regional_target_plan_blocks_mature_zero_qualified_segment
         ],
     )
     monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", [])
+    monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", [])
 
     def fake_fetch_all(sql, params=()):
         if "SELECT name FROM scout_sources" in sql:

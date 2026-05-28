@@ -452,7 +452,7 @@ def quality_aware_regional_target_plan(limit_targets: int = 5) -> dict[str, Any]
     performance = _source_segment_performance_summary()
     candidates: list[dict[str, Any]] = []
     blocked_segments: list[dict[str, Any]] = []
-    target_pool = [*lead_discovery_target_plan(False)["targets"], *RESERVE_REGIONAL_TARGETS]
+    target_pool = [*lead_discovery_target_plan(False)["targets"], *RESERVE_REGIONAL_TARGETS, *STOCKPILE_EXPANSION_TARGETS]
     for target in target_pool:
         source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
         if source_name in existing_source_names:
