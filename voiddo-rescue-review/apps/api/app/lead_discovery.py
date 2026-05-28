@@ -433,12 +433,16 @@ def _segment_blocked(perf: dict[str, Any]) -> bool:
     pause_count = int(perf.get("pause_count") or 0)
     promote_count = int(perf.get("promote_count") or 0)
     qualified_count = int(perf.get("qualified_count") or 0)
+    qualified_rate = float(perf.get("qualified_rate") or 0)
+    average_final_score = float(perf.get("average_final_score") or 0)
+    if source_count >= 3 and qualified_count <= 0 and qualified_rate < 0.03:
+        return True
     return bool(
         source_count >= 2
         and pause_count >= max(2, promote_count + 1)
         and qualified_count <= 0
-        and float(perf.get("qualified_rate") or 0) < 0.05
-        and float(perf.get("average_final_score") or 0) < 40
+        and qualified_rate < 0.05
+        and average_final_score < 40
     )
 
 
@@ -471,16 +475,19 @@ def quality_aware_regional_target_plan(limit_targets: int = 5) -> dict[str, Any]
         if _segment_blocked(perf):
             blocked_segments.append({"country": key[0], "niche": key[1], "source_name": source_name, "reason": "low_yield_segment"})
             continue
+        low_yield_penalty = 35 if int(perf["source_count"]) >= 3 and int(perf["qualified_count"]) <= 1 and float(perf["qualified_rate"]) < 0.03 else 0
         quality_score = round(
             float(target.get("priority", 0))
             + NICHE_EXPANSION_PRIORITY.get(str(target["niche"]), 5)
+            + (min(int(perf["qualified_count"]), 10) * 9)
             + (float(perf["qualified_rate"]) * 120)
             + (float(perf["email_coverage"]) * 30)
             + (float(perf["issue_signal_rate"]) * 35)
             + (float(perf["average_final_score"]) * 0.25)
             + (int(perf["promote_count"]) * 18)
             + (int(perf["watch_count"]) * 8)
-            - (int(perf["pause_count"]) * 14),
+            - (int(perf["pause_count"]) * 14)
+            - low_yield_penalty,
             2,
         )
         candidates.append(

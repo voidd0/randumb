@@ -360,6 +360,62 @@ def test_quality_aware_regional_target_plan_uses_reserve_bank_when_primary_is_ex
     assert plan["send_mail"] is False
 
 
+def test_quality_aware_regional_target_plan_blocks_mature_zero_qualified_segments(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    monkeypatch.setattr(
+        discovery_module,
+        "FIRST_TIER_TARGETS",
+        [
+            {"country": "US", "city": f"ZeroQualified{token}", "language": "en", "niche": "contractors", "priority": 100},
+            {"country": "UK", "city": f"ProvenDental{token}", "language": "en", "niche": "dentists", "priority": 50},
+        ],
+    )
+    monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", [])
+
+    def fake_fetch_all(sql, params=()):
+        if "SELECT name FROM scout_sources" in sql:
+            return []
+        if "FROM scout_source_performance_scores" in sql:
+            return [
+                {
+                    "country": "US",
+                    "niche": "contractors",
+                    "source_count": 4,
+                    "qualified_rate": 0.0,
+                    "average_final_score": 42,
+                    "email_coverage": 0.7,
+                    "issue_signal_rate": 0.4,
+                    "qualified_count": 0,
+                    "promote_count": 0,
+                    "watch_count": 0,
+                    "pause_count": 0,
+                },
+                {
+                    "country": "UK",
+                    "niche": "dentists",
+                    "source_count": 4,
+                    "qualified_rate": 0.25,
+                    "average_final_score": 62,
+                    "email_coverage": 0.75,
+                    "issue_signal_rate": 0.55,
+                    "qualified_count": 4,
+                    "promote_count": 1,
+                    "watch_count": 1,
+                    "pause_count": 0,
+                },
+            ]
+        return []
+
+    monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
+    plan = quality_aware_regional_target_plan(2)
+    assert plan["selected_count"] == 1
+    assert plan["targets"][0]["city"] == f"ProvenDental{token}"
+    assert plan["blocked_segment_count"] == 1
+    assert plan["blocked_segments"][0]["reason"] == "low_yield_segment"
+    assert plan["send_mail"] is False
+    assert plan["live_outreach_allowed"] is False
+
+
 def test_stockpile_expansion_target_plan_uses_approved_preview_segments(monkeypatch):
     token = uuid.uuid4().hex[:8]
     monkeypatch.setattr(
