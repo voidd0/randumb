@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
+from app.mailer_action_queue import process_mailer_action_queue
 from app.mailer_control_room import cleanup_mailer_policy_score_history, latest_mailer_business_kpi_history, latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, latest_mailer_policy_score_regression_guard_summary, mailer_business_kpi_snapshot, mailer_digest_summary, mailer_policy_score, mailer_policy_score_regression_guard, mailer_policy_score_retention_summary, mailer_self_audit_matrix_snapshot
 from app.main import app
 from fastapi.testclient import TestClient
@@ -29,9 +30,7 @@ def _cleanup(action_id: str | None = None) -> None:
 
 
 def _clean_trend_runtime() -> None:
-    execute("DELETE FROM mailer_send_ledger")
-    execute("DELETE FROM recipient_resolver_audit")
-    execute("DELETE FROM mailer_action_queue")
+    process_mailer_action_queue(100)
 
 
 def test_mailer_digest_agent_exists_and_generates_report():
@@ -213,12 +212,21 @@ def test_mailer_digest_trend_guard_agent_blocks_queue_regression():
     _clean_trend_runtime()
     run_agent("mailer_ops_retention_agent")
     digest_run = run_agent("mailer_digest_agent")
-    run = run_agent("mailer_digest_trend_guard_agent")
-    assert run["status"] == "completed"
-    assert run["result_json"]["decision"] == "FAIL_BLOCK_LAUNCH"
-    assert "mailer_action_queue_not_empty" in run["result_json"]["regressions"]
-    assert run["result_json"]["send_mail"] is False
-    _cleanup(digest_run["result_json"]["owner_report_action"]["id"])
+    action = execute(
+        """
+        INSERT INTO mailer_action_queue(action_type, risk_level, status, payload_json)
+        VALUES ('owner_report', 'SAFE_AUTO', 'queued', '{"source":"p36-queue-regression"}'::jsonb)
+        RETURNING id
+        """
+    )
+    try:
+        run = run_agent("mailer_digest_trend_guard_agent")
+        assert run["status"] == "completed"
+        assert run["result_json"]["decision"] == "FAIL_BLOCK_LAUNCH"
+        assert "mailer_action_queue_not_empty" in run["result_json"]["regressions"]
+        assert run["result_json"]["send_mail"] is False
+    finally:
+        execute("DELETE FROM mailer_action_queue WHERE id IN (%s, %s)", (digest_run["result_json"]["owner_report_action"]["id"], action["id"]))
 
 
 def test_daily_loop_includes_mailer_digest_trend_guard_agent_after_digest():
