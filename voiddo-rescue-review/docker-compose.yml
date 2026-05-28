@@ -82,6 +82,7 @@ services:
     build:
       context: ./apps/worker
     container_name: voiddo_rescue_worker
+    init: true
     restart: unless-stopped
     env_file: .env
     environment:
