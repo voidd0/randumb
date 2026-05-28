@@ -6,7 +6,7 @@ from psycopg.types.json import Jsonb
 
 from app.db import execute, fetch_one
 from app.autonomous_agents import run_agent
-from app.p0 import one_click_unsubscribe_url_from_body, prepare_outreach_preview, queue_outreach_preview, suppress_unsubscribe_token
+from app.p0 import dedupe_outreach_preview_messages, one_click_unsubscribe_url_from_body, prepare_outreach_preview, queue_outreach_preview, suppress_unsubscribe_token
 
 
 def _cleanup(token: str) -> None:
@@ -143,4 +143,31 @@ def test_queue_outreach_preview_remains_dry_run_and_suppresses_raw_recipients():
     finally:
         if preview_batch_id:
             execute("DELETE FROM outreach_preview_batches WHERE id = %s", (preview_batch_id,))
+        _cleanup(token)
+
+
+def test_outreach_preview_dedupe_archives_duplicate_preview_rows():
+    token = uuid.uuid4().hex[:8]
+    try:
+        _preview_candidate(token, approved=True)
+        first = queue_outreach_preview(5)
+        assert first["created"] == 1
+        row = fetch_one("SELECT lead_id, audit_id, subject, body, html_body FROM outreach_messages WHERE body LIKE %s LIMIT 1", (f"%qa97-{token}.clinic%",))
+        execute(
+            """
+            INSERT INTO outreach_messages(lead_id, audit_id, mailbox, subject, body, html_body, status)
+            VALUES (%s, %s, 'audit@voiddorescue.com', %s, %s, %s, 'preview')
+            """,
+            (row["lead_id"], row["audit_id"], row["subject"], row["body"], row["html_body"]),
+        )
+        preview = dedupe_outreach_preview_messages(50, apply=False)
+        assert preview["duplicate_group_count"] >= 1
+        result = run_agent("outreach_preview_dedupe_agent", {"limit": 50, "apply": True})
+        assert result["status"] == "completed"
+        assert result["result_json"]["archived_count"] >= 1
+        active = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE body LIKE %s AND status = 'preview'", (f"%qa97-{token}.clinic%",))
+        archived = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE body LIKE %s AND status = 'archived_duplicate_preview'", (f"%qa97-{token}.clinic%",))
+        assert int(active["count"]) == 1
+        assert int(archived["count"]) >= 1
+    finally:
         _cleanup(token)

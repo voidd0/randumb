@@ -27,6 +27,7 @@ from .p0 import (
     run_mail_qa,
     import_warmup_recipients,
     import_test_inboxes,
+    dedupe_outreach_preview_messages,
     prepare_outreach_preview,
     queue_outreach_preview,
     run_warmup_calendar_due,
@@ -526,6 +527,18 @@ async def outreach_preview_batch(request: Request):
 async def outreach_queue_preview(request: Request):
     payload = await request.json()
     return {"ok": True, "queued": queue_outreach_preview(int(payload.get("limit", 20)))}
+
+
+@app.post("/outreach/dedupe-preview", dependencies=[Depends(require_admin)])
+async def outreach_dedupe_preview(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "dedupe": dedupe_outreach_preview_messages(
+            int(payload.get("limit", 500)),
+            apply=bool(payload.get("apply", True)),
+        ),
+    }
 
 
 @app.post("/outreach/send")

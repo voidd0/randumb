@@ -2703,6 +2703,53 @@ def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
     }
 
 
+def dedupe_outreach_preview_messages(limit: int = 500, apply: bool = False) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 500), 1000))
+    groups = fetch_all(
+        """
+        SELECT lead_id, audit_id, array_agg(id ORDER BY created_at DESC, id DESC) AS ids, count(*) AS count
+        FROM outreach_messages
+        WHERE status = 'preview'
+        GROUP BY lead_id, audit_id
+        HAVING count(*) > 1
+        ORDER BY max(created_at) DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    duplicate_ids: list[str] = []
+    sample: list[dict[str, Any]] = []
+    for group in groups:
+        ids = [str(item) for item in group["ids"]]
+        keep_id = ids[0]
+        archived = ids[1:]
+        duplicate_ids.extend(archived)
+        sample.append(
+            {
+                "lead_id": str(group["lead_id"]),
+                "audit_id": str(group["audit_id"]),
+                "keep_id": keep_id,
+                "duplicate_count": len(archived),
+            }
+        )
+    archived_count = 0
+    if apply and duplicate_ids:
+        execute("UPDATE outreach_messages SET status = 'archived_duplicate_preview' WHERE id = ANY(%s::uuid[])", (duplicate_ids,))
+        archived_count = len(duplicate_ids)
+    return {
+        "status": "clean" if not groups else ("archived" if apply else "duplicates_found"),
+        "duplicate_group_count": len(groups),
+        "duplicate_message_count": len(duplicate_ids),
+        "archived_count": archived_count,
+        "sample": sample[:20],
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
 def suppress_unsubscribe_token(token: str) -> dict[str, Any]:
     try:
         lead_id = lead_id_from_unsubscribe_token(token, _unsubscribe_secret())

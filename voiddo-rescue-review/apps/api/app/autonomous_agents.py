@@ -33,6 +33,7 @@ from .monitoring import process_due_monitoring_targets, run_monitoring_check
 from .owner_command_control import owner_command_control_summary
 from .p0 import (
     build_warmup_calendar,
+    dedupe_outreach_preview_messages,
     mail_signal_summary,
     prepare_outreach_preview,
     queue_outreach_preview,
@@ -291,6 +292,10 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "warmup_block_recovery_snapshot_agent": lambda: warmup_block_recovery_snapshot(int(payload.get("limit", 50))),
         "campaign_agent": lambda: prepare_outreach_preview(int(payload.get("limit", 20))),
         "outreach_preview_queue_agent": lambda: queue_outreach_preview(int(payload.get("limit", 20))),
+        "outreach_preview_dedupe_agent": lambda: dedupe_outreach_preview_messages(
+            int(payload.get("limit", 500)),
+            apply=bool(payload.get("apply", True)),
+        ),
         "campaign_operator_agent": lambda: run_campaign_operator_cycle(int(payload.get("limit", 25))),
         "campaign_control_room_agent": lambda: campaign_control_room_snapshot(int(payload.get("limit", 100))),
         "campaign_control_room_prepare_agent": lambda: prepare_campaign_control_room(int(payload.get("limit", 100)), dry_run=True),
@@ -493,6 +498,7 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
         "scout_sensitive_hygiene_snapshot_agent",
         "campaign_agent",
         "outreach_preview_queue_agent",
+        "outreach_preview_dedupe_agent",
         "campaign_operator_agent",
         "campaign_control_room_agent",
         "campaign_control_room_prepare_agent",
