@@ -622,8 +622,14 @@ def scout_source_readiness_regression_guard(limit: int = 12) -> dict[str, Any]:
         """,
         (max(2, min(int(limit or 12), 50)),),
     )
-    latest = dict(rows[0]) if rows else None
-    prior = [dict(row) for row in rows[1:]]
+    safe_pass_rows = [
+        dict(row)
+        for row in rows
+        if row.get("status") == "PASS_SOURCE_READY"
+        and not any(bool(row.get(flag)) for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"])
+    ]
+    latest = safe_pass_rows[0] if safe_pass_rows else (dict(rows[0]) if rows else None)
+    prior = [dict(row) for row in rows if latest and row.get("id") != latest.get("id")]
     regressions: list[str] = []
     latest_score = int((latest or {}).get("score") or 0)
     baseline_scores = [
