@@ -283,6 +283,42 @@ def test_campaign_preview_self_review_approves_two_issue_mid_score_with_screensh
         _cleanup(token)
 
 
+def test_campaign_preview_self_review_approves_single_high_issue_with_two_screenshots():
+    token = uuid.uuid4().hex[:8]
+    try:
+        lead_id, audit_id = _qualified_lead(token)
+        execute("DELETE FROM audit_issues WHERE audit_id = %s AND issue_type IN ('metadata', 'mobile_cta')", (audit_id,))
+        execute(
+            """
+            INSERT INTO screenshots(audit_id, type, file_path, public_url, viewport)
+            VALUES (%s, 'mobile', %s, %s, 'mobile')
+            """,
+            (audit_id, f"/app/storage/screenshots/p59-{token}-mobile.png", f"/media/screenshots/p59-{token}-mobile.png"),
+        )
+        execute("UPDATE leads SET score = 74 WHERE id = %s", (lead_id,))
+        execute("UPDATE lead_scores SET final_score = 74 WHERE lead_id = %s AND audit_id = %s", (lead_id, audit_id))
+        campaign = create_campaign(
+            {
+                "name": f"QA59 single issue proof {token}",
+                "country": f"QA59{token[:3].upper()}",
+                "language": "en",
+                "niche": "dentists",
+                "offer_key": "contact_form_repair",
+            }
+        )
+        prepare_campaign_gated(str(campaign["id"]), 70, 20)
+        result = auto_review_campaign_previews(100, apply=True, campaign_id=str(campaign["id"]))
+        row = [item for item in campaign_preview_rows(100)["rows"] if item["domain"] == f"p59-{token}.clinic"][0]
+        assert row["latest_review_action"] == "approved"
+        assert result["decisions"][0]["issue_count"] == 1
+        assert result["decisions"][0]["critical_high_count"] == 1
+        assert result["decisions"][0]["screenshot_count"] == 2
+        assert result["approved_count"] == 1
+        assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
 def test_campaign_preview_self_review_approves_evidence_strong_local_scores():
     token = uuid.uuid4().hex[:8]
     try:

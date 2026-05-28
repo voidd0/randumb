@@ -253,6 +253,9 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
         elif lead_score >= 75 and audit_strength >= 70 and issue_count >= 2 and critical_high_count >= 1 and screenshot_count >= 1:
             action = "approved"
             reason = "two specific public issues and screenshot evidence meet no-send preview threshold"
+        elif lead_score >= 74 and audit_strength >= 70 and critical_high_count >= 1 and screenshot_count >= 2:
+            action = "approved"
+            reason = "single high-severity public issue with screenshot evidence meets no-send canary threshold"
         elif lead_score >= 72 and audit_strength >= 77:
             action = "approved"
             reason = "specific public audit evidence meets no-send preview threshold"
