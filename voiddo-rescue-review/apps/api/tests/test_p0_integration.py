@@ -151,9 +151,15 @@ def test_inbound_persistence_redacts_sender_in_events():
 def test_owner_command_safe_auto_and_high_risk_blocked():
     owner = os.environ["OWNER_COMMAND_EMAIL"]
     safe = parse_owner_command(owner, "STATUS", "", owner, "dkim=pass")
+    supply = parse_owner_command(owner, "SHOW LEAD SUPPLY", "", owner, "dkim=pass")
+    run_supply = parse_owner_command(owner, "RUN LEAD SUPPLY BUILDOUT", "", owner, "dkim=pass")
     risky = parse_owner_command(owner, "RUN SHELL", "ls -la", owner, "dkim=pass")
     assert safe["risk_level"] == "SAFE_AUTO"
     assert safe["status"] == "executed"
+    assert supply["risk_level"] == "SAFE_AUTO"
+    assert supply["status"] == "executed"
+    assert run_supply["risk_level"] == "MEDIUM_RISK"
+    assert run_supply["status"] == "prepared"
     assert risky["risk_level"] == "HIGH_RISK"
     assert risky["status"] == "review_required"
 

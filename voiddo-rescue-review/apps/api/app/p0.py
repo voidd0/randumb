@@ -913,6 +913,10 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "ПОКАЖИ ПЛАТЕЖИ": "SHOW PAYMENTS",
         "ПОКАЖИ РУЧНУЮ ПРОВЕРКУ": "SHOW HUMAN REVIEW",
         "ПОКАЖИ ЖИВУЮ ОЧЕРЕДЬ": "SHOW LIVE QUEUE",
+        "ПОКАЖИ ЗАПАС ЛИДОВ": "SHOW LEAD SUPPLY",
+        "ПОКАЖИ SUPPLY": "SHOW LEAD SUPPLY",
+        "ЗАПУСТИ ЗАПАС ЛИДОВ": "RUN LEAD SUPPLY BUILDOUT",
+        "ЗАПУСТИ SUPPLY": "RUN LEAD SUPPLY BUILDOUT",
         "ПОДГОТОВЬ ЖИВОЙ КАНАРЕЙКУ": "PREPARE LIVE CANARY",
         "ПОДГОТОВЬ ЖИВОЙ КАНАРИ": "PREPARE LIVE CANARY",
         "ПОКАЖИ ЗАПУСК": "SHOW LAUNCH RUNBOOK",
@@ -941,8 +945,9 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",
         "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
         "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE", "SHOW LAUNCH RUNBOOK", "ROLLBACK LIVE OUTREACH",
+        "SHOW LEAD SUPPLY",
     }
-    medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP"}
+    medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP", "RUN LEAD SUPPLY BUILDOUT"}
     medium.add("RUN LAUNCH REHEARSAL")
     high = {"SEND OUTREACH", "START WARMUP", "UNPAUSE OUTREACH", "RUN SHELL", "EXECUTE"}
     if command in safe:
@@ -1767,6 +1772,19 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
             "queue": live_outreach_queue_candidates(20),
             "history": latest_outreach_send_runs(10),
         }
+    elif command == "SHOW LEAD SUPPLY":
+        from .lead_discovery import quality_aware_regional_target_plan
+        from .lead_stockpile_health import latest_lead_stockpile_health_runs, lead_stockpile_health_snapshot
+        from .lead_supply_buildout import lead_supply_buildout
+
+        result = {
+            "ok": True,
+            "action": "lead_supply_status",
+            "stockpile": lead_stockpile_health_snapshot(100, 20, 150),
+            "buildout": lead_supply_buildout(100, 20, 120, apply=False),
+            "quality_targets": quality_aware_regional_target_plan(5),
+            "history": latest_lead_stockpile_health_runs(5),
+        }
     elif command == "SHOW LAUNCH RUNBOOK":
         from .launch_activation import launch_activation_runbook
 
@@ -1797,6 +1815,14 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
             "ok": True,
             "action": "live_canary_prepared_dry_run",
             "queue": stage_live_outreach_batch(20, dry_run=True, requested_by="owner_command"),
+        }
+    elif command == "RUN LEAD SUPPLY BUILDOUT":
+        from .lead_supply_buildout import lead_supply_buildout
+
+        result = {
+            "ok": True,
+            "action": "lead_supply_buildout",
+            "supply": lead_supply_buildout(100, 20, 120, max_cycles=1, max_seconds=90, enrichment_limit=0, apply=True),
         }
     elif command == "RUN LAUNCH REHEARSAL":
         from .launch_rehearsal import run_launch_rehearsal

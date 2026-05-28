@@ -58,6 +58,16 @@ def test_owner_command_show_live_queue_is_safe_auto_and_redacted():
     assert "@" not in str(result["queue"])
 
 
+def test_owner_command_show_lead_supply_is_safe_auto_and_no_send():
+    result = execute_owner_command({"command": "SHOW LEAD SUPPLY", "risk_level": "SAFE_AUTO", "args_json": {}})
+    assert result["ok"] is True
+    assert result["action"] == "lead_supply_status"
+    assert result["stockpile"]["send_mail"] is False
+    assert result["buildout"]["send_mail"] is False
+    assert result["quality_targets"]["live_outreach_allowed"] is False
+    assert result["stockpile"]["raw_recipient_addresses_included"] is False
+
+
 def test_owner_command_prepare_live_canary_is_dry_run_and_never_queues():
     before = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE status = 'queued'")
     result = execute_owner_command({"command": "PREPARE LIVE CANARY", "risk_level": "MEDIUM_RISK", "args_json": {}})
