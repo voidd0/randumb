@@ -1368,6 +1368,40 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         ),
         reverse=True,
     )
+    if not candidates:
+        fallback_plan = quality_aware_regional_target_plan(safe_limit)
+        for target in fallback_plan.get("targets", []):
+            source_name = str(target.get("source_name") or f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}")
+            quality_score = float(target.get("quality_score") or 0)
+            if source_name in existing_source_names or quality_score < 70:
+                continue
+            candidates.append(
+                {
+                    "country": target["country"],
+                    "city": target["city"],
+                    "language": target.get("language") or "en",
+                    "niche": target["niche"],
+                    "priority": target.get("priority", 0),
+                    "tier": target.get("tier", "quality_fallback"),
+                    "source_name": source_name,
+                    "expansion_score": round(quality_score, 2),
+                    "guidance": {
+                        "strategy": "fallback_to_quality_aware_targets_after_proven_stockpile_targets_exhausted",
+                        "segment_origin": "quality_aware_fallback",
+                        "approved_count": 0,
+                        "average_score": 0,
+                        "source_performance": (target.get("guidance") or {}).get("source_performance", {}),
+                    },
+                }
+            )
+        candidates.sort(
+            key=lambda item: (
+                item["expansion_score"],
+                NICHE_EXPANSION_PRIORITY.get(item["niche"], 0),
+                item.get("priority", 0),
+            ),
+            reverse=True,
+        )
     selected = candidates[:safe_limit]
     return {
         "status": "ready" if selected else "no_stockpile_expansion_targets",
