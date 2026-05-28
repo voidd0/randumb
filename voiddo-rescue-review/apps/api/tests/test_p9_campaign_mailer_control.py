@@ -9,7 +9,7 @@ from psycopg.types.json import Jsonb
 from app.autonomous_agents import run_agent
 from app.campaign_control import campaign_readiness_snapshot
 from app.db import execute, fetch_one
-from app.mailer_control import evaluate_outbound_message
+from app.mailer_control import evaluate_latest_preview_outbound_message, evaluate_outbound_message
 from app.main import app
 from app.reply_actions import plan_reply_action
 from app.scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, run_scout_quality_gate, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
@@ -102,6 +102,59 @@ def test_outbound_message_decision_blocks_and_hashes_recipient():
     assert decision["action"] == "do_not_send"
     assert decision["recipient_hash"] != "lead-p9@example.test"
     assert "outreach_dry_run_enabled" in decision["reason"] or "recent_" in decision["reason"]
+
+
+def test_outbound_gate_agent_uses_real_preview_message_with_signed_unsubscribe():
+    token = uuid.uuid4().hex[:8]
+    message_id = None
+    try:
+        business = execute(
+            "INSERT INTO businesses(name, domain, source, niche, country, status) VALUES (%s, %s, 'p9_test', 'dentists', 'P9', 'scouted') RETURNING id",
+            (f"P9 Gate {token}", f"gate-{token}.example.test"),
+        )
+        lead = execute(
+            "INSERT INTO leads(business_id, email, source, status, score, niche, country, language) VALUES (%s, %s, 'p9_test', 'scouted', 91, 'dentists', 'P9', 'en') RETURNING id",
+            (business["id"], f"gate-{token}@example.test"),
+        )
+        audit = execute(
+            """
+            INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+            VALUES (%s, %s, %s, %s, 'completed', 88, 'Contact path issue', %s, now())
+            RETURNING id
+            """,
+            (business["id"], lead["id"], f"gate-{token}.example.test", f"https://gate-{token}.example.test", f"gate-{token}"),
+        )
+        unsubscribe_url = f"https://go.rescue.voiddo.com/unsubscribe/u_{lead['id']}.signedtoken"
+        message = execute(
+            """
+            INSERT INTO outreach_messages(lead_id, audit_id, mailbox, subject, body, html_body, status)
+            VALUES (%s, %s, 'audit@voiddorescue.com', 'Possible issue on test website', %s, %s, 'preview')
+            RETURNING id
+            """,
+            (
+                lead["id"],
+                audit["id"],
+                f"Public check details.\nUnsubscribe: {unsubscribe_url}",
+                f"<!doctype html><html><body><a href=\"{unsubscribe_url}\">Unsubscribe</a></body></html>",
+            ),
+        )
+        message_id = str(message["id"])
+        decision = evaluate_latest_preview_outbound_message()
+        checks = decision["checks_json"]["transport"]["checks"]
+        assert str(decision["outreach_message_id"]) == str(message["id"])
+        assert checks["has_unsubscribe"] is True
+        assert checks["unsubscribe_one_click_ready"] is True
+        assert checks["html_body_ready"] is True
+        assert decision["status"] == "blocked"
+        assert decision["reason"] == "outreach_dry_run_enabled"
+        assert decision["recipient_hash"] != f"gate-{token}@example.test"
+    finally:
+        if message_id:
+            execute("DELETE FROM outbound_mailer_decisions WHERE outreach_message_id = %s", (message_id,))
+        execute("DELETE FROM outreach_messages WHERE subject = 'Possible issue on test website' AND body LIKE %s", (f"%{token}%",))
+        execute("DELETE FROM audits WHERE public_slug = %s", (f"gate-{token}",))
+        execute("DELETE FROM leads WHERE email = %s", (f"gate-{token}@example.test",))
+        execute("DELETE FROM businesses WHERE domain = %s", (f"gate-{token}.example.test",))
 
 
 def test_outbound_message_decision_rejects_suppressed_recipient():

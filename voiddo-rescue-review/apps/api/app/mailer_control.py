@@ -86,4 +86,52 @@ def evaluate_outbound_message(payload: dict[str, Any]) -> dict[str, Any]:
             Jsonb(checks),
         ),
     )
-    return dict(row)
+    result = dict(row)
+    result["send_mail"] = False
+    result["smtp_called"] = False
+    result["live_outreach_allowed"] = False
+    return result
+
+
+def evaluate_latest_preview_outbound_message() -> dict[str, Any]:
+    row = fetch_one(
+        """
+        SELECT om.id AS outreach_message_id, om.body, om.html_body, om.mailbox,
+               l.email, cl.campaign_id
+        FROM outreach_messages om
+        JOIN leads l ON l.id = om.lead_id
+        LEFT JOIN campaign_leads cl ON cl.lead_id = om.lead_id AND cl.audit_id = om.audit_id
+        WHERE om.status = 'preview'
+        ORDER BY om.created_at DESC
+        LIMIT 1
+        """
+    )
+    if not row:
+        return evaluate_outbound_message(
+            {
+                "email": "sample@example.test",
+                "template_key": "first_audit_notice",
+                "template_data": {
+                    "business_name": "Example Studio",
+                    "name_or_team": "team",
+                    "domain": "example.test",
+                    "main_issue_short": "A public enquiry path may be unclear.",
+                    "audit_url": "https://audit.rescue.voiddo.com/r/demo",
+                    "unsubscribe_url": "https://go.rescue.voiddo.com/unsubscribe/u_00000000-0000-0000-0000-000000000000.sample",
+                    "one_time_price": "$99",
+                    "monthly_price": "$19",
+                },
+                "skip_campaign_preflight": True,
+            }
+        )
+    return evaluate_outbound_message(
+        {
+            "outreach_message_id": str(row["outreach_message_id"]),
+            "campaign_id": str(row["campaign_id"]) if row.get("campaign_id") else None,
+            "email": row["email"],
+            "mailbox": row["mailbox"],
+            "template_key": "first_audit_notice",
+            "body": row["body"],
+            "html_body": row["html_body"],
+        }
+    )

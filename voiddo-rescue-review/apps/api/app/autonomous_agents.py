@@ -17,7 +17,7 @@ from .audit_refresh_drain import audit_refresh_drain_snapshot, prioritize_audit_
 from .audit_refresh_failures import audit_refresh_failure_snapshot, retry_failed_audit_refresh_jobs
 from .audit_refresh_repair import audit_refresh_attachment_repair_snapshot, repair_audit_refresh_attachments
 from .autonomous_mailer import run_autonomous_mailer_cycle
-from .mailer_control import evaluate_outbound_message
+from .mailer_control import evaluate_latest_preview_outbound_message, evaluate_outbound_message
 from .mailer_action_queue import process_mailer_action_queue
 from .mailer_control_room import cleanup_mailer_digest_history, cleanup_mailer_policy_score_history, mailer_business_kpi_snapshot, mailer_digest_trend_guard, mailer_policy_score, mailer_policy_score_regression_guard, mailer_self_audit_matrix_snapshot, record_mailer_business_kpi_history, record_mailer_policy_score_history, record_mailer_self_audit_matrix_history, write_mailer_digest_agent_report, write_owner_status_report
 from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
@@ -395,7 +395,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "mailer_business_kpi_agent": lambda: mailer_business_kpi_snapshot(),
         "mailer_self_audit_matrix_agent": lambda: mailer_self_audit_matrix_snapshot(),
         "mailer_ops_retention_agent": lambda: cleanup_mailer_ops_synthetic_history(),
-        "outbound_mailer_gate_agent": lambda: evaluate_outbound_message({"email": "sample@example.test", "template_key": "first_audit_notice"}),
+        "outbound_mailer_gate_agent": lambda: evaluate_latest_preview_outbound_message(),
         "reply_action_agent": lambda: plan_reply_action("Price", "How much does it cost?", "audit@voiddorescue.com"),
         "quality_plugin_agent": lambda: latest_quality_summary(),
         "revenue_simulation_agent": lambda: run_synthetic_lead_simulation(int(payload.get("count", 25))),
