@@ -53,7 +53,7 @@ export default async function AdminPage() {
   const ledgerData = await fetchJson("/admin/mailer/autonomy-ledger", authorization ? { Authorization: authorization } : {});
   const actionQueueData = await fetchJson("/admin/mailer/action-queue", authorization ? { Authorization: authorization } : {});
   const closedLoopData = await fetchJson("/admin/mailer/closed-loop", authorization ? { Authorization: authorization } : {});
-  const simulationData = await postJson("/admin/mailer/customer-simulation", { write_report: false }, authorization ? { Authorization: authorization } : {});
+  const simulationData = await fetchJson("/admin/mailer/customer-simulation", authorization ? { Authorization: authorization } : {});
   const opsActionData = await fetchJson("/admin/mailer/ops-actions", authorization ? { Authorization: authorization } : {});
   const opsRetentionHistoryData = await fetchJson("/admin/mailer/ops-retention-history", authorization ? { Authorization: authorization } : {});
   const digestData = await fetchJson("/admin/mailer/digest-summary", authorization ? { Authorization: authorization } : {});

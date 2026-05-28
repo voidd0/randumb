@@ -989,6 +989,11 @@ async def mailer_customer_simulation(request: Request):
     return {"ok": True, "simulation": run_customer_mail_simulation(bool(payload.get("write_report", True)))}
 
 
+@app.get("/admin/mailer/customer-simulation", dependencies=[Depends(require_admin)])
+def mailer_customer_simulation_summary():
+    return {"ok": True, "simulation": run_customer_mail_simulation(False)}
+
+
 @app.get("/admin/mailer/ops-actions", dependencies=[Depends(require_admin)])
 def mailer_ops_actions_get():
     return {"ok": True, "ops_actions": mailer_ops_action_summary()}

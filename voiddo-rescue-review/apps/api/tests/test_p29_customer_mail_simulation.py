@@ -57,9 +57,14 @@ def test_customer_mail_simulation_templates_pass_qa():
 
 def test_customer_mail_simulation_endpoint_requires_auth():
     assert client.post("/admin/mailer/customer-simulation", json={"write_report": False}).status_code == 401
+    assert client.get("/admin/mailer/customer-simulation").status_code == 401
     response = client.post("/admin/mailer/customer-simulation", json={"write_report": False}, headers=admin_headers())
     assert response.status_code == 200
     assert response.json()["simulation"]["case_count"] == len(PRODUCTS) * len(ACTION_TEMPLATES) * len(SCENARIOS)
+    read_only = client.get("/admin/mailer/customer-simulation", headers=admin_headers())
+    assert read_only.status_code == 200
+    assert read_only.json()["simulation"]["send_mail"] is False
+    assert read_only.json()["simulation"]["real_smtp_called"] is False
 
 
 def test_customer_mail_simulation_agent_records_no_send():
