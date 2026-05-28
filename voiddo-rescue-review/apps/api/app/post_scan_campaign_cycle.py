@@ -7,11 +7,13 @@ from psycopg.types.json import Jsonb
 from .campaign_actions import run_campaign_operator_cycle
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import repair_campaign_pipeline
+from .campaign_preview_hygiene import archive_campaign_preview_artifacts, archive_campaign_shell_artifacts
 from .db import execute, fetch_all, fetch_one
 from .lead_quality_diagnostics import scout_source_performance
 from .lead_scoring import backfill_post_scan_lead_scores
 from .p0 import json_safe
 from .scanner_ops import scanner_queue_health_snapshot
+from .scout_sensitive_hygiene import archive_sensitive_scout_targets
 
 
 SAFE_FLAGS = {
@@ -38,6 +40,9 @@ def post_scan_campaign_cycle(limit: int = 100, dry_run: bool = True) -> dict[str
     before_scanner = scanner_queue_health_snapshot(20)
     before_campaign = campaign_control_room_snapshot(safe_limit, 70)
     preview_before = _preview_count()
+    pre_sensitive_hygiene = archive_sensitive_scout_targets(safe_limit, apply=not dry_run)
+    pre_preview_hygiene = archive_campaign_preview_artifacts(safe_limit, apply=not dry_run)
+    pre_shell_hygiene = archive_campaign_shell_artifacts(safe_limit, apply=not dry_run)
 
     backfill = backfill_post_scan_lead_scores(safe_limit, dry_run=dry_run)
     source_perf = scout_source_performance(safe_limit, store=not dry_run)
@@ -48,6 +53,9 @@ def post_scan_campaign_cycle(limit: int = 100, dry_run: bool = True) -> dict[str
         else {"status": "dry_run", "campaign_previews_prepared": 0, **SAFE_FLAGS}
     )
     operator = run_campaign_operator_cycle(min(safe_limit, 50), refresh_previews=False) if not dry_run else {"status": "dry_run", **SAFE_FLAGS}
+    post_sensitive_hygiene = archive_sensitive_scout_targets(safe_limit, apply=not dry_run)
+    post_preview_hygiene = archive_campaign_preview_artifacts(safe_limit, apply=not dry_run)
+    post_shell_hygiene = archive_campaign_shell_artifacts(safe_limit, apply=not dry_run)
     after_campaign = campaign_control_room_snapshot(safe_limit, 70)
     after_scanner = scanner_queue_health_snapshot(20)
     preview_after = _preview_count()
@@ -55,7 +63,20 @@ def post_scan_campaign_cycle(limit: int = 100, dry_run: bool = True) -> dict[str
     status = "completed_no_send" if not dry_run else "dry_run_no_send"
     if any(
         bool((item or {}).get(flag))
-        for item in [backfill, source_perf, pipeline, prepared, operator, after_campaign]
+        for item in [
+            pre_sensitive_hygiene,
+            pre_preview_hygiene,
+            pre_shell_hygiene,
+            backfill,
+            source_perf,
+            pipeline,
+            prepared,
+            operator,
+            post_sensitive_hygiene,
+            post_preview_hygiene,
+            post_shell_hygiene,
+            after_campaign,
+        ]
         for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"]
     ):
         status = "failed_send_flag_regression"
@@ -70,6 +91,9 @@ def post_scan_campaign_cycle(limit: int = 100, dry_run: bool = True) -> dict[str
                 "campaign_preview_count": preview_before,
             },
             "steps": {
+                "pre_sensitive_hygiene": pre_sensitive_hygiene,
+                "pre_preview_hygiene": pre_preview_hygiene,
+                "pre_shell_hygiene": pre_shell_hygiene,
                 "backfill": backfill,
                 "source_performance": {
                     "status": source_perf.get("status"),
@@ -82,6 +106,9 @@ def post_scan_campaign_cycle(limit: int = 100, dry_run: bool = True) -> dict[str
                 "pipeline_repair": pipeline,
                 "campaign_prepare": prepared,
                 "campaign_operator": operator,
+                "post_sensitive_hygiene": post_sensitive_hygiene,
+                "post_preview_hygiene": post_preview_hygiene,
+                "post_shell_hygiene": post_shell_hygiene,
             },
             "after": {
                 "scanner": after_scanner,

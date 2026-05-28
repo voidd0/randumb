@@ -24,7 +24,7 @@ def _cleanup(token: str) -> None:
     execute("DELETE FROM campaign_action_runs WHERE result_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM campaign_readiness_snapshots WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM campaign_leads WHERE preview_json::text LIKE %s OR campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s)", (f"%{token}%", f"%{token}%"))
-    execute("DELETE FROM campaigns WHERE name LIKE %s OR country = %s", (f"%{token}%", f"P74{token[:3].upper()}"))
+    execute("DELETE FROM campaigns WHERE name LIKE %s OR country = %s", (f"%{token}%", f"QA74{token[:3].upper()}"))
     execute("DELETE FROM audit_strength_scores WHERE audit_id IN (SELECT id FROM audits WHERE public_slug LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM lead_scores WHERE lead_id IN (SELECT id FROM leads WHERE email LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM audit_issues WHERE audit_id IN (SELECT id FROM audits WHERE public_slug LIKE %s)", (f"%{token}%",))
@@ -40,7 +40,7 @@ def _cleanup(token: str) -> None:
 
 
 def _seed_completed_scan_candidate(token: str) -> tuple[str, str]:
-    country = f"P74{token[:3].upper()}"
+    country = f"QA74{token[:3].upper()}"
     domain = f"p74-{token}.clinic"
     source = execute(
         """
@@ -69,7 +69,7 @@ def _seed_completed_scan_candidate(token: str) -> tuple[str, str]:
     business = execute(
         """
         INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
-        VALUES (%s, %s, 'Cycle City', 'en', 'dentists', 'p74_test', %s, %s, %s, 'scouted')
+        VALUES (%s, %s, 'Cycle City', 'en', 'dentists', 'qa74_fixture', %s, %s, %s, 'scouted')
         RETURNING id
         """,
         (f"P74 Clinic {token}", country, f"https://{domain}", domain, f"owner-{token}@{domain}"),
@@ -77,7 +77,7 @@ def _seed_completed_scan_candidate(token: str) -> tuple[str, str]:
     lead = execute(
         """
         INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
-        VALUES (%s, %s, 'p74_test', 'scouted', 0, 'en', %s, 'Cycle City', 'dentists')
+        VALUES (%s, %s, 'qa74_fixture', 'scouted', 0, 'en', %s, 'Cycle City', 'dentists')
         RETURNING id
         """,
         (business["id"], f"owner-{token}@{domain}", country),
@@ -132,6 +132,8 @@ def test_post_scan_campaign_cycle_scores_and_prepares_preview_without_send():
         result = post_scan_campaign_cycle(100, dry_run=False)
         assert result["status"] == "completed_no_send"
         assert result["steps"]["backfill"]["scored_count"] >= 1
+        assert result["steps"]["pre_preview_hygiene"]["send_mail"] is False
+        assert result["steps"]["post_preview_hygiene"]["send_mail"] is False
         assert result["after"]["campaign"]["ready_candidate_count"] >= 1
         assert result["after"]["campaign_preview_count"] >= 1
         assert result["send_mail"] is False
