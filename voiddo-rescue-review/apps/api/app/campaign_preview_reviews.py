@@ -189,6 +189,9 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
                l.status AS lead_status,
                b.domain, a.public_slug,
                latest_strength.final_score AS audit_strength_score,
+               COALESCE(issue_counts.issue_count, 0) AS issue_count,
+               COALESCE(issue_counts.critical_high_count, 0) AS critical_high_count,
+               COALESCE(shot_counts.screenshot_count, 0) AS screenshot_count,
                latest_review.action AS latest_review_action,
                latest_review.actor AS latest_review_actor
         FROM campaign_leads cl
@@ -199,6 +202,17 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
         LEFT JOIN LATERAL (
           SELECT final_score FROM audit_strength_scores WHERE audit_id = cl.audit_id ORDER BY created_at DESC LIMIT 1
         ) latest_strength ON true
+        LEFT JOIN LATERAL (
+          SELECT count(*) AS issue_count,
+                 count(*) FILTER (WHERE severity IN ('critical', 'high')) AS critical_high_count
+          FROM audit_issues
+          WHERE audit_id = cl.audit_id
+        ) issue_counts ON true
+        LEFT JOIN LATERAL (
+          SELECT count(*) AS screenshot_count
+          FROM screenshots
+          WHERE audit_id = cl.audit_id
+        ) shot_counts ON true
         LEFT JOIN LATERAL (
           SELECT action, actor FROM campaign_preview_reviews WHERE campaign_lead_id = cl.id ORDER BY created_at DESC LIMIT 1
         ) latest_review ON true
@@ -220,6 +234,9 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
         audit_strength = int(row["audit_strength_score"] or 0)
         if not audit_strength and row.get("audit_id"):
             audit_strength = int(score_audit_strength(str(row["audit_id"]))["final_score"])
+        issue_count = int(row["issue_count"] or 0)
+        critical_high_count = int(row["critical_high_count"] or 0)
+        screenshot_count = int(row["screenshot_count"] or 0)
         domain = (row["domain"] or "").lower()
         lead_status = row["lead_status"] or ""
         action = "held"
@@ -233,6 +250,9 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
         elif lead_score >= 80 and audit_strength >= 75:
             action = "approved"
             reason = "lead score and audit evidence meet no-send preview threshold"
+        elif lead_score >= 75 and audit_strength >= 70 and issue_count >= 2 and critical_high_count >= 1 and screenshot_count >= 1:
+            action = "approved"
+            reason = "two specific public issues and screenshot evidence meet no-send preview threshold"
         elif lead_score >= 72 and audit_strength >= 77:
             action = "approved"
             reason = "specific public audit evidence meets no-send preview threshold"
@@ -245,6 +265,9 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
             "domain": row["domain"],
             "lead_score": lead_score,
             "audit_strength_score": audit_strength,
+            "issue_count": issue_count,
+            "critical_high_count": critical_high_count,
+            "screenshot_count": screenshot_count,
             "action": action,
             "reason": reason,
         }
