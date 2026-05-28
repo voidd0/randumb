@@ -72,6 +72,7 @@ from .source_scanner_queue import queue_source_scanner_jobs, source_scanner_back
 from .scout_sensitive_hygiene import archive_sensitive_scout_targets, scout_sensitive_target_snapshot
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_activation import launch_activation_readiness, prepare_launch_activation
+from .outreach_live_queue import live_outreach_queue_candidates, stage_live_outreach_batch
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
@@ -374,6 +375,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "launch_readiness_scoreboard_agent": lambda: launch_readiness_scoreboard(int(payload.get("limit", 25))),
         "launch_activation_readiness_agent": lambda: launch_activation_readiness(int(payload.get("limit", 25))),
         "launch_activation_prepare_agent": lambda: prepare_launch_activation(int(payload.get("limit", 25)), "agent"),
+        "live_outreach_queue_candidates_agent": lambda: live_outreach_queue_candidates(int(payload.get("limit", 20))),
+        "live_outreach_stage_dry_run_agent": lambda: stage_live_outreach_batch(int(payload.get("limit", 20)), dry_run=True, requested_by="agent"),
         "launch_repair_plan_agent": lambda: launch_repair_plan(int(payload.get("limit", 25))),
         "launch_repair_executor_agent": lambda: execute_launch_repair_plan(int(payload.get("limit", 25)), dry_run=True),
         "launch_repair_cycle_agent": lambda: run_launch_repair_cycle(int(payload.get("limit", 25)), execute_safe_auto=False),
@@ -536,6 +539,7 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
         "source_campaign_operator_advance_agent",
         "launch_readiness_scoreboard_agent",
         "launch_activation_readiness_agent",
+        "live_outreach_queue_candidates_agent",
         "launch_repair_plan_agent",
         "launch_repair_cycle_agent",
         "launch_operating_lane_agent",

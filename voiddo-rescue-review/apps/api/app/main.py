@@ -95,6 +95,7 @@ from .owner_command_control import owner_command_control_summary
 from .language_gate import check_no_ai_public_language
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_activation import apply_launch_activation, latest_launch_activation_runs, launch_activation_readiness, prepare_launch_activation
+from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates, stage_live_outreach_batch
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
@@ -538,6 +539,24 @@ async def outreach_dedupe_preview(request: Request):
         "dedupe": dedupe_outreach_preview_messages(
             int(payload.get("limit", 500)),
             apply=bool(payload.get("apply", True)),
+        ),
+    }
+
+
+@app.get("/admin/outreach/live-queue", dependencies=[Depends(require_admin)])
+def outreach_live_queue_get(limit: int = 20):
+    return {"ok": True, "candidates": live_outreach_queue_candidates(limit), "history": latest_outreach_send_runs(10)}
+
+
+@app.post("/admin/outreach/live-queue/stage", dependencies=[Depends(require_admin)])
+async def outreach_live_queue_stage(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "queue": stage_live_outreach_batch(
+            int(payload.get("limit", 20)),
+            bool(payload.get("dry_run", True)),
+            payload.get("requested_by", "operator"),
         ),
     }
 

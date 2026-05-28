@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timezone
 
 from .inbox_engine import poll_all
+from .outreach_transport import process_outreach_queue
 from .pipeline import process_scanner_jobs
 from .scouts import process_one_scout_run
 
@@ -33,6 +34,13 @@ def main():
                     log("inbox_poll_complete", messages=len(messages), auto_replies_paused=os.environ.get("AUTO_REPLIES_PAUSED", "true"))
                 except Exception as exc:
                     log("inbox_poll_failed", error=type(exc).__name__)
+            if os.environ.get("OUTREACH_WORKER_ENABLED", "false").lower() == "true":
+                try:
+                    result = process_outreach_queue(int(os.environ.get("OUTREACH_MESSAGES_PER_TICK", "1") or "1"))
+                    if result.get("processed"):
+                        log("outreach_queue_processed", **result)
+                except Exception as exc:
+                    log("outreach_queue_failed", error=type(exc).__name__)
         time.sleep(60)
 
 

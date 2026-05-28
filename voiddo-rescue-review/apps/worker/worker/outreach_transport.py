@@ -209,6 +209,7 @@ def send_message_if_allowed(message_id: str) -> dict:
                     "INSERT INTO system_events(type, severity, message, payload_json) VALUES ('outreach.transport_blocked', 'warning', %s, %s)",
                     (reason, Jsonb({"message_id": message_id, "checks": checks})),
                 )
+                cur.execute("UPDATE outreach_messages SET status = 'transport_blocked' WHERE id = %s", (message_id,))
             conn.commit()
         return {"sent": False, "reason": reason, "checks": checks}
 
@@ -234,3 +235,55 @@ def send_message_if_allowed(message_id: str) -> dict:
             cur.execute("UPDATE outreach_messages SET status = 'sent', sent_at = now() WHERE id = %s", (message_id,))
         conn.commit()
     return {"sent": True, "reason": "sent"}
+
+
+def process_outreach_queue(limit: int = 1) -> dict:
+    safe_limit = max(1, min(int(limit or 1), 5))
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM outreach_messages
+                WHERE status = 'queued'
+                ORDER BY created_at
+                FOR UPDATE SKIP LOCKED
+                LIMIT %s
+                """,
+                (safe_limit,),
+            )
+            rows = cur.fetchall()
+            ids = [str(row["id"]) for row in rows]
+            if ids:
+                cur.execute("UPDATE outreach_messages SET status = 'sending' WHERE id = ANY(%s::uuid[])", (ids,))
+        conn.commit()
+    sent = 0
+    blocked = 0
+    results = []
+    for message_id in ids:
+        try:
+            result = send_message_if_allowed(message_id)
+        except Exception as exc:
+            with connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE outreach_messages
+                        SET status = 'transport_failed'
+                        WHERE id = %s
+                        """,
+                        (message_id,),
+                    )
+                    cur.execute(
+                        "INSERT INTO system_events(type, severity, message, payload_json) VALUES ('outreach.transport_failed', 'error', %s, %s)",
+                        (type(exc).__name__, Jsonb({"message_id": message_id})),
+                    )
+                conn.commit()
+            result = {"sent": False, "reason": type(exc).__name__}
+        results.append({"message_id": message_id, "sent": bool(result.get("sent")), "reason": result.get("reason")})
+        if result.get("sent"):
+            sent += 1
+        else:
+            blocked += 1
+            break
+    return {"processed": len(ids), "sent": sent, "blocked": blocked, "results": results}

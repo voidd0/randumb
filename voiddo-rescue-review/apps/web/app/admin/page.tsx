@@ -70,6 +70,7 @@ export default async function AdminPage() {
   const campaignActionsData = await fetchJson("/admin/campaign-actions?limit=8", authorization ? { Authorization: authorization } : {});
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
   const launchActivationData = await fetchJson("/admin/launch-activation?limit=25", authorization ? { Authorization: authorization } : {});
+  const liveQueueData = await fetchJson("/admin/outreach/live-queue?limit=20", authorization ? { Authorization: authorization } : {});
   const studioMailData = await fetchJson("/admin/studio-mail/messages?limit=8", authorization ? { Authorization: authorization } : {});
   const studioMailRunsData = await fetchJson("/admin/studio-mail/runs?limit=5", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
@@ -120,6 +121,9 @@ export default async function AdminPage() {
   const launchActivation = launchActivationData?.activation || {};
   const launchActivationHistory = launchActivationData?.history || {};
   const latestLaunchActivationRun = Array.isArray(launchActivationHistory.runs) ? launchActivationHistory.runs[0] || {} : {};
+  const liveQueue = liveQueueData?.candidates || {};
+  const liveQueueHistory = liveQueueData?.history || {};
+  const latestLiveQueueRun = Array.isArray(liveQueueHistory.runs) ? liveQueueHistory.runs[0] || {} : {};
   const launchEvidence = launchReadiness.evidence || {};
   const launchMail = launchEvidence.mail || {};
   const launchVisual = launchEvidence.visual || {};
@@ -314,6 +318,11 @@ export default async function AdminPage() {
                 <span className="tag">first day</span>
                 <strong>{launchActivation.quota?.daily_sent ?? launchTransportChecks.live_quota?.daily_sent ?? 0}/{launchActivation.quota?.daily_limit ?? launchTransportChecks.live_quota?.daily_limit ?? 20}</strong>
                 <span>live sends remain locked</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">canary queue</span>
+                <strong>{liveQueue.candidate_count ?? 0}</strong>
+                <span>latest stage {latestLiveQueueRun.decision ?? "none"}</span>
               </div>
             </div>
             <div className="segments-list">

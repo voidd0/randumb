@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.db import execute, fetch_one
 from app.launch_activation import apply_launch_activation, launch_activation_readiness, prepare_launch_activation
 from app.main import app
+from app.outreach_live_queue import live_outreach_queue_candidates, stage_live_outreach_batch
 from app.p0 import transport_gate_status
 
 
@@ -59,6 +60,27 @@ def test_launch_activation_apply_is_blocked_without_runtime_activation_flag():
     assert activation["runtime_change_performed"] is False
     assert result["send_mail"] is False
     assert result["live_outreach_allowed"] is False
+
+
+def test_live_outreach_queue_stage_dry_run_never_changes_preview_status():
+    before_preview = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE status = 'preview'")
+    result = stage_live_outreach_batch(5, dry_run=True, requested_by="test_p99")
+    after_preview = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE status = 'preview'")
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+    assert result["result"]["decision"] == "BLOCKED"
+    assert "dry_run_no_messages_staged" in result["result"]["blockers"]
+    assert result["result"]["staged_count"] == 0
+    assert after_preview["count"] == before_preview["count"]
+
+
+def test_live_outreach_queue_candidates_are_redacted():
+    result = live_outreach_queue_candidates(5)
+    assert result["send_mail"] is False
+    assert result["raw_recipient_addresses_included"] is False
+    assert "@" not in str(result)
+    for item in result["candidates"]:
+        assert item["recipient_domain_hash"]
 
 
 def test_transport_gate_exposes_live_quota_and_blocks_daily_cap():
