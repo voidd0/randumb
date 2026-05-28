@@ -138,6 +138,22 @@ def _select_public_contact_email(domain: str, emails: set[str]) -> tuple[str | N
 
 def contact_enrichment_candidates(limit: int = 25) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 25), 100))
+    recent_runs = fetch_all(
+        """
+        SELECT result_json
+        FROM contact_enrichment_runs
+        WHERE provider = 'public_contact_page'
+          AND created_at > now() - interval '24 hours'
+        ORDER BY created_at DESC
+        LIMIT 25
+        """
+    )
+    cooldown_hashes: set[str] = set()
+    for run in recent_runs:
+        for item in (run.get("result_json") or {}).get("results", []) or []:
+            if item.get("status") in {"no_safe_public_contact_email", "time_budget_exhausted"} and item.get("domain_hash"):
+                cooldown_hashes.add(str(item["domain_hash"]))
+    fetch_limit = min(500, max(safe_limit, safe_limit + len(cooldown_hashes) * 2))
     rows = fetch_all(
         """
         SELECT l.id AS lead_id, b.id AS business_id, b.name AS business_name, b.domain,
@@ -169,7 +185,7 @@ def contact_enrichment_candidates(limit: int = 25) -> dict[str, Any]:
         ORDER BY COALESCE(ls.final_score, l.score, 0) DESC, a.checked_at DESC NULLS LAST
         LIMIT %s
         """,
-        (safe_limit,),
+        (fetch_limit,),
     )
     candidates: list[dict[str, Any]] = []
     for row in rows:
@@ -184,6 +200,9 @@ def contact_enrichment_candidates(limit: int = 25) -> dict[str, Any]:
             str(payload.get("niche") or ""),
         ):
             continue
+        domain_hash = _hash(domain)
+        if domain_hash in cooldown_hashes:
+            continue
         candidates.append(
             {
                 "lead_id": str(payload["lead_id"]),
@@ -191,14 +210,24 @@ def contact_enrichment_candidates(limit: int = 25) -> dict[str, Any]:
                 "audit_id": str(payload["audit_id"]),
                 "public_slug": payload.get("public_slug"),
                 "domain": domain,
-                "domain_hash": _hash(domain),
+                "domain_hash": domain_hash,
                 "country": payload.get("country"),
                 "language": payload.get("language"),
                 "niche": payload.get("niche"),
                 "final_score": int(payload.get("final_score") or 0),
             }
         )
-    return json_safe({"status": "ready" if candidates else "idle", "candidate_count": len(candidates), "candidates": candidates, **SAFE_FLAGS})
+        if len(candidates) >= safe_limit:
+            break
+    return json_safe(
+        {
+            "status": "ready" if candidates else "idle",
+            "candidate_count": len(candidates),
+            "cooldown_domain_count": len(cooldown_hashes),
+            "candidates": candidates,
+            **SAFE_FLAGS,
+        }
+    )
 
 
 def hunter_domain_search(domain: str, api_key: str, limit: int = 10) -> dict[str, Any]:

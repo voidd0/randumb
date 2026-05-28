@@ -84,6 +84,74 @@ def test_contact_enrichment_candidates_are_redacted_and_no_send():
         _cleanup(token)
 
 
+def test_contact_enrichment_candidates_skip_recent_no_safe_public_attempts():
+    token = uuid.uuid4().hex[:8]
+    try:
+        seeded = _seed_lead(token)
+        domain_hash = enrichment_module._hash(seeded["domain"])
+        execute(
+            """
+            INSERT INTO contact_enrichment_runs(provider, status, scanned_count, enriched_count, skipped_count, result_json)
+            VALUES ('public_contact_page', 'no_safe_enrichment', 1, 0, 1, %s)
+            """,
+            (
+                Jsonb(
+                    {
+                        "results": [
+                            {
+                                "domain_hash": domain_hash,
+                                "status": "no_safe_public_contact_email",
+                            }
+                        ],
+                        "dry_run": False,
+                    }
+                ),
+            ),
+        )
+        result = contact_enrichment_candidates(25)
+        assert result["cooldown_domain_count"] >= 1
+        assert all(item["lead_id"] != seeded["lead_id"] for item in result["candidates"])
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_contact_enrichment_candidates_fetch_beyond_cooldown_limit():
+    token_a = uuid.uuid4().hex[:8]
+    token_b = uuid.uuid4().hex[:8]
+    try:
+        cooled = _seed_lead(token_a)
+        fresh = _seed_lead(token_b)
+        execute(
+            """
+            INSERT INTO contact_enrichment_runs(provider, status, scanned_count, enriched_count, skipped_count, result_json)
+            VALUES ('public_contact_page', 'no_safe_enrichment', 1, 0, 1, %s)
+            """,
+            (
+                Jsonb(
+                    {
+                        "results": [
+                            {
+                                "domain_hash": enrichment_module._hash(cooled["domain"]),
+                                "status": "no_safe_public_contact_email",
+                            }
+                        ],
+                        "dry_run": False,
+                    }
+                ),
+            ),
+        )
+        result = contact_enrichment_candidates(1)
+        assert result["candidate_count"] == 1
+        assert result["candidates"][0]["lead_id"] == fresh["lead_id"]
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup(token_a)
+        _cleanup(token_b)
+
+
 def test_hunter_enrichment_prefers_role_email_and_updates_lead(monkeypatch):
     token = uuid.uuid4().hex[:8]
     try:
