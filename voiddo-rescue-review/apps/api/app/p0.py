@@ -1098,9 +1098,24 @@ def warmup_calendar_health() -> dict[str, Any]:
 
 
 def launch_readiness_state() -> str:
-    warmup_sent = _count("SELECT count(*) FROM warmup_schedule WHERE status = 'sent'")
+    maturity = warmup_domain_maturity_status()
     scheduled = _count("SELECT count(*) FROM warmup_schedule WHERE status = 'scheduled'")
-    if warmup_sent > 0:
+    preview_ready = _count(
+        """
+        SELECT count(*)
+        FROM campaigns c
+        WHERE c.status = 'preview_ready'
+          AND EXISTS (
+            SELECT 1
+            FROM campaign_leads cl
+            WHERE cl.campaign_id = c.id
+              AND cl.status IN ('preview', 'approved')
+          )
+        """
+    )
+    if maturity.get("allowed") and preview_ready > 0:
+        return "PREVIEW_PIPELINE_READY_NO_OUTREACH"
+    if maturity.get("allowed"):
         return "WARMUP_ACTIVE_NO_OUTREACH"
     if scheduled > 0:
         return "WARMUP_SCHEDULED_NO_OUTREACH"

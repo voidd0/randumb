@@ -169,6 +169,25 @@ def test_warmup_maturity_accepts_structured_verified_warmup_events(monkeypatch):
     assert result["blockers"] == []
 
 
+def test_launch_readiness_state_uses_verified_warmup_events_and_preview_pipeline(monkeypatch):
+    def fake_count(sql: str, *args, **kwargs) -> int:
+        if "FROM warmup_schedule" in sql and "status = 'scheduled'" in sql:
+            return 28
+        if "FROM warmup_schedule" in sql and "status = 'sent'" in sql:
+            return 0
+        if "FROM email_events" in sql and "event_type = 'warmup_sent'" in sql:
+            return 9
+        if "FROM campaigns c" in sql:
+            return 3
+        return 0
+
+    monkeypatch.setattr(p0, "_count", fake_count)
+    monkeypatch.setattr(p0, "verified_warmup_event_count", lambda days=30: 6)
+    monkeypatch.setattr(p0, "recent_mail_signal_count", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(p0, "latest_mail_qa_decision", lambda: "PASS")
+    assert p0.launch_readiness_state() == "PREVIEW_PIPELINE_READY_NO_OUTREACH"
+
+
 def test_latest_campaign_preflight_status_blocks_failed_or_stale_evidence():
     token = uuid.uuid4().hex[:8]
     try:
