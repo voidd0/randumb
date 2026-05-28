@@ -175,6 +175,155 @@ def test_canary_batch_quality_passes_redacted_single_candidate():
         _cleanup(token)
 
 
+def test_canary_batch_quality_blocks_domain_country_mismatch():
+    token = uuid.uuid4().hex[:8]
+    try:
+        business = execute(
+            """
+            INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
+            VALUES (%s, 'US', 'Control', 'en', 'dentists', 'p99', %s, %s, %s, 'scouted')
+            RETURNING id
+            """,
+            (f"P99 Mismatch {token}", f"https://p99-mismatch-{token}.ca", f"p99-mismatch-{token}.ca", f"owner@p99-mismatch-{token}.ca"),
+        )
+        lead = execute(
+            """
+            INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
+            VALUES (%s, %s, 'p99', 'qualified', 88, 'en', 'US', 'Control', 'dentists')
+            RETURNING id
+            """,
+            (business["id"], f"owner@p99-mismatch-{token}.ca"),
+        )
+        audit = execute(
+            """
+            INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+            VALUES (%s, %s, %s, %s, 'completed', 90, 'P99 mismatch audit', %s, now())
+            RETURNING id
+            """,
+            (business["id"], lead["id"], f"p99-mismatch-{token}.ca", f"https://p99-mismatch-{token}.ca", f"p99-mismatch-{token}"),
+        )
+        campaign = execute(
+            """
+            INSERT INTO campaigns(name, status, country, language, niche, offer_key, dry_run)
+            VALUES (%s, 'preview_ready', 'US', 'en', 'dentists', 'contact_form_repair', true)
+            RETURNING id
+            """,
+            (f"p99-mismatch-{token}",),
+        )
+        preview = execute(
+            """
+            INSERT INTO campaign_leads(campaign_id, lead_id, audit_id, status, score, preview_json)
+            VALUES (%s, %s, %s, 'preview', 88, %s)
+            RETURNING id
+            """,
+            (campaign["id"], lead["id"], audit["id"], Jsonb({"token": token})),
+        )
+        execute(
+            "INSERT INTO audit_strength_scores(audit_id, final_score, proof_score, commercial_score, completeness_score, issues_json) VALUES (%s, 78, 80, 80, 74, '[]'::jsonb)",
+            (audit["id"],),
+        )
+        execute("INSERT INTO campaign_preview_reviews(campaign_lead_id, action, reason, actor) VALUES (%s, 'approved', 'p99 mismatch proof', 'test')", (preview["id"],))
+        execute(
+            """
+            INSERT INTO campaign_preflight_runs(campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json)
+            VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s)
+            """,
+            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT"})),
+        )
+        execute(
+            """
+            INSERT INTO outreach_messages(lead_id, audit_id, mailbox, subject, body, html_body, status)
+            VALUES (%s, %s, 'audit@voiddorescue.com', %s, %s, %s, 'preview')
+            """,
+            (
+                lead["id"],
+                audit["id"],
+                f"p99 mismatch {token}",
+                f"Public non-invasive website check.\nUnsubscribe: https://go.rescue.voiddo.com/unsubscribe/u_00000000-0000-0000-0000-000000000000.{token}",
+                "<!doctype html><html><body>Vøiddo Rescue</body></html>",
+            ),
+        )
+        result = canary_batch_quality(1, store=False)
+        assert result["decision"] == "FAIL_CANARY_BATCH_QUALITY"
+        assert "domain_country_mismatch" in result["blockers"]
+        assert result["items"][0]["inferred_country"] == "CA"
+        assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_live_outreach_queue_uses_latest_preview_review_only():
+    token = uuid.uuid4().hex[:8]
+    try:
+        business = execute(
+            """
+            INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
+            VALUES (%s, 'US', 'Control', 'en', 'dentists', 'p99', %s, %s, %s, 'scouted')
+            RETURNING id
+            """,
+            (f"P99 Held {token}", f"https://p99-held-{token}.com", f"p99-held-{token}.com", f"owner@p99-held-{token}.com"),
+        )
+        lead = execute(
+            """
+            INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
+            VALUES (%s, %s, 'p99', 'qualified', 88, 'en', 'US', 'Control', 'dentists')
+            RETURNING id
+            """,
+            (business["id"], f"owner@p99-held-{token}.com"),
+        )
+        audit = execute(
+            """
+            INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+            VALUES (%s, %s, %s, %s, 'completed', 90, 'P99 held audit', %s, now())
+            RETURNING id
+            """,
+            (business["id"], lead["id"], f"p99-held-{token}.com", f"https://p99-held-{token}.com", f"p99-held-{token}"),
+        )
+        campaign = execute(
+            """
+            INSERT INTO campaigns(name, status, country, language, niche, offer_key, dry_run)
+            VALUES (%s, 'preview_ready', 'US', 'en', 'dentists', 'contact_form_repair', true)
+            RETURNING id
+            """,
+            (f"p99-held-{token}",),
+        )
+        preview = execute(
+            """
+            INSERT INTO campaign_leads(campaign_id, lead_id, audit_id, status, score, preview_json)
+            VALUES (%s, %s, %s, 'preview', 88, %s)
+            RETURNING id
+            """,
+            (campaign["id"], lead["id"], audit["id"], Jsonb({"token": token})),
+        )
+        execute("INSERT INTO campaign_preview_reviews(campaign_lead_id, action, reason, actor) VALUES (%s, 'approved', 'first pass', 'test')", (preview["id"],))
+        execute("INSERT INTO campaign_preview_reviews(campaign_lead_id, action, reason, actor) VALUES (%s, 'held', 'latest hold', 'test')", (preview["id"],))
+        execute(
+            """
+            INSERT INTO campaign_preflight_runs(campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json)
+            VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s)
+            """,
+            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT"})),
+        )
+        execute(
+            """
+            INSERT INTO outreach_messages(lead_id, audit_id, mailbox, subject, body, html_body, status)
+            VALUES (%s, %s, 'audit@voiddorescue.com', %s, %s, %s, 'preview')
+            """,
+            (
+                lead["id"],
+                audit["id"],
+                f"p99 held {token}",
+                f"Public non-invasive website check.\nUnsubscribe: https://go.rescue.voiddo.com/unsubscribe/u_00000000-0000-0000-0000-000000000000.{token}",
+                "<!doctype html><html><body>Vøiddo Rescue</body></html>",
+            ),
+        )
+        result = live_outreach_queue_candidates(100)
+        assert f"p99-held-{token}.com" not in str(result)
+        assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
 def test_transport_gate_exposes_live_quota_and_blocks_daily_cap():
     token = uuid.uuid4().hex[:8]
     try:

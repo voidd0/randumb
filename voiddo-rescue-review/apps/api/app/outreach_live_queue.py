@@ -33,13 +33,23 @@ def _candidate_rows(limit: int = 20) -> list[dict[str, Any]]:
                    lower(split_part(l.email, '@', 2)) AS recipient_domain
             FROM outreach_messages om
             JOIN leads l ON l.id = om.lead_id
+            JOIN businesses b ON b.id = l.business_id
             JOIN audits a ON a.id = om.audit_id
             JOIN campaign_leads cl ON cl.lead_id = om.lead_id AND cl.audit_id = om.audit_id AND cl.status = 'preview'
-            JOIN campaign_preview_reviews r ON r.campaign_lead_id = cl.id AND r.action = 'approved'
+            JOIN LATERAL (
+              SELECT action
+              FROM campaign_preview_reviews
+              WHERE campaign_lead_id = cl.id
+              ORDER BY created_at DESC
+              LIMIT 1
+            ) latest_review ON true
             WHERE om.status = 'preview'
+              AND latest_review.action = 'approved'
               AND om.html_body IS NOT NULL
               AND om.html_body <> ''
               AND om.body LIKE '%%/unsubscribe/u_%%'
+              AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
+              AND COALESCE(b.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
               AND NOT EXISTS (
                     SELECT 1 FROM suppression_list s
                     WHERE lower(s.email) = lower(l.email)

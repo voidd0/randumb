@@ -8,6 +8,7 @@ from psycopg.types.json import Jsonb
 from .db import execute, fetch_all
 from .economics import calculate_unit_economics
 from .p0 import json_safe, recipient_hash
+from .scouts import infer_country_from_domain, is_excluded_sensitive_target
 
 
 SAFE_FLAGS = {
@@ -28,7 +29,10 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
                cl.id AS campaign_lead_id,
                cl.campaign_id,
                c.country, c.language, c.niche, c.offer_key,
+               b.name AS business_name,
                b.domain,
+               b.website_url,
+               b.status AS business_status,
                a.public_slug,
                lower(split_part(l.email, '@', 2)) AS recipient_domain,
                latest_review.action AS review_action,
@@ -106,8 +110,20 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
                 offer_economics[offer_key] = {"product_key": offer_key, "decision": "review", "gross_margin_percent": 0, "price_cents": 0, "gross_margin_cents": 0}
                 blockers.append("unknown_offer_key")
         item_blockers = []
+        inferred_country = infer_country_from_domain(domain)
         body = row["body"] or ""
         html_body = row["html_body"] or ""
+        if inferred_country and str(row["country"] or "").upper() != inferred_country:
+            item_blockers.append("domain_country_mismatch")
+        if row["business_status"] in {"excluded_sensitive_target", "suppressed", "unsubscribed"}:
+            item_blockers.append("business_status_excluded")
+        if is_excluded_sensitive_target(
+            str(row["business_name"] or ""),
+            domain,
+            str(row["website_url"] or ""),
+            str(row["niche"] or ""),
+        ):
+            item_blockers.append("sensitive_or_large_target")
         if row["review_action"] != "approved":
             item_blockers.append("preview_not_approved")
         if row["preflight_decision"] != "PASS_NO_SEND_PREFLIGHT":
@@ -135,6 +151,7 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
                 "niche": row["niche"],
                 "offer_key": row["offer_key"],
                 "domain": domain,
+                "inferred_country": inferred_country,
                 "audit_slug": row["public_slug"],
                 "recipient_domain_hash": recipient_hash(recipient_domain),
                 "lead_score": int(row["lead_score"] or 0),

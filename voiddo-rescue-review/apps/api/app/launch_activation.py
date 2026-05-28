@@ -6,6 +6,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .config import get_settings
+from .canary_batch_quality import canary_batch_quality
 from .db import execute, fetch_all, fetch_one
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .p0 import json_safe, latest_preview_transport_gate_status, live_outreach_quota_status, set_runtime_control
@@ -63,14 +64,21 @@ def launch_activation_readiness(limit: int = 25) -> dict[str, Any]:
     transport = latest_preview_transport_gate_status()
     quota = live_outreach_quota_status()
     preflight = _latest_preflight_counts(limit)
+    canary_quality = canary_batch_quality(min(max(1, int(limit or 20)), 20), store=False)
     preview_count = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'preview'")
     approved_preview_count = _count(
         """
         SELECT count(*) AS count
         FROM campaign_leads cl
-        JOIN campaign_preview_reviews r ON r.campaign_lead_id = cl.id
+        JOIN LATERAL (
+          SELECT action
+          FROM campaign_preview_reviews
+          WHERE campaign_lead_id = cl.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) latest_review ON true
         WHERE cl.status = 'preview'
-          AND r.action = 'approved'
+          AND latest_review.action = 'approved'
         """
     )
     live_sent = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'sent'")
@@ -86,6 +94,8 @@ def launch_activation_readiness(limit: int = 25) -> dict[str, Any]:
         blockers.append("approved_campaign_previews_missing")
     if preflight["passed_campaign_count"] <= 0 or preflight["failed_campaign_count"] > 0 or preflight["missing_campaign_count"] > 0:
         blockers.append("campaign_preflight_not_clean")
+    if canary_quality.get("decision") != "PASS_CANARY_BATCH_QUALITY":
+        blockers.append("canary_batch_quality_not_pass")
     transport_checks = transport.get("checks") or {}
     if not transport_checks.get("unsubscribe_one_click_ready"):
         blockers.append("signed_unsubscribe_not_ready")
@@ -109,6 +119,15 @@ def launch_activation_readiness(limit: int = 25) -> dict[str, Any]:
                 "live_outreach_allowed": bool(scoreboard.get("live_outreach_allowed", False)),
             },
             "preflight": preflight,
+            "canary_quality": {
+                "decision": canary_quality.get("decision"),
+                "candidate_count": int(canary_quality.get("candidate_count") or 0),
+                "segment_count": int(canary_quality.get("segment_count") or 0),
+                "campaign_count": int(canary_quality.get("campaign_count") or 0),
+                "recipient_domain_count": int(canary_quality.get("recipient_domain_count") or 0),
+                "blockers": canary_quality.get("blockers") or [],
+                "warnings": canary_quality.get("warnings") or [],
+            },
             "preview_message_count": preview_count,
             "approved_preview_count": approved_preview_count,
             "live_outreach_sent_count": live_sent,
