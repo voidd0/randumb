@@ -69,6 +69,8 @@ export default async function AdminPage() {
   const campaignControlRoomData = await fetchJson("/admin/campaign-control-room?limit=25&threshold=70", authorization ? { Authorization: authorization } : {});
   const campaignActionsData = await fetchJson("/admin/campaign-actions?limit=8", authorization ? { Authorization: authorization } : {});
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
+  const studioMailData = await fetchJson("/admin/studio-mail/messages?limit=8", authorization ? { Authorization: authorization } : {});
+  const studioMailRunsData = await fetchJson("/admin/studio-mail/runs?limit=5", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
   const selfClosedLoopData = await fetchJson("/admin/self/closed-loop?limit=5", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
@@ -121,6 +123,10 @@ export default async function AdminPage() {
   const launchTransportChecks = launchTransport.checks || {};
   const launchWarmupMaturity = launchEvidence.warmup_maturity || {};
   const launchCampaigns = launchEvidence.campaigns || {};
+  const studioMail = studioMailData?.studio_mail || {};
+  const studioMailMessages = Array.isArray(studioMail.messages) ? studioMail.messages : [];
+  const studioMailRuns = studioMailRunsData?.runs || {};
+  const latestStudioMailRun = Array.isArray(studioMailRuns.runs) ? studioMailRuns.runs[0] || {} : {};
   const selfClosedLoop = selfClosedLoopData || {};
   const selfCycles = Array.isArray(selfClosedLoop.cycles) ? selfClosedLoop.cycles : [];
   const latestSelfCycle = selfCycles[0] || {};
@@ -439,6 +445,22 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">stored</span><span>gated inbox commands</span><span className="score">{metrics.owner_commands ?? 0}</span></div>
             <div className="row"><span className="tag">visual</span><span>QA runs</span><span className="score">{metrics.visual_qa_runs ?? 0}</span></div>
             <div className="row"><span className="tag">mail</span><span>QA runs</span><span className="score">{metrics.mail_qa_runs ?? 0}</span></div>
+          </div>
+          <div className="panel">
+            <h2>Studio Mail Monitor</h2>
+            <div className="row"><span className="tag">poll</span><span>latest em inbox poll</span><span className="score">{latestStudioMailRun.status ?? "unknown"}</span></div>
+            <div className="row"><span className="tag">scanned</span><span>messages inspected in last poll</span><span className="score">{latestStudioMailRun.scanned_count ?? 0}</span></div>
+            <div className="row"><span className="tag">commands</span><span>owner commands routed to global gate</span><span className="score">{latestStudioMailRun.owner_command_count ?? 0}</span></div>
+            <div className="row"><span className="tag">review</span><span>studio mail items needing review</span><span className="score">{latestStudioMailRun.human_review_count ?? 0}</span></div>
+            <div className="row"><span className="tag">privacy</span><span>raw private addresses in admin payload</span><span className="score">{studioMail.raw_private_addresses_included || studioMailRuns.raw_private_addresses_included ? "blocked" : "omitted"}</span></div>
+            <div className="row"><span className="tag">send</span><span>studio monitor send capability</span><span className="score">{studioMail.send_mail || studioMailRuns.send_mail ? "armed" : "read-only"}</span></div>
+            {studioMailMessages.length ? studioMailMessages.slice(0, 5).map((item: any) => (
+              <div className="row" key={item.id}>
+                <span className="tag">{item.priority ?? "normal"}</span>
+                <span>{String(item.classification || "classified").replaceAll("_", " ")}</span>
+                <span className="score">{item.human_review_required ? "review" : "auto"}</span>
+              </div>
+            )) : <div className="row"><span className="tag">clear</span><span>no recent stored studio-mail items</span><span className="score">0</span></div>}
           </div>
           <div className="panel">
             <h2>Mailer Control</h2>
