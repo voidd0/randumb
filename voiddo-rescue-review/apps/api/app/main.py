@@ -101,6 +101,7 @@ from .launch_activation import apply_launch_activation, latest_launch_activation
 from .launch_rehearsal import latest_launch_rehearsal_runs, run_launch_rehearsal
 from .lead_stockpile_health import latest_lead_stockpile_health_runs, lead_stockpile_health_snapshot, run_lead_stockpile_health
 from .lead_supply_autopilot import lead_supply_autopilot
+from .lead_supply_buildout import lead_supply_buildout
 from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates, stage_live_outreach_batch
 from .canary_batch_quality import canary_batch_quality
 from .canary_checkout_simulation import run_canary_checkout_simulation
@@ -1873,6 +1874,28 @@ async def lead_supply_autopilot_run(request: Request):
             apply=bool(payload.get("apply", False)),
             enrichment_limit=int(payload.get("enrichment_limit", 10)),
             enrichment_seconds=int(payload.get("enrichment_seconds", 90)),
+        ),
+    }
+
+
+@app.get("/admin/lead-supply-buildout", dependencies=[Depends(require_admin)])
+def lead_supply_buildout_get(target_preview_count: int = 100, canary_count: int = 20, limit: int = 120):
+    return {"ok": True, "supply": lead_supply_buildout(target_preview_count, canary_count, limit, apply=False)}
+
+
+@app.post("/admin/lead-supply-buildout/run", dependencies=[Depends(require_admin)])
+async def lead_supply_buildout_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "supply": lead_supply_buildout(
+            int(payload.get("target_preview_count", 100)),
+            int(payload.get("canary_count", 20)),
+            int(payload.get("limit", 120)),
+            int(payload.get("max_cycles", 4)),
+            int(payload.get("max_seconds", 240)),
+            int(payload.get("enrichment_limit", 0)),
+            apply=bool(payload.get("apply", False)),
         ),
     }
 

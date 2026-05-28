@@ -82,6 +82,7 @@ from .launch_activation import launch_activation_readiness, launch_activation_ru
 from .launch_rehearsal import latest_launch_rehearsal_runs, run_launch_rehearsal
 from .lead_stockpile_health import lead_stockpile_health_snapshot, run_lead_stockpile_health
 from .lead_supply_autopilot import lead_supply_autopilot
+from .lead_supply_buildout import lead_supply_buildout
 from .outreach_live_queue import live_outreach_queue_candidates, stage_live_outreach_batch
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
@@ -417,6 +418,15 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             enrichment_limit=int(payload.get("enrichment_limit", 10)),
             enrichment_seconds=int(payload.get("enrichment_seconds", 90)),
         ),
+        "lead_supply_buildout_agent": lambda: lead_supply_buildout(
+            int(payload.get("target_preview_count", 100)),
+            int(payload.get("canary_count", 20)),
+            int(payload.get("limit", 120)),
+            int(payload.get("max_cycles", 4)),
+            int(payload.get("max_seconds", 240)),
+            int(payload.get("enrichment_limit", 0)),
+            apply=bool(payload.get("apply", False)),
+        ),
         "launch_readiness_scoreboard_agent": lambda: launch_readiness_scoreboard(int(payload.get("limit", 25))),
         "launch_activation_readiness_agent": lambda: launch_activation_readiness(int(payload.get("limit", 25))),
         "launch_activation_prepare_agent": lambda: prepare_launch_activation(int(payload.get("limit", 25)), "agent"),
@@ -641,6 +651,7 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
         "lead_stockpile_health_agent",
         "lead_stockpile_health_advance_agent",
         "lead_supply_autopilot_agent",
+        "lead_supply_buildout_agent",
         "overpass_lead_discovery_agent",
         "apollo_organization_discovery_agent",
         "scout_campaign_quality_summary_agent",

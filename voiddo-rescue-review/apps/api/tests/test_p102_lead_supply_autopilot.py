@@ -5,8 +5,10 @@ import os
 from fastapi.testclient import TestClient
 
 import app.lead_supply_autopilot as supply_module
+import app.lead_supply_buildout as buildout_module
 from app.autonomous_agents import run_agent
 from app.lead_supply_autopilot import lead_supply_autopilot
+from app.lead_supply_buildout import lead_supply_buildout
 from app.main import app
 
 
@@ -117,6 +119,75 @@ def test_lead_supply_autopilot_endpoint_and_agent_are_admin_gated(monkeypatch):
     assert response.status_code == 200
     assert response.json()["supply"]["decision"] == "SUPPLY_TARGET_READY_NO_SEND"
     agent = run_agent("lead_supply_autopilot_agent", {"apply": False})
+    assert agent["status"] == "completed"
+    assert agent["result_json"]["send_mail"] is False
+    assert agent["result_json"]["live_outreach_allowed"] is False
+
+
+def test_lead_supply_buildout_dry_run_is_no_send(monkeypatch):
+    monkeypatch.setattr(buildout_module, "lead_stockpile_health_snapshot", lambda *args: _health(50))
+    result = lead_supply_buildout(apply=False)
+    assert result["decision"] == "SUPPLY_BUILDOUT_DRY_RUN_NO_SEND"
+    assert result["enrichment_limit"] == 0
+    assert result["cycles"] == []
+    assert result["send_mail"] is False
+    assert result["smtp_called"] is False
+    assert result["live_outreach_allowed"] is False
+
+
+def test_lead_supply_buildout_runs_bounded_safe_cycle(monkeypatch):
+    snapshots = iter([
+        _health(45, source_candidates=1),
+        _health(45, source_candidates=1),
+        _health(65, source_candidates=0),
+        _health(65, source_candidates=0),
+        _health(65, source_candidates=0),
+    ])
+    calls: list[str] = []
+    monkeypatch.setattr(buildout_module, "lead_stockpile_health_snapshot", lambda *args: next(snapshots))
+
+    def _advance(*args, **kwargs):
+        calls.append("advance")
+        return {"status": "completed", "accepted_count": 5, "created_scanner_jobs": 3, "send_mail": False}
+
+    def _watch(*args, **kwargs):
+        calls.append("watch")
+        return {"status": "idle_no_new_completions", "completed_count": 0, "send_mail": False, "smtp_called": False}
+
+    def _review(*args, **kwargs):
+        calls.append("review")
+        return {"status": "completed", "send_mail": False}
+
+    def _refresh(*args, **kwargs):
+        calls.append("refresh")
+        return {"status": "completed", "send_mail": False}
+
+    def _preflight(*args, **kwargs):
+        calls.append("preflight")
+        return {"status": "completed", "send_mail": False}
+
+    monkeypatch.setattr(buildout_module, "advance_source_to_campaign", _advance)
+    monkeypatch.setattr(buildout_module, "scanner_completion_watch", _watch)
+    monkeypatch.setattr(buildout_module, "refresh_campaign_previews_if_needed", _refresh)
+    monkeypatch.setattr(buildout_module, "auto_review_campaign_previews", _review)
+    monkeypatch.setattr(buildout_module, "campaign_preflight_batch", _preflight)
+
+    result = lead_supply_buildout(target_preview_count=100, max_cycles=1, apply=True)
+    assert calls == ["advance", "watch", "refresh", "review", "preflight"]
+    assert result["cycle_count"] == 1
+    assert result["decision"] == "SUPPLY_BUILDOUT_CANARY_READY_NO_SEND"
+    assert result["cycles"][0]["actions"][0]["name"] == "advance_source_to_campaign"
+    assert result["send_mail"] is False
+    assert result["smtp_called"] is False
+    assert result["live_outreach_allowed"] is False
+
+
+def test_lead_supply_buildout_endpoint_and_agent_are_admin_gated():
+    assert client.get("/admin/lead-supply-buildout").status_code == 401
+    response = client.get("/admin/lead-supply-buildout", headers=admin_headers())
+    assert response.status_code == 200
+    assert response.json()["supply"]["send_mail"] is False
+    agent = run_agent("lead_supply_buildout_agent", {"apply": False})
     assert agent["status"] == "completed"
     assert agent["result_json"]["send_mail"] is False
     assert agent["result_json"]["live_outreach_allowed"] is False
