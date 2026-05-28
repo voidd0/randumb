@@ -622,13 +622,33 @@ def scout_source_readiness_regression_guard(limit: int = 12) -> dict[str, Any]:
         """,
         (max(2, min(int(limit or 12), 50)),),
     )
+    latest_overall = dict(rows[0]) if rows else None
     safe_pass_rows = [
         dict(row)
         for row in rows
         if row.get("status") == "PASS_SOURCE_READY"
         and not any(bool(row.get(flag)) for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"])
     ]
-    latest = safe_pass_rows[0] if safe_pass_rows else (dict(rows[0]) if rows else None)
+    degraded_latest_for_source = None
+    seen_sources = set()
+    for row in rows:
+        source_key = row.get("source_id")
+        if source_key in seen_sources:
+            continue
+        seen_sources.add(source_key)
+        if row.get("status") == "PASS_SOURCE_READY":
+            continue
+        had_prior_pass = any(
+            prior_row.get("source_id") == source_key
+            and prior_row.get("id") != row.get("id")
+            and prior_row.get("status") == "PASS_SOURCE_READY"
+            and not any(bool(prior_row.get(flag)) for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"])
+            for prior_row in rows
+        )
+        if had_prior_pass:
+            degraded_latest_for_source = dict(row)
+            break
+    latest = degraded_latest_for_source or (safe_pass_rows[0] if safe_pass_rows else latest_overall)
     prior = [dict(row) for row in rows if latest and row.get("id") != latest.get("id")]
     regressions: list[str] = []
     latest_score = int((latest or {}).get("score") or 0)
