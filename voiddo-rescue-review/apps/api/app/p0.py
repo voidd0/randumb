@@ -1441,22 +1441,31 @@ def scout_source_queue_preview_snapshot(limit: int = 20) -> dict[str, Any]:
 
 
 def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> dict[str, Any]:
+    mail_qa_decision = latest_mail_qa_decision()
+    bounce_count = recent_mail_signal_count(["bounce", "dsn"], 24)
+    rate_limit_signal_count = recent_mail_signal_count(["smtp_rate_limit"], 24)
+    if bounce_count > 0 or rate_limit_signal_count > 0:
+        next_allowed_action = "wait_until_recent_bounce_and_rate_limit_window_clears_then_recheck_mail_qa"
+    elif mail_qa_decision != "PASS":
+        next_allowed_action = "run_mail_qa_and_keep_sends_blocked_until_pass"
+    else:
+        next_allowed_action = "continue_monitored_warmup_and_canary_preview_preparation_no_cold_outreach"
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "current_branch_head": branch_head,
         "current_zip_sha": current_zip_sha,
         "checkout_status": "READY",
         "mail_auth_status": "PASS",
-        "latest_mail_qa_decision": latest_mail_qa_decision(),
+        "latest_mail_qa_decision": mail_qa_decision,
         "test_inbox_count": _count("SELECT count(*) FROM test_inboxes WHERE status = 'approved' AND approved"),
         "warmup_recipient_count": _count("SELECT count(*) FROM warmup_recipients WHERE status = 'approved_test_pool' AND approved"),
         "scheduled_warmup_count": _count("SELECT count(*) FROM warmup_schedule"),
         "deliverability_diagnostic_sent_count": _count("SELECT count(*) FROM test_inboxes WHERE last_test_at IS NOT NULL"),
         "warmup_sent_count": _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'"),
         "live_outreach_sent_count": _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'"),
-        "bounce_count": recent_mail_signal_count(["bounce", "dsn"], 24),
-        "rate_limit_signal_count": recent_mail_signal_count(["smtp_rate_limit"], 24),
-        "next_allowed_action": "wait_until_recent_bounce_and_rate_limit_window_clears_then_recheck_mail_qa",
+        "bounce_count": bounce_count,
+        "rate_limit_signal_count": rate_limit_signal_count,
+        "next_allowed_action": next_allowed_action,
         "launch_readiness_state": launch_readiness_state(),
         "mailer_policy_trend": mailer_policy_trend_snapshot(),
         "mailer_business_kpi": mailer_business_kpi_report_snapshot(),
