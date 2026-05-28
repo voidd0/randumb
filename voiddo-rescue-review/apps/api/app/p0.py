@@ -882,6 +882,8 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "ПОКАЖИ ЖИВУЮ ОЧЕРЕДЬ": "SHOW LIVE QUEUE",
         "ПОДГОТОВЬ ЖИВОЙ КАНАРЕЙКУ": "PREPARE LIVE CANARY",
         "ПОДГОТОВЬ ЖИВОЙ КАНАРИ": "PREPARE LIVE CANARY",
+        "ПОКАЖИ ЗАПУСК": "SHOW LAUNCH RUNBOOK",
+        "ОТКАТИ РАССЫЛКУ": "ROLLBACK LIVE OUTREACH",
         "ЗАПУСТИ MAIL QA": "RUN MAIL QA",
         "ЗАПУСТИ ВИЗУАЛ QA": "RUN VISUAL QA",
         "ПОДГОТОВЬ ПРОГРЕВ": "PREPARE WARMUP",
@@ -904,7 +906,7 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
     safe = {
         "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",
         "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
-        "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE",
+        "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE", "SHOW LAUNCH RUNBOOK", "ROLLBACK LIVE OUTREACH",
     }
     medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP"}
     high = {"SEND OUTREACH", "START WARMUP", "UNPAUSE OUTREACH", "RUN SHELL", "EXECUTE"}
@@ -1730,6 +1732,14 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
             "queue": live_outreach_queue_candidates(20),
             "history": latest_outreach_send_runs(10),
         }
+    elif command == "SHOW LAUNCH RUNBOOK":
+        from .launch_activation import launch_activation_runbook
+
+        result = {"ok": True, "action": "launch_runbook", "runbook": launch_activation_runbook(25)}
+    elif command == "ROLLBACK LIVE OUTREACH":
+        from .launch_activation import rollback_live_outreach
+
+        result = rollback_live_outreach("owner_command")
     elif command == "RUN MAIL QA":
         result = {"ok": True, "action": "mail_qa", "run": run_mail_qa()}
     elif command == "RUN DELIVERABILITY TEST":

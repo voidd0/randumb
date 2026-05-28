@@ -8,7 +8,8 @@ from fastapi.testclient import TestClient
 from app.db import execute, fetch_one
 from app.main import app
 from app.outreach_post_send_observer import outreach_post_send_observer
-from app.p0 import execute_owner_command
+from app.launch_activation import launch_activation_runbook, rollback_live_outreach
+from app.p0 import execute_owner_command, runtime_control_enabled, set_runtime_control
 
 
 client = TestClient(app)
@@ -74,3 +75,35 @@ def test_owner_command_send_outreach_remains_review_required():
     assert result["ok"] is False
     assert result["action"] == "review_required"
     assert result["reason"] == "high_risk_command_blocked"
+
+
+def test_launch_runbook_is_no_send_and_contains_rollback_env():
+    runbook = launch_activation_runbook(5)
+    assert runbook["send_mail"] is False
+    assert runbook["live_outreach_allowed"] is False
+    assert runbook["rollback_env"]["OUTREACH_DRY_RUN"] == "true"
+    assert runbook["rollback_env"]["OUTREACH_WORKER_ENABLED"] == "false"
+    assert runbook["operator_guard"].startswith("No live activation")
+
+
+def test_owner_command_show_launch_runbook_is_safe_auto():
+    result = execute_owner_command({"command": "SHOW LAUNCH RUNBOOK", "risk_level": "SAFE_AUTO", "args_json": {}})
+    assert result["ok"] is True
+    assert result["action"] == "launch_runbook"
+    assert result["runbook"]["send_mail"] is False
+    assert result["runbook"]["live_outreach_allowed"] is False
+
+
+def test_rollback_live_outreach_sets_persistent_pause_controls():
+    previous_outreach = runtime_control_enabled("pause_outreach")
+    previous_auto = runtime_control_enabled("pause_auto_replies")
+    try:
+        result = rollback_live_outreach("p100_test")
+        assert result["ok"] is True
+        assert result["send_mail"] is False
+        assert result["env_change_performed"] is False
+        assert runtime_control_enabled("pause_outreach") is True
+        assert runtime_control_enabled("pause_auto_replies") is True
+    finally:
+        set_runtime_control("pause_outreach", previous_outreach, "p100_test_cleanup", "restore")
+        set_runtime_control("pause_auto_replies", previous_auto, "p100_test_cleanup", "restore")

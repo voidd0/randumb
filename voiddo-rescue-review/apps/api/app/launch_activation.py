@@ -8,7 +8,7 @@ from psycopg.types.json import Jsonb
 from .config import get_settings
 from .db import execute, fetch_all, fetch_one
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
-from .p0 import json_safe, latest_preview_transport_gate_status, live_outreach_quota_status
+from .p0 import json_safe, latest_preview_transport_gate_status, live_outreach_quota_status, set_runtime_control
 
 
 SAFE_FLAGS = {
@@ -189,6 +189,77 @@ def prepare_launch_activation(limit: int = 25, requested_by: str = "operator") -
         dry_run=True,
     )
     return json_safe({"readiness": readiness, "run": run, "applied": False, **SAFE_FLAGS})
+
+
+def launch_activation_runbook(limit: int = 25) -> dict[str, Any]:
+    readiness = launch_activation_readiness(limit)
+    blockers = list(readiness.get("blockers") or [])
+    canary_steps = [
+        "verify_launch_activation_readiness",
+        "verify_live_queue_candidates_redacted",
+        "set_operator_env_allow_live_activation_true",
+        "set_OUTREACH_DRY_RUN_false",
+        "set_OUTREACH_PAUSED_false",
+        "set_FIRST_LIVE_SEND_FLAG_true",
+        "restart_rescue_api_worker_only",
+        "stage_first_canary_batch_limit_20",
+        "enable_OUTREACH_WORKER_ENABLED_for_bounded_worker_drain",
+        "run_post_send_observer_after_each_send_window",
+        "rollback_to_dry_run_and_paused_on_any_blocking_signal",
+    ]
+    rollback_steps = [
+        "set_OUTREACH_DRY_RUN_true",
+        "set_OUTREACH_PAUSED_true",
+        "set_FIRST_LIVE_SEND_FLAG_false",
+        "set_OUTREACH_WORKER_ENABLED_false",
+        "restart_rescue_api_worker_only",
+        "run_post_send_observer_apply_pause_true",
+        "verify_queued_count_zero_or_transport_blocked",
+    ]
+    return json_safe(
+        {
+            "status": "ready" if not blockers else "blocked",
+            "decision": readiness.get("decision"),
+            "blockers": blockers,
+            "canary_limit": min(20, get_settings().daily_send_limit),
+            "canary_steps": canary_steps,
+            "rollback_steps": rollback_steps,
+            "activation_env_required": readiness.get("activation_env_required"),
+            "rollback_env": {**readiness.get("rollback_env", {}), "OUTREACH_WORKER_ENABLED": "false"},
+            "operator_guard": "No live activation is performed by this runbook API.",
+            **SAFE_FLAGS,
+        }
+    )
+
+
+def rollback_live_outreach(reason: str = "operator_rollback") -> dict[str, Any]:
+    controls = [
+        set_runtime_control("pause_outreach", True, "launch_rollback", reason),
+        set_runtime_control("pause_auto_replies", True, "launch_rollback", reason),
+    ]
+    execute(
+        """
+        INSERT INTO system_events(type, severity, message, payload_json)
+        VALUES ('launch.rollback', 'warning', 'Live outreach rollback control applied', %s)
+        """,
+        (Jsonb(json_safe({"reason": reason, "controls": controls, **SAFE_FLAGS})),),
+    )
+    return json_safe(
+        {
+            "ok": True,
+            "action": "rollback_live_outreach",
+            "controls": controls,
+            "required_env": {
+                "OUTREACH_DRY_RUN": "true",
+                "OUTREACH_PAUSED": "true",
+                "FIRST_LIVE_SEND_FLAG": "false",
+                "OUTREACH_WORKER_ENABLED": "false",
+            },
+            "runtime_change_performed": True,
+            "env_change_performed": False,
+            **SAFE_FLAGS,
+        }
+    )
 
 
 def apply_launch_activation(confirm_text: str, requested_by: str = "operator", limit: int = 25, dry_run: bool = True) -> dict[str, Any]:

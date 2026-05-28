@@ -70,6 +70,7 @@ export default async function AdminPage() {
   const campaignActionsData = await fetchJson("/admin/campaign-actions?limit=8", authorization ? { Authorization: authorization } : {});
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
   const launchActivationData = await fetchJson("/admin/launch-activation?limit=25", authorization ? { Authorization: authorization } : {});
+  const launchRunbookData = await fetchJson("/admin/launch-activation/runbook?limit=25", authorization ? { Authorization: authorization } : {});
   const liveQueueData = await fetchJson("/admin/outreach/live-queue?limit=20", authorization ? { Authorization: authorization } : {});
   const postSendObserverData = await fetchJson("/admin/outreach/post-send-observer?limit=5", authorization ? { Authorization: authorization } : {});
   const studioMailData = await fetchJson("/admin/studio-mail/messages?limit=8", authorization ? { Authorization: authorization } : {});
@@ -120,6 +121,7 @@ export default async function AdminPage() {
   const campaignPreviewRows = Array.isArray(campaignControlRoom.first_batch_preview_rows) ? campaignControlRoom.first_batch_preview_rows : [];
   const launchReadiness = launchReadinessData?.scoreboard || {};
   const launchActivation = launchActivationData?.activation || {};
+  const launchRunbook = launchRunbookData?.runbook || {};
   const launchActivationHistory = launchActivationData?.history || {};
   const latestLaunchActivationRun = Array.isArray(launchActivationHistory.runs) ? launchActivationHistory.runs[0] || {} : {};
   const liveQueue = liveQueueData?.candidates || {};
@@ -344,9 +346,16 @@ export default async function AdminPage() {
               <div className="segment-row">
                 <span className="readiness-chip">rollback</span>
                 <strong>Live switch rollback</strong>
-                <span>dry-run true</span>
-                <span>outreach paused</span>
-                <span>first flag false</span>
+                <span>dry-run {launchRunbook.rollback_env?.OUTREACH_DRY_RUN ?? "true"}</span>
+                <span>worker {launchRunbook.rollback_env?.OUTREACH_WORKER_ENABLED ?? "false"}</span>
+                <span>{launchRunbook.rollback_steps?.length ?? 0} steps</span>
+              </div>
+              <div className="segment-row">
+                <span className="readiness-chip">runbook</span>
+                <strong>Canary activation plan</strong>
+                <span>{launchRunbook.status ?? "unknown"}</span>
+                <span>limit {launchRunbook.canary_limit ?? 20}</span>
+                <span>{launchRunbook.operator_guard ?? "guarded"}</span>
               </div>
             </div>
             <div className="segments-list">
