@@ -18,6 +18,7 @@ from .audit_refresh_failures import audit_refresh_failure_snapshot, retry_failed
 from .audit_refresh_repair import audit_refresh_attachment_repair_snapshot, repair_audit_refresh_attachments
 from .autonomous_mailer import run_autonomous_mailer_cycle
 from .mailer_control import evaluate_outbound_message
+from .mailer_action_queue import process_mailer_action_queue
 from .mailer_control_room import cleanup_mailer_digest_history, cleanup_mailer_policy_score_history, mailer_business_kpi_snapshot, mailer_digest_trend_guard, mailer_policy_score, mailer_policy_score_regression_guard, mailer_self_audit_matrix_snapshot, record_mailer_business_kpi_history, record_mailer_policy_score_history, record_mailer_self_audit_matrix_history, write_mailer_digest_agent_report, write_owner_status_report
 from .mailer_readiness import run_clean_window_transition, sender_rotation_ready
 from .mailer_autonomy import mailer_status_snapshot, record_mail_signal_lessons, run_clean_window_recovery
@@ -92,6 +93,7 @@ def _record_agent(agent: str, func: Callable[[], dict[str, Any]]) -> dict[str, A
         if agent == "mailer_digest_agent":
             digest_report = write_mailer_digest_agent_report(str(row["id"]), result)
             result["digest_agent_report"] = digest_report
+            result["post_digest_queue_processing"] = process_mailer_action_queue(10)
         if agent == "mailer_ops_retention_agent":
             retention_report = write_mailer_ops_retention_agent_report(str(row["id"]), result)
             result["ops_retention_agent_report"] = retention_report

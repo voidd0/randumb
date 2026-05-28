@@ -39,18 +39,21 @@ def test_mailer_digest_agent_exists_and_generates_report():
     result = run["result_json"]
     assert run["status"] == "completed"
     assert result["email_sent"] is False
+    assert result["post_digest_queue_processing"]["send_mail"] is False
+    assert result["post_digest_queue_processing"]["processed"] >= 1
     assert Path(result["path"]).exists()
     assert result["owner_report_action"]["action_type"] == "owner_report"
     _cleanup(result["owner_report_action"]["id"])
 
 
-def test_mailer_digest_agent_queues_no_send_owner_report_action():
+def test_mailer_digest_agent_prepares_no_send_owner_report_action():
     run = run_agent("mailer_digest_agent")
     action = run["result_json"]["owner_report_action"]
     row = fetch_one("SELECT status, recipient_hash, payload_json FROM mailer_action_queue WHERE id = %s", (action["id"],))
-    assert row["status"] == "queued"
+    assert row["status"] == "prepared"
     assert row["recipient_hash"] == ""
     assert row["payload_json"]["payload_json"]["email_sent"] is False
+    assert run["result_json"]["post_digest_queue_processing"]["live_outreach_allowed"] is False
     _cleanup(action["id"])
 
 
