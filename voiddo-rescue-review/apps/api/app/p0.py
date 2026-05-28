@@ -883,6 +883,7 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "ПОДГОТОВЬ ЖИВОЙ КАНАРЕЙКУ": "PREPARE LIVE CANARY",
         "ПОДГОТОВЬ ЖИВОЙ КАНАРИ": "PREPARE LIVE CANARY",
         "ПОКАЖИ ЗАПУСК": "SHOW LAUNCH RUNBOOK",
+        "ПРОВЕРЬ ЗАПУСК": "RUN LAUNCH REHEARSAL",
         "ОТКАТИ РАССЫЛКУ": "ROLLBACK LIVE OUTREACH",
         "ЗАПУСТИ MAIL QA": "RUN MAIL QA",
         "ЗАПУСТИ ВИЗУАЛ QA": "RUN VISUAL QA",
@@ -909,6 +910,7 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE", "SHOW LAUNCH RUNBOOK", "ROLLBACK LIVE OUTREACH",
     }
     medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP"}
+    medium.add("RUN LAUNCH REHEARSAL")
     high = {"SEND OUTREACH", "START WARMUP", "UNPAUSE OUTREACH", "RUN SHELL", "EXECUTE"}
     if command in safe:
         risk = "SAFE_AUTO"
@@ -1763,6 +1765,10 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
             "action": "live_canary_prepared_dry_run",
             "queue": stage_live_outreach_batch(20, dry_run=True, requested_by="owner_command"),
         }
+    elif command == "RUN LAUNCH REHEARSAL":
+        from .launch_rehearsal import run_launch_rehearsal
+
+        result = {"ok": True, "action": "launch_rehearsal", "rehearsal": run_launch_rehearsal(20, apply_pause=False)}
     else:
         result = {"ok": False, "action": "review_required", "reason": "unknown_command"}
     execute(

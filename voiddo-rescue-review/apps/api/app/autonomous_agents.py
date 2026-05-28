@@ -72,6 +72,7 @@ from .source_scanner_queue import queue_source_scanner_jobs, source_scanner_back
 from .scout_sensitive_hygiene import archive_sensitive_scout_targets, scout_sensitive_target_snapshot
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_activation import launch_activation_readiness, launch_activation_runbook, prepare_launch_activation
+from .launch_rehearsal import latest_launch_rehearsal_runs, run_launch_rehearsal
 from .outreach_live_queue import live_outreach_queue_candidates, stage_live_outreach_batch
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
@@ -377,6 +378,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "launch_activation_readiness_agent": lambda: launch_activation_readiness(int(payload.get("limit", 25))),
         "launch_activation_prepare_agent": lambda: prepare_launch_activation(int(payload.get("limit", 25)), "agent"),
         "launch_activation_runbook_agent": lambda: launch_activation_runbook(int(payload.get("limit", 25))),
+        "launch_rehearsal_agent": lambda: run_launch_rehearsal(int(payload.get("limit", 20)), apply_pause=False),
+        "launch_rehearsal_history_agent": lambda: latest_launch_rehearsal_runs(int(payload.get("limit", 10))),
         "live_outreach_queue_candidates_agent": lambda: live_outreach_queue_candidates(int(payload.get("limit", 20))),
         "live_outreach_stage_dry_run_agent": lambda: stage_live_outreach_batch(int(payload.get("limit", 20)), dry_run=True, requested_by="agent"),
         "outreach_post_send_observer_agent": lambda: outreach_post_send_observer(int(payload.get("window_hours", 24)), apply_pause=bool(payload.get("apply_pause", True))),
@@ -544,6 +547,7 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
             "launch_readiness_scoreboard_agent",
             "launch_activation_readiness_agent",
             "launch_activation_runbook_agent",
+            "launch_rehearsal_agent",
             "live_outreach_queue_candidates_agent",
             "outreach_post_send_observer_agent",
             "launch_repair_plan_agent",

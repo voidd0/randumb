@@ -71,6 +71,7 @@ export default async function AdminPage() {
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
   const launchActivationData = await fetchJson("/admin/launch-activation?limit=25", authorization ? { Authorization: authorization } : {});
   const launchRunbookData = await fetchJson("/admin/launch-activation/runbook?limit=25", authorization ? { Authorization: authorization } : {});
+  const launchRehearsalData = await fetchJson("/admin/launch-rehearsal?limit=5", authorization ? { Authorization: authorization } : {});
   const liveQueueData = await fetchJson("/admin/outreach/live-queue?limit=20", authorization ? { Authorization: authorization } : {});
   const postSendObserverData = await fetchJson("/admin/outreach/post-send-observer?limit=5", authorization ? { Authorization: authorization } : {});
   const studioMailData = await fetchJson("/admin/studio-mail/messages?limit=8", authorization ? { Authorization: authorization } : {});
@@ -122,6 +123,8 @@ export default async function AdminPage() {
   const launchReadiness = launchReadinessData?.scoreboard || {};
   const launchActivation = launchActivationData?.activation || {};
   const launchRunbook = launchRunbookData?.runbook || {};
+  const launchRehearsal = launchRehearsalData?.history || {};
+  const latestLaunchRehearsalRun = Array.isArray(launchRehearsal.runs) ? launchRehearsal.runs[0] || {} : {};
   const launchActivationHistory = launchActivationData?.history || {};
   const latestLaunchActivationRun = Array.isArray(launchActivationHistory.runs) ? launchActivationHistory.runs[0] || {} : {};
   const liveQueue = liveQueueData?.candidates || {};
@@ -333,6 +336,11 @@ export default async function AdminPage() {
                 <span className="tag">post-send watch</span>
                 <strong>{latestPostSendObserverRun.decision ?? "idle"}</strong>
                 <span>bounces {latestPostSendObserverRun.bounce_or_dsn_count ?? 0} · replies {latestPostSendObserverRun.reply_count ?? 0}</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">rehearsal</span>
+                <strong>{latestLaunchRehearsalRun.decision ?? "not run"}</strong>
+                <span>{latestLaunchRehearsalRun.passed_step_count ?? 0}/{latestLaunchRehearsalRun.step_count ?? 0} steps</span>
               </div>
             </div>
             <div className="segments-list">

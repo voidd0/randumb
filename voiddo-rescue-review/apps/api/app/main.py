@@ -95,6 +95,7 @@ from .owner_command_control import owner_command_control_summary
 from .language_gate import check_no_ai_public_language
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_activation import apply_launch_activation, latest_launch_activation_runs, launch_activation_readiness, launch_activation_runbook, prepare_launch_activation, rollback_live_outreach
+from .launch_rehearsal import latest_launch_rehearsal_runs, run_launch_rehearsal
 from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates, stage_live_outreach_batch
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
@@ -1796,6 +1797,23 @@ def launch_activation_runbook_get(limit: int = 25):
 async def launch_activation_rollback(request: Request):
     payload = await request.json()
     return {"ok": True, "rollback": rollback_live_outreach(payload.get("reason", "admin_requested"))}
+
+
+@app.get("/admin/launch-rehearsal", dependencies=[Depends(require_admin)])
+def launch_rehearsal_get(limit: int = 10):
+    return {"ok": True, "history": latest_launch_rehearsal_runs(limit)}
+
+
+@app.post("/admin/launch-rehearsal/run", dependencies=[Depends(require_admin)])
+async def launch_rehearsal_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "rehearsal": run_launch_rehearsal(
+            int(payload.get("limit", 20)),
+            apply_pause=bool(payload.get("apply_pause", False)),
+        ),
+    }
 
 
 @app.get("/admin/launch-repair-plan", dependencies=[Depends(require_admin)])
