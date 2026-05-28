@@ -242,6 +242,64 @@ SECONDARY_TEST_TARGETS: list[dict[str, Any]] = [
     {"country": "EE", "city": "Tallinn", "language": "en", "niche": "dentists", "priority": 40},
 ]
 
+WINNER_EXPANSION_MARKETS: list[tuple[str, str, str]] = [
+    ("CA", "Coquitlam", "dentists"),
+    ("CA", "Maple Ridge", "dentists"),
+    ("CA", "Chilliwack", "dentists"),
+    ("CA", "Langley", "dentists"),
+    ("CA", "White Rock", "dentists"),
+    ("CA", "New Westminster", "dentists"),
+    ("CA", "Port Moody", "dentists"),
+    ("CA", "North Vancouver", "dentists"),
+    ("CA", "Duncan", "dentists"),
+    ("CA", "Courtenay", "dentists"),
+    ("US", "Overland Park", "dentists"),
+    ("US", "Naperville", "dentists"),
+    ("US", "Carmel", "dentists"),
+    ("US", "Franklin", "dentists"),
+    ("US", "Greenville", "dentists"),
+    ("US", "Asheville", "dentists"),
+    ("US", "Charleston", "dentists"),
+    ("US", "Savannah", "dentists"),
+    ("US", "Wilmington", "dentists"),
+    ("US", "Fayetteville", "dentists"),
+    ("UK", "Tunbridge Wells", "dentists"),
+    ("UK", "Sevenoaks", "dentists"),
+    ("UK", "Guildford", "dentists"),
+    ("UK", "St Albans", "dentists"),
+    ("UK", "Cheltenham", "dentists"),
+    ("UK", "Warwick", "dentists"),
+    ("UK", "Leamington Spa", "dentists"),
+    ("UK", "Worthing", "dentists"),
+    ("UK", "Basingstoke", "dentists"),
+    ("UK", "Maidstone", "dentists"),
+    ("IE", "Dingle", "local tourism"),
+    ("IE", "Westport", "local tourism"),
+    ("IE", "Kinsale", "local tourism"),
+    ("IE", "Doolin", "local tourism"),
+    ("IE", "Lahinch", "local tourism"),
+    ("IE", "Clifden", "local tourism"),
+    ("IE", "Kenmare", "local tourism"),
+    ("IE", "Killarney", "local tourism"),
+    ("IE", "Tralee", "local tourism"),
+    ("IE", "Ennis", "local tourism"),
+    ("CA", "Waterloo", "clinics"),
+    ("CA", "Kitchener", "clinics"),
+    ("CA", "Cambridge", "clinics"),
+    ("CA", "Burlington", "clinics"),
+    ("CA", "Oakville", "clinics"),
+    ("IE", "Naas", "dentists"),
+    ("IE", "Carlow", "dentists"),
+    ("IE", "Letterkenny", "dentists"),
+    ("IE", "Castlebar", "dentists"),
+    ("IE", "Mullingar", "dentists"),
+]
+
+WINNER_EXPANSION_TARGETS: list[dict[str, Any]] = [
+    {"country": country, "city": city, "language": "en", "niche": niche, "priority": 160 - index, "tier": "winner_expansion"}
+    for index, (country, city, niche) in enumerate(WINNER_EXPANSION_MARKETS)
+]
+
 STOCKPILE_EXPANSION_MARKETS: list[tuple[str, str, str]] = [
     ("IE", "Dingle", "local tourism"),
     ("IE", "Westport", "local tourism"),
@@ -534,7 +592,7 @@ def quality_aware_regional_target_plan(limit_targets: int = 5) -> dict[str, Any]
     performance = _source_segment_performance_summary()
     candidates: list[dict[str, Any]] = []
     blocked_segments: list[dict[str, Any]] = []
-    target_pool = [*lead_discovery_target_plan(False)["targets"], *RESERVE_REGIONAL_TARGETS, *STOCKPILE_EXPANSION_TARGETS, *DEEP_EXPANSION_TARGETS]
+    target_pool = [*lead_discovery_target_plan(False)["targets"], *RESERVE_REGIONAL_TARGETS, *WINNER_EXPANSION_TARGETS, *STOCKPILE_EXPANSION_TARGETS, *DEEP_EXPANSION_TARGETS]
     for target in target_pool:
         source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
         if source_name in existing_source_names:
@@ -1244,7 +1302,7 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         for row in performance_rows
     }
     candidates: list[dict[str, Any]] = []
-    for target in [*STOCKPILE_EXPANSION_TARGETS, *DEEP_EXPANSION_TARGETS]:
+    for target in [*WINNER_EXPANSION_TARGETS, *STOCKPILE_EXPANSION_TARGETS, *DEEP_EXPANSION_TARGETS]:
         key = (target["country"].upper(), target["niche"])
         source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
         if source_name in existing_source_names:

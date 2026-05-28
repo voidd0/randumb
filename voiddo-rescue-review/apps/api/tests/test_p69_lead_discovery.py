@@ -301,6 +301,7 @@ def test_quality_aware_regional_target_plan_skips_low_yield_segments(monkeypatch
         ],
     )
     monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", [])
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", [])
 
@@ -366,6 +367,7 @@ def test_quality_aware_regional_target_plan_uses_reserve_bank_when_primary_is_ex
     reserve = [{"country": "US", "city": f"FreshReserve{token}", "language": "en", "niche": "dentists", "priority": 35, "tier": "reserve"}]
     monkeypatch.setattr(discovery_module, "FIRST_TIER_TARGETS", primary)
     monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", reserve)
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", [])
 
@@ -407,6 +409,7 @@ def test_quality_aware_regional_target_plan_uses_stockpile_bank_when_primary_and
     stockpile = [{"country": "IE", "city": f"FreshStockpile{token}", "language": "en", "niche": "dentists", "priority": 120}]
     monkeypatch.setattr(discovery_module, "FIRST_TIER_TARGETS", primary)
     monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", reserve)
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", stockpile)
     monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", [])
 
@@ -444,6 +447,60 @@ def test_quality_aware_regional_target_plan_uses_stockpile_bank_when_primary_and
     assert plan["live_outreach_allowed"] is False
 
 
+def test_quality_aware_regional_target_plan_prefers_winner_expansion_segments(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    winner = [{"country": "CA", "city": f"WinnerDentists{token}", "language": "en", "niche": "dentists", "priority": 160, "tier": "winner_expansion"}]
+    weak = [{"country": "US", "city": f"WeakContractors{token}", "language": "en", "niche": "contractors", "priority": 120}]
+    monkeypatch.setattr(discovery_module, "FIRST_TIER_TARGETS", [{"country": "US", "city": f"UsedPrimary{token}", "language": "en", "niche": "dentists", "priority": 100}])
+    monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", [])
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", winner)
+    monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", weak)
+    monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", [])
+
+    def fake_fetch_all(sql, params=()):
+        if "SELECT name FROM scout_sources" in sql:
+            return [{"name": f"overpass-US-UsedPrimary{token}-dentists"}]
+        if "FROM scout_source_performance_scores" in sql:
+            return [
+                {
+                    "country": "CA",
+                    "niche": "dentists",
+                    "source_count": 4,
+                    "qualified_rate": 0.22,
+                    "average_final_score": 60,
+                    "email_coverage": 0.7,
+                    "issue_signal_rate": 0.45,
+                    "qualified_count": 8,
+                    "promote_count": 2,
+                    "watch_count": 1,
+                    "pause_count": 0,
+                },
+                {
+                    "country": "US",
+                    "niche": "contractors",
+                    "source_count": 6,
+                    "qualified_rate": 0.01,
+                    "average_final_score": 32,
+                    "email_coverage": 0.3,
+                    "issue_signal_rate": 0.05,
+                    "qualified_count": 0,
+                    "promote_count": 0,
+                    "watch_count": 0,
+                    "pause_count": 4,
+                },
+            ]
+        return []
+
+    monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
+    plan = quality_aware_regional_target_plan(2)
+    assert plan["status"] == "ready"
+    assert plan["targets"][0]["city"] == f"WinnerDentists{token}"
+    assert plan["targets"][0]["tier"] == "winner_expansion"
+    assert plan["blocked_segment_count"] >= 1
+    assert plan["send_mail"] is False
+    assert plan["live_outreach_allowed"] is False
+
+
 def test_quality_aware_regional_target_plan_uses_deep_bank_when_static_banks_are_exhausted(monkeypatch):
     token = uuid.uuid4().hex[:8]
     primary = [{"country": "US", "city": f"UsedPrimary{token}", "language": "en", "niche": "dentists", "priority": 100}]
@@ -452,6 +509,7 @@ def test_quality_aware_regional_target_plan_uses_deep_bank_when_static_banks_are
     deep = [{"country": "CA", "city": f"FreshDeep{token}", "language": "en", "niche": "dentists", "priority": 85, "tier": "deep_expansion"}]
     monkeypatch.setattr(discovery_module, "FIRST_TIER_TARGETS", primary)
     monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", reserve)
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", stockpile)
     monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", deep)
 
@@ -502,6 +560,7 @@ def test_quality_aware_regional_target_plan_blocks_mature_zero_qualified_segment
         ],
     )
     monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", [])
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", [])
 
@@ -559,6 +618,7 @@ def test_stockpile_expansion_target_plan_uses_approved_preview_segments(monkeypa
             {"country": "AU", "city": f"EmptyTown{token}", "language": "en", "niche": "contractors", "priority": 90},
         ],
     )
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", [])
 
     def fake_fetch_all(sql, params=()):
@@ -602,6 +662,7 @@ def test_stockpile_expansion_target_plan_ranks_by_quality_and_filters_weak_segme
             {"country": "US", "city": f"WeakTown{token}", "language": "en", "niche": "contractors", "priority": 99},
         ],
     )
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", [])
 
     def fake_fetch_all(sql, params=()):
@@ -668,6 +729,7 @@ def test_stockpile_expansion_target_plan_explores_strong_performance_only_segmen
             {"country": "UK", "city": f"WeakPerf{token}", "language": "en", "niche": "dentists", "priority": 99},
         ],
     )
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", [])
     monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", [])
 
     def fake_fetch_all(sql, params=()):
