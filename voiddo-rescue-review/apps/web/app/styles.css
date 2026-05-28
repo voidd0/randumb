@@ -256,6 +256,14 @@ h1 { font-size: clamp(44px, 7vw, 86px); line-height: 0.95; margin: 14px 0 22px; 
 .campaign-action-row {
   grid-template-columns: 138px minmax(130px, 1fr) 76px 76px 76px;
 }
+.customer-grid {
+  align-items: stretch;
+  margin-top: 14px;
+}
+.compact-row {
+  grid-template-columns: 58px minmax(0, 1fr) minmax(76px, auto);
+  margin-top: 8px;
+}
 .preview-table {
   display: grid;
   gap: 8px;
