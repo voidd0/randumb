@@ -100,6 +100,8 @@ def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
     assert len(calls) == len(loop_script.CORE_AGENTS)
     assert calls[0][0] == "mail_throttle_agent"
     assert "lead_supply_buildout_agent" not in [agent for agent, _payload in calls]
+    assert [agent for agent, _payload in calls].index("lead_quality_diagnostics_agent") < [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent")
+    assert [agent for agent, _payload in calls].index("scout_source_feedback_agent") < [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent")
     assert [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent") < [agent for agent, _payload in calls].index("post_scan_campaign_cycle_agent")
     assert [agent for agent, _payload in calls].index("post_scan_campaign_cycle_agent") < [agent for agent, _payload in calls].index("outreach_preview_queue_agent")
     assert [agent for agent, _payload in calls].index("outreach_preview_queue_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
