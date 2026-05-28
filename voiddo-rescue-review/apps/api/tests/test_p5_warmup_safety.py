@@ -4,6 +4,8 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from psycopg.types.json import Jsonb
+
 from app.config import Settings
 from app.db import execute, fetch_one
 from app.p0 import (
@@ -346,12 +348,20 @@ def test_blockers_report_does_not_block_on_latest_empty_source_when_ready_pool_e
             }
         )
         run_scout_source_readiness(str(blocked_source["id"]))
+        execute(
+            """
+            INSERT INTO agent_runs(agent, status, result_json, started_at, completed_at)
+            VALUES ('scout_source_readiness_regression_guard_agent', 'completed', %s, now(), now())
+            """,
+            (Jsonb({"decision": "PASS_NO_SEND", "regressions": [], "review_task_created": False, "token": token}),),
+        )
 
         report = write_blockers_report(tmp_path / "blockers_report.md")
         assert "scout_source_readiness_not_pass" not in report["blockers"]
         assert report["send_mail"] is False
         assert report["live_outreach_allowed"] is False
     finally:
+        execute("DELETE FROM agent_runs WHERE agent = 'scout_source_readiness_regression_guard_agent' AND result_json->>'token' = %s", (token,))
         execute("DELETE FROM scout_runs WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s OR name LIKE %s)", (f"ready-pool-{token}", f"empty-source-{token}"))
         execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s OR name LIKE %s)", (f"ready-pool-{token}", f"empty-source-{token}"))
         execute("DELETE FROM scout_sources WHERE name LIKE %s OR name LIKE %s", (f"ready-pool-{token}", f"empty-source-{token}"))
