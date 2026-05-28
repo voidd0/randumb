@@ -99,6 +99,7 @@ from .launch_activation import apply_launch_activation, latest_launch_activation
 from .launch_rehearsal import latest_launch_rehearsal_runs, run_launch_rehearsal
 from .lead_stockpile_health import latest_lead_stockpile_health_runs, lead_stockpile_health_snapshot, run_lead_stockpile_health
 from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates, stage_live_outreach_batch
+from .canary_batch_quality import canary_batch_quality
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
@@ -549,7 +550,17 @@ async def outreach_dedupe_preview(request: Request):
 
 @app.get("/admin/outreach/live-queue", dependencies=[Depends(require_admin)])
 def outreach_live_queue_get(limit: int = 20):
-    return {"ok": True, "candidates": live_outreach_queue_candidates(limit), "history": latest_outreach_send_runs(10)}
+    return {
+        "ok": True,
+        "candidates": live_outreach_queue_candidates(limit),
+        "quality": canary_batch_quality(limit, store=False),
+        "history": latest_outreach_send_runs(10),
+    }
+
+
+@app.get("/admin/outreach/live-queue/quality", dependencies=[Depends(require_admin)])
+def outreach_live_queue_quality_get(limit: int = 20):
+    return {"ok": True, "quality": canary_batch_quality(limit)}
 
 
 @app.post("/admin/outreach/live-queue/stage", dependencies=[Depends(require_admin)])

@@ -1,0 +1,169 @@
+from __future__ import annotations
+
+from collections import Counter
+from typing import Any
+
+from psycopg.types.json import Jsonb
+
+from .db import execute, fetch_all
+from .p0 import json_safe, recipient_hash
+
+
+SAFE_FLAGS = {
+    "send_mail": False,
+    "smtp_called": False,
+    "live_outreach_allowed": False,
+    "raw_recipient_addresses_included": False,
+    "secrets_included": False,
+}
+TEST_COUNTRY_PATTERN = r"^(P7|P8|P9|P10|P11|P12|P59|P60|P61|P62|P63|P68|P72|P73|P74)"
+
+
+def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 20), 100))
+    rows = fetch_all(
+        """
+        SELECT om.id AS outreach_message_id,
+               cl.id AS campaign_lead_id,
+               cl.campaign_id,
+               c.country, c.language, c.niche, c.offer_key,
+               b.domain,
+               a.public_slug,
+               lower(split_part(l.email, '@', 2)) AS recipient_domain,
+               latest_review.action AS review_action,
+               latest_preflight.decision AS preflight_decision,
+               om.body, om.html_body, om.status AS message_status,
+               COALESCE(ls.final_score, cl.score, l.score, 0) AS lead_score,
+               latest_strength.final_score AS audit_strength_score
+        FROM outreach_messages om
+        JOIN leads l ON l.id = om.lead_id
+        JOIN businesses b ON b.id = l.business_id
+        JOIN audits a ON a.id = om.audit_id
+        JOIN campaign_leads cl ON cl.lead_id = om.lead_id AND cl.audit_id = om.audit_id AND cl.status = 'preview'
+        JOIN campaigns c ON c.id = cl.campaign_id
+        LEFT JOIN LATERAL (
+          SELECT action
+          FROM campaign_preview_reviews
+          WHERE campaign_lead_id = cl.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) latest_review ON true
+        LEFT JOIN LATERAL (
+          SELECT decision
+          FROM campaign_preflight_runs
+          WHERE campaign_id = c.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) latest_preflight ON true
+        LEFT JOIN LATERAL (
+          SELECT final_score FROM lead_scores WHERE lead_id = l.id ORDER BY created_at DESC LIMIT 1
+        ) ls ON true
+        LEFT JOIN LATERAL (
+          SELECT final_score FROM audit_strength_scores WHERE audit_id = a.id ORDER BY created_at DESC LIMIT 1
+        ) latest_strength ON true
+        WHERE om.status = 'preview'
+          AND upper(COALESCE(c.country, '')) !~ %s
+          AND lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
+          AND lower(COALESCE(l.email, '')) NOT LIKE '%%.example.test'
+          AND lower(COALESCE(b.domain, '')) NOT IN ('example.com', 'localhost')
+          AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
+          AND NOT EXISTS (
+                SELECT 1 FROM suppression_list s
+                WHERE lower(s.email) = lower(l.email)
+                   OR lower(COALESCE(s.domain, '')) = lower(COALESCE(b.domain, ''))
+                   OR lower(COALESCE(s.domain, '')) = lower(split_part(l.email, '@', 2))
+          )
+        ORDER BY om.created_at DESC, om.id DESC
+        LIMIT %s
+        """,
+        (TEST_COUNTRY_PATTERN, safe_limit),
+    )
+    items: list[dict[str, Any]] = []
+    domain_counts: Counter[str] = Counter()
+    recipient_domain_counts: Counter[str] = Counter()
+    campaign_counts: Counter[str] = Counter()
+    segment_counts: Counter[str] = Counter()
+    blockers: list[str] = []
+    warnings: list[str] = []
+
+    for row in rows:
+        domain = str(row["domain"] or "").lower()
+        recipient_domain = str(row["recipient_domain"] or "").lower()
+        segment = f"{row['country']}:{row['niche']}"
+        domain_counts[domain] += 1
+        recipient_domain_counts[recipient_domain] += 1
+        campaign_counts[str(row["campaign_id"])] += 1
+        segment_counts[segment] += 1
+        item_blockers = []
+        body = row["body"] or ""
+        html_body = row["html_body"] or ""
+        if row["review_action"] != "approved":
+            item_blockers.append("preview_not_approved")
+        if row["preflight_decision"] != "PASS_NO_SEND_PREFLIGHT":
+            item_blockers.append("campaign_preflight_not_passed")
+        if "unsubscribe/u_" not in body:
+            item_blockers.append("missing_signed_unsubscribe")
+        if not html_body or "<html" not in html_body.lower():
+            item_blockers.append("html_body_not_ready")
+        if not row["public_slug"]:
+            item_blockers.append("missing_audit_slug")
+        if int(row["lead_score"] or 0) < 70:
+            item_blockers.append("lead_score_below_70")
+        if int(row["audit_strength_score"] or 0) < 70:
+            item_blockers.append("audit_strength_below_70")
+        blockers.extend(item_blockers)
+        items.append(
+            {
+                "outreach_message_id": str(row["outreach_message_id"]),
+                "campaign_lead_id": str(row["campaign_lead_id"]),
+                "campaign_id": str(row["campaign_id"]),
+                "country": row["country"],
+                "language": row["language"],
+                "niche": row["niche"],
+                "offer_key": row["offer_key"],
+                "domain": domain,
+                "audit_slug": row["public_slug"],
+                "recipient_domain_hash": recipient_hash(recipient_domain),
+                "lead_score": int(row["lead_score"] or 0),
+                "audit_strength_score": int(row["audit_strength_score"] or 0),
+                "blockers": sorted(set(item_blockers)),
+            }
+        )
+
+    if len(items) < min(safe_limit, 20):
+        blockers.append("canary_candidate_count_below_requested_limit")
+    if any(count > 1 for count in domain_counts.values()):
+        blockers.append("duplicate_business_domain_in_canary")
+    if any(count > 5 for count in recipient_domain_counts.values()):
+        blockers.append("recipient_domain_concentration_above_5")
+    if any(count > 5 for count in campaign_counts.values()):
+        warnings.append("campaign_concentration_above_5")
+    if len(segment_counts) < 3 and len(items) >= 10:
+        warnings.append("low_segment_diversity")
+
+    decision = "PASS_CANARY_BATCH_QUALITY" if not blockers else "FAIL_CANARY_BATCH_QUALITY"
+    result = json_safe(
+        {
+            "status": "completed",
+            "decision": decision,
+            "requested_limit": safe_limit,
+            "candidate_count": len(items),
+            "segment_count": len(segment_counts),
+            "campaign_count": len(campaign_counts),
+            "recipient_domain_count": len([key for key in recipient_domain_counts if key]),
+            "blockers": sorted(set(blockers)),
+            "warnings": sorted(set(warnings)),
+            "segments": [{"segment": key, "count": value} for key, value in sorted(segment_counts.items())],
+            "items": items,
+            **SAFE_FLAGS,
+        }
+    )
+    if store:
+        execute(
+            """
+            INSERT INTO agent_runs(agent, status, result_json, started_at, completed_at)
+            VALUES ('canary_batch_quality_agent', %s, %s, now(), now())
+            """,
+            ("completed" if decision.startswith("PASS") else "blocked", Jsonb(result)),
+        )
+    return result
