@@ -5,6 +5,7 @@ import argparse
 import fcntl
 import json
 import os
+import subprocess
 import sys
 from http.client import RemoteDisconnected
 from pathlib import Path
@@ -20,6 +21,8 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("mail_qa_agent", {}),
     ("mailer_status_agent", {}),
     ("mail_signal_learning_agent", {}),
+    ("studio_mail_monitor_health_agent", {"max_age_minutes": 15}),
+    ("studio_mail_monitor_agent", {"limit": 20}),
     ("clean_window_recheck_agent", {}),
     ("post_window_recheck_agent", {}),
     ("warmup_block_recovery_snapshot_agent", {"limit": 50}),
@@ -40,6 +43,34 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("autonomous_mailer_executor_agent", {"limit": 10}),
     ("mailer_digest_trend_guard_agent", {}),
     ("mailer_policy_score_agent", {}),
+)
+
+FULL_EXTRA_AGENTS: tuple[tuple[str, dict], ...] = (
+    (
+        "lead_supply_buildout_agent",
+        {
+            "target_preview_count": 110,
+            "canary_count": 20,
+            "limit": 120,
+            "max_cycles": 1,
+            "max_seconds": 75,
+            "enrichment_limit": 2,
+            "apply": True,
+        },
+    ),
+    ("post_scan_campaign_cycle_agent", {"limit": 120, "dry_run": False}),
+    ("canary_batch_quality_agent", {"limit": 20}),
+    ("canary_operator_packet_agent", {"limit": 20, "run_checkout_simulation": False}),
+    ("canary_send_window_plan_agent", {"limit": 20}),
+    ("inbox_integrity_gate_agent", {"window_hours": 24}),
+    ("revenue_autonomy_gap_agent", {"target_mrr_cents": 500_000, "approved_preview_target": 110, "apply": True}),
+    ("quality_plugin_agent", {}),
+    ("visual_qa_agent", {}),
+    ("self_audit_agent", {}),
+    ("self_closed_loop_agent", {}),
+    ("self_fix_agent", {}),
+    ("self_learning_agent", {}),
+    ("self_building_agent", {}),
 )
 
 
@@ -130,19 +161,35 @@ def run_loop(api_base: str, token: str, timeout: int, attempts: int = 2) -> dict
 
 
 def run_agent(api_base: str, token: str, agent: str, payload: dict, timeout: int, attempts: int = 2) -> dict:
-    request = Request(
-        f"{api_base.rstrip('/')}/admin/agents/{agent}",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "X-Admin-Token": token},
-        method="POST",
-    )
     last_error: Exception | None = None
     for _attempt in range(max(1, attempts)):
         try:
-            with urlopen(request, timeout=timeout) as response:
-                result = json.loads(response.read().decode("utf-8"))
+            completed = subprocess.run(
+                [
+                    "curl",
+                    "-fsS",
+                    "--connect-timeout",
+                    "10",
+                    "--max-time",
+                    str(max(15, timeout)),
+                    "-X",
+                    "POST",
+                    "-H",
+                    "Content-Type: application/json",
+                    "-H",
+                    f"X-Admin-Token: {token}",
+                    "--data-binary",
+                    "@-",
+                    f"{api_base.rstrip('/')}/admin/agents/{agent}",
+                ],
+                input=json.dumps(payload).encode("utf-8"),
+                capture_output=True,
+                timeout=max(20, timeout + 5),
+                check=True,
+            )
+            result = json.loads(completed.stdout.decode("utf-8"))
             return result.get("run", {}) if isinstance(result, dict) else {}
-        except (ConnectionResetError, TimeoutError, URLError, RemoteDisconnected) as exc:
+        except (ConnectionResetError, TimeoutError, URLError, RemoteDisconnected, subprocess.SubprocessError, json.JSONDecodeError) as exc:
             last_error = exc
     return {
         "agent": agent,
@@ -156,6 +203,13 @@ def run_core_loop(api_base: str, token: str, timeout: int) -> dict:
     per_agent_timeout = max(20, min(timeout, 180))
     runs = [run_agent(api_base, token, agent, payload, per_agent_timeout) for agent, payload in CORE_AGENTS]
     return {"ok": True, "loop": {"agents": len(runs), "runs": runs, "live_outreach": False, "mode": "core"}}
+
+
+def run_bounded_full_loop(api_base: str, token: str, timeout: int) -> dict:
+    per_agent_timeout = max(20, min(timeout, 180))
+    agents = (*CORE_AGENTS, *FULL_EXTRA_AGENTS)
+    runs = [run_agent(api_base, token, agent, payload, per_agent_timeout) for agent, payload in agents]
+    return {"ok": True, "loop": {"agents": len(runs), "runs": runs, "live_outreach": False, "mode": "full_bounded"}}
 
 
 def main() -> int:
@@ -195,7 +249,7 @@ def main() -> int:
         if args.mode == "core":
             result = run_core_loop(args.api_base, token, max(30, args.timeout))
         else:
-            result = run_loop(args.api_base, token, max(30, args.timeout))
+            result = run_bounded_full_loop(args.api_base, token, max(30, args.timeout))
         summary = build_summary(result)
         summary["mode"] = args.mode
         if args.allow_agent_failures and int(summary.get("failed", 0)) > 0:
