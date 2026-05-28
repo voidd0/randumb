@@ -171,6 +171,22 @@ def test_public_contact_page_enrichment_respects_suppression(monkeypatch):
         _cleanup(token)
 
 
+def test_public_contact_page_enrichment_stops_on_time_budget(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        _seed_lead(token)
+        ticks = iter([0.0, 0.0, 10.0])
+        monkeypatch.setattr(enrichment_module.time, "monotonic", lambda: next(ticks))
+        result = run_public_contact_page_enrichment(10, dry_run=False, max_pages_per_domain=4, max_seconds=5)
+        assert result["status"] == "partial_time_budget_exhausted"
+        assert result["time_budget_exhausted"] is True
+        assert result["scanned_count"] == 1
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup(token)
+
+
 def test_public_contact_page_agent_and_endpoint_are_admin_gated(monkeypatch):
     token = uuid.uuid4().hex[:8]
     try:

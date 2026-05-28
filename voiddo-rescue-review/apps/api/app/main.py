@@ -717,6 +717,7 @@ async def lead_contact_public_page_enrichment_run(request: Request):
             int(payload.get("limit", 10)),
             bool(payload.get("dry_run", True)),
             int(payload.get("max_pages_per_domain", 4)),
+            int(payload.get("max_seconds", 45)),
         ),
     }
 

@@ -214,6 +214,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("limit", 10)),
             dry_run=bool(payload.get("dry_run", True)),
             max_pages_per_domain=int(payload.get("max_pages_per_domain", 4)),
+            max_seconds=int(payload.get("max_seconds", 45)),
         ),
         "lead_quality_diagnostics_agent": lambda: record_lead_quality_diagnostics(int(payload.get("limit", 50))),
         "scout_source_feedback_agent": lambda: apply_scout_source_feedback(int(payload.get("limit", 50)), dry_run=bool(payload.get("dry_run", True))),

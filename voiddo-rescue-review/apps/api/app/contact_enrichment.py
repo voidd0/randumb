@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from typing import Any
 from urllib.parse import urljoin
 from urllib.error import HTTPError
@@ -320,21 +321,36 @@ def run_hunter_contact_enrichment(limit: int = 10, dry_run: bool = True) -> dict
     )
 
 
-def run_public_contact_page_enrichment(limit: int = 10, dry_run: bool = True, max_pages_per_domain: int = 4) -> dict[str, Any]:
+def run_public_contact_page_enrichment(
+    limit: int = 10,
+    dry_run: bool = True,
+    max_pages_per_domain: int = 4,
+    max_seconds: int = 45,
+) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 10), 100))
     safe_max_pages = max(1, min(int(max_pages_per_domain or 4), 8))
+    safe_max_seconds = max(5, min(int(max_seconds or 45), 180))
     candidates = contact_enrichment_candidates(safe_limit)["candidates"]
     scanned = 0
     enriched = 0
     skipped = 0
     results: list[dict[str, Any]] = []
+    started = time.monotonic()
+    time_budget_exhausted = False
     for item in candidates:
+        if time.monotonic() - started >= safe_max_seconds:
+            time_budget_exhausted = True
+            break
         scanned += 1
         domain = item["domain"]
         urls = _contact_urls(domain, None, safe_max_pages)
         found_emails: set[str] = set()
         page_results: list[dict[str, Any]] = []
         for url in urls:
+            if time.monotonic() - started >= safe_max_seconds:
+                time_budget_exhausted = True
+                page_results.append({"path_hash": _hash(url), "status": "time_budget_exhausted"})
+                break
             try:
                 status_code, html, final_url = fetch_public_contact_page(url)
             except Exception as exc:
@@ -352,6 +368,17 @@ def run_public_contact_page_enrichment(limit: int = 10, dry_run: bool = True, ma
             )
             if page_emails:
                 break
+        if time_budget_exhausted and not found_emails:
+            skipped += 1
+            results.append(
+                {
+                    "domain_hash": item["domain_hash"],
+                    "status": "time_budget_exhausted",
+                    "pages_checked": len(page_results),
+                    "pages": page_results,
+                }
+            )
+            break
         selected, evidence = _select_public_contact_email(domain, found_emails)
         if not selected:
             skipped += 1
@@ -380,7 +407,7 @@ def run_public_contact_page_enrichment(limit: int = 10, dry_run: bool = True, ma
             }
         )
 
-    status = "dry_run" if dry_run else ("enriched" if enriched else "no_safe_enrichment")
+    status = "dry_run" if dry_run else ("partial_time_budget_exhausted" if time_budget_exhausted else ("enriched" if enriched else "no_safe_enrichment"))
     row = execute(
         """
         INSERT INTO contact_enrichment_runs(provider, status, scanned_count, enriched_count, skipped_count, result_json)
@@ -392,7 +419,16 @@ def run_public_contact_page_enrichment(limit: int = 10, dry_run: bool = True, ma
             scanned,
             enriched,
             skipped,
-            Jsonb({"results": results, "dry_run": dry_run, "max_pages_per_domain": safe_max_pages, **SAFE_FLAGS}),
+            Jsonb(
+                {
+                    "results": results,
+                    "dry_run": dry_run,
+                    "max_pages_per_domain": safe_max_pages,
+                    "max_seconds": safe_max_seconds,
+                    "time_budget_exhausted": time_budget_exhausted,
+                    **SAFE_FLAGS,
+                }
+            ),
         ),
     )
     return json_safe(
@@ -407,6 +443,8 @@ def run_public_contact_page_enrichment(limit: int = 10, dry_run: bool = True, ma
             "results": results,
             "dry_run": dry_run,
             "max_pages_per_domain": safe_max_pages,
+            "max_seconds": safe_max_seconds,
+            "time_budget_exhausted": time_budget_exhausted,
             **SAFE_FLAGS,
         }
     )
