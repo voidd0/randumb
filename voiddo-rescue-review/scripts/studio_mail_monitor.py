@@ -122,7 +122,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--api-base", default="http://127.0.0.1:18082")
-    parser.add_argument("--imap-host", default="127.0.0.1")
+    parser.add_argument("--imap-host", default=os.environ.get("STUDIO_MAIL_IMAP_HOST", "mail.voiddo.com"))
     parser.add_argument("--imap-port", type=int, default=993)
     parser.add_argument("--username", default="em@voiddo.com")
     parser.add_argument("--creds", default=str(DEFAULT_CREDS))
