@@ -125,6 +125,8 @@ export default async function AdminPage() {
   const cards = Object.entries(labels).map(([key, label]) => [String(metrics[key] ?? 0), label]);
   const scans = metrics.scans || {};
   const emails = metrics.emails || {};
+  const production = metrics.production || {};
+  const qaArtifacts = metrics.qa_artifacts || {};
   const switches = metrics.kill_switches || {};
   const latestMailer = metrics.latest_mailer_status || {};
   const mailerSignals = mailer.signals || {};
@@ -199,6 +201,40 @@ export default async function AdminPage() {
         <section className="content">
           <div className="metric-grid">
             {cards.map(([value, label]) => <div className="metric" key={label}><strong>{value}</strong><span>{label}</span></div>)}
+          </div>
+          <div className="panel">
+            <h2>Production Metrics</h2>
+            <div className="segment-grid">
+              <div className="segment-card">
+                <span className="tag">real</span>
+                <strong>{production.real_leads_total ?? 0}</strong>
+                <span>non-test leads</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">qualified</span>
+                <strong>{production.real_qualified_leads ?? 0}</strong>
+                <span>real scored leads</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">audits</span>
+                <strong>{production.real_audit_pages_generated ?? 0}</strong>
+                <span>public real audit pages</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">preview</span>
+                <strong>{production.real_campaign_preview_rows ?? 0}</strong>
+                <span>real no-send campaign rows</span>
+              </div>
+            </div>
+            <div className="segments-list">
+              <div className="segment-row">
+                <span className="readiness-chip">qa separated</span>
+                <strong>Runtime test artifacts</strong>
+                <span>{qaArtifacts.test_like_businesses ?? 0} businesses</span>
+                <span>{qaArtifacts.test_like_audits ?? 0} audits</span>
+                <span>{qaArtifacts.test_like_campaign_previews ?? 0} previews</span>
+              </div>
+            </div>
           </div>
           <div className="panel readiness-panel">
             <div>

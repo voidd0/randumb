@@ -284,6 +284,19 @@ def admin_metrics_from_db() -> dict[str, Any]:
     scan_rows = fetch_all("SELECT status, count(*) AS count FROM scanner_jobs GROUP BY status")
     email_rows = fetch_all("SELECT status, count(*) AS count FROM outreach_messages GROUP BY status")
     latest_mailer = fetch_one("SELECT status, next_safe_action FROM mailer_status_snapshots ORDER BY created_at DESC LIMIT 1")
+    real_lead_where = """
+        lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
+        AND lower(COALESCE(b.website_url, '')) NOT LIKE '%%.example.test%%'
+        AND lower(COALESCE(l.email, '')) NOT LIKE '%%.example.test'
+        AND lower(COALESCE(l.source, '')) NOT LIKE 'p%%\\_test' ESCAPE '\\'
+        AND lower(COALESCE(l.source, '')) NOT LIKE 'test%%'
+        AND upper(COALESCE(l.country, '')) !~ '^(P7|P8|P9|P10|P11|P12|P59|P60|P61|P62|P63|P68|P72|P73|P74)'
+    """
+    real_audit_where = """
+        lower(COALESCE(a.domain, '')) NOT LIKE '%%.example.test'
+        AND lower(COALESCE(a.url, '')) NOT LIKE '%%.example.test%%'
+        AND COALESCE(a.status, '') NOT IN ('archived_test_artifact', 'archived_sensitive_target', 'superseded')
+    """
     return {
         "leads_total": scalar("SELECT count(*) FROM leads"),
         "scans": {
@@ -294,13 +307,16 @@ def admin_metrics_from_db() -> dict[str, Any]:
         },
         "qualified_leads": scalar("SELECT count(*) FROM leads WHERE score >= 70"),
         "post_scan_score_candidates": scalar(
-            """
+            f"""
             SELECT count(*)
             FROM audits a
             JOIN leads l ON l.id = a.lead_id
+            JOIN businesses b ON b.id = l.business_id
             WHERE a.status = 'completed'
               AND a.lead_id IS NOT NULL
               AND l.email IS NOT NULL
+              AND {real_lead_where}
+              AND {real_audit_where}
               AND NOT EXISTS (
                 SELECT 1 FROM lead_scores ls
                 WHERE ls.lead_id = a.lead_id
@@ -309,6 +325,55 @@ def admin_metrics_from_db() -> dict[str, Any]:
             """
         ),
         "audit_pages_generated": scalar("SELECT count(*) FROM audits WHERE public_slug IS NOT NULL"),
+        "production": {
+            "real_leads_total": scalar(f"SELECT count(*) FROM leads l JOIN businesses b ON b.id = l.business_id WHERE {real_lead_where}"),
+            "real_qualified_leads": scalar(f"SELECT count(*) FROM leads l JOIN businesses b ON b.id = l.business_id WHERE l.score >= 70 AND {real_lead_where}"),
+            "real_audit_pages_generated": scalar(f"SELECT count(*) FROM audits a WHERE a.public_slug IS NOT NULL AND {real_audit_where}"),
+            "real_campaign_preview_rows": scalar(
+                f"""
+                SELECT count(*)
+                FROM campaign_leads cl
+                JOIN leads l ON l.id = cl.lead_id
+                JOIN businesses b ON b.id = l.business_id
+                WHERE cl.status = 'preview'
+                  AND {real_lead_where}
+                """
+            ),
+        },
+        "qa_artifacts": {
+            "test_like_businesses": scalar(
+                "SELECT count(*) FROM businesses WHERE lower(COALESCE(domain, '')) LIKE '%%.example.test' OR lower(COALESCE(website_url, '')) LIKE '%%.example.test%%'"
+            ),
+            "test_like_leads": scalar(
+                """
+                SELECT count(*)
+                FROM leads l
+                JOIN businesses b ON b.id = l.business_id
+                WHERE lower(COALESCE(b.domain, '')) LIKE '%%.example.test'
+                   OR lower(COALESCE(l.email, '')) LIKE '%%.example.test'
+                   OR lower(COALESCE(l.source, '')) LIKE 'p%%\\_test' ESCAPE '\\'
+                   OR lower(COALESCE(l.source, '')) LIKE 'test%%'
+                """
+            ),
+            "test_like_audits": scalar(
+                "SELECT count(*) FROM audits a WHERE lower(COALESCE(a.domain, '')) LIKE '%%.example.test' OR lower(COALESCE(a.url, '')) LIKE '%%.example.test%%' OR a.status = 'archived_test_artifact'"
+            ),
+            "test_like_campaign_previews": scalar(
+                """
+                SELECT count(*)
+                FROM campaign_leads cl
+                JOIN leads l ON l.id = cl.lead_id
+                JOIN businesses b ON b.id = l.business_id
+                WHERE cl.status = 'preview'
+                  AND (
+                    lower(COALESCE(b.domain, '')) LIKE '%%.example.test'
+                    OR lower(COALESCE(l.email, '')) LIKE '%%.example.test'
+                    OR lower(COALESCE(l.source, '')) LIKE 'p%%\\_test' ESCAPE '\\'
+                    OR lower(COALESCE(l.source, '')) LIKE 'test%%'
+                  )
+                """
+            ),
+        },
         "scanner_retryable_transient": scalar(
             """
             SELECT count(*)

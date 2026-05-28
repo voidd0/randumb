@@ -81,6 +81,10 @@ def test_admin_metrics_include_mailer_control_room_and_customer_journey():
     assert "latest_mailer_status" in metrics
     assert "customer_journey_snapshots" in metrics
     assert "clean_window_recovery_runs" in metrics
+    assert "production" in metrics
+    assert "qa_artifacts" in metrics
+    assert "real_leads_total" in metrics["production"]
+    assert "test_like_campaign_previews" in metrics["qa_artifacts"]
 
 
 def test_reply_matrix_safe_categories_prepare_only_no_send():

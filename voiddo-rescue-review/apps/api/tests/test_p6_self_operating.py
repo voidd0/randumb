@@ -66,8 +66,9 @@ def test_quality_plugin_manifest_has_huanshu_plus_four_plugins():
     manifest = quality_plugin_manifest()
     assert manifest["canonical"] == "huanshu"
     assert len(manifest["additional_plugins"]) >= 4
-    run = record_quality_plugin_run("axe-core-playwright", "/", "PASS", 100, [])
+    run = record_quality_plugin_run("axe-core-playwright", "/", "PASS", 100, [], None)
     assert run["tool"] == "axe-core-playwright"
+    assert run["artifact_path"] == ""
     assert normalize_quality_tool("huanshu-local-adapter") == "huanshu"
     huanshu_run = record_quality_plugin_run("huashu-design", "/r/demo", "PASS", 100, [])
     assert huanshu_run["tool"] == "huanshu"

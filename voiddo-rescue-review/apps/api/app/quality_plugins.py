@@ -31,6 +31,7 @@ def normalize_quality_tool(tool: str) -> str:
 
 def record_quality_plugin_run(tool: str, target: str, status: str, score: int = 0, issues: list[dict[str, Any]] | None = None, artifact_path: str = "") -> dict[str, Any]:
     tool = normalize_quality_tool(tool)
+    artifact_path = artifact_path or ""
     row = execute(
         """
         INSERT INTO quality_plugin_runs(tool, target, status, score, issues_json, artifact_path)
