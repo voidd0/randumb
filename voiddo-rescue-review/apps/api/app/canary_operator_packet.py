@@ -36,9 +36,9 @@ def build_canary_operator_packet(limit: int = 20, store: bool = True, run_checko
     scoreboard = launch_readiness_scoreboard(safe_limit)
     activation = launch_activation_readiness(safe_limit)
     runbook = launch_activation_runbook(safe_limit)
-    quality = canary_batch_quality(safe_limit, store=True)
-    reply_safety = run_reply_safety_rehearsal(store=True)
-    inbox_integrity = run_inbox_integrity_gate(24, store=True)
+    quality = canary_batch_quality(safe_limit, store=store)
+    reply_safety = run_reply_safety_rehearsal(store=store)
+    inbox_integrity = run_inbox_integrity_gate(24, store=store)
     rehearsal = run_launch_rehearsal(safe_limit, apply_pause=False)
     queue = live_outreach_queue_candidates(safe_limit)
     checkout_simulation = run_canary_checkout_simulation(cleanup_after=True) if run_checkout_simulation else {"decision": "SKIPPED_NOT_REQUESTED", **SAFE_FLAGS}
@@ -115,3 +115,16 @@ def build_canary_operator_packet(limit: int = 20, store: bool = True, run_checko
             ("completed" if not blockers else "blocked", Jsonb(result)),
         )
     return result
+
+
+def latest_canary_operator_packet() -> dict[str, Any]:
+    row = fetch_one(
+        """
+        SELECT result_json
+        FROM agent_runs
+        WHERE agent = 'canary_operator_packet_agent'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    return dict(row["result_json"]) if row and row.get("result_json") else {"decision": "MISSING_CANARY_OPERATOR_PACKET", "blockers": ["packet_not_generated"], **SAFE_FLAGS}

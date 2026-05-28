@@ -83,6 +83,8 @@ export default async function AdminPage() {
   const launchRunbookData = await fetchJson("/admin/launch-activation/runbook?limit=25", authorization ? { Authorization: authorization } : {});
   const launchRehearsalData = await fetchJson("/admin/launch-rehearsal?limit=5", authorization ? { Authorization: authorization } : {});
   const liveQueueData = await fetchJson("/admin/outreach/live-queue?limit=20", authorization ? { Authorization: authorization } : {});
+  const canaryOperatorPacketData = await fetchJson("/admin/outreach/live-queue/operator-packet?limit=20", authorization ? { Authorization: authorization } : {});
+  const canarySendWindowData = await fetchJson("/admin/outreach/live-queue/send-window-plan?limit=20", authorization ? { Authorization: authorization } : {});
   const postSendObserverData = await fetchJson("/admin/outreach/post-send-observer?limit=5", authorization ? { Authorization: authorization } : {});
   const studioMailData = await fetchJson("/admin/studio-mail/messages?limit=8", authorization ? { Authorization: authorization } : {});
   const studioMailRunsData = await fetchJson("/admin/studio-mail/runs?limit=5", authorization ? { Authorization: authorization } : {});
@@ -142,6 +144,8 @@ export default async function AdminPage() {
   const launchActivationHistory = launchActivationData?.history || {};
   const latestLaunchActivationRun = Array.isArray(launchActivationHistory.runs) ? launchActivationHistory.runs[0] || {} : {};
   const liveQueue = liveQueueData?.candidates || {};
+  const canaryOperatorPacket = canaryOperatorPacketData?.packet || {};
+  const canarySendWindow = canarySendWindowData?.plan || {};
   const liveQueueHistory = liveQueueData?.history || {};
   const latestLiveQueueRun = Array.isArray(liveQueueHistory.runs) ? liveQueueHistory.runs[0] || {} : {};
   const postSendObserver = postSendObserverData?.history || {};
@@ -369,6 +373,16 @@ export default async function AdminPage() {
                 <span>{latestLaunchRehearsalRun.passed_step_count ?? 0}/{latestLaunchRehearsalRun.step_count ?? 0} steps</span>
               </div>
               <div className="segment-card">
+                <span className="tag">operator proof</span>
+                <strong>{canaryOperatorPacket.decision ?? "checking"}</strong>
+                <span>{(canaryOperatorPacket.blockers || []).length ?? 0} blockers · sent {canaryOperatorPacket.live_outreach_sent_count ?? 0}</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">send window</span>
+                <strong>{canarySendWindow.decision ?? "checking"}</strong>
+                <span>{canarySendWindow.planned_count ?? 0}/{canarySendWindow.daily_cap ?? 20} slots · max/h {canarySendWindow.max_hourly_domain_count ?? 0}</span>
+              </div>
+              <div className="segment-card">
                 <span className="tag">paid customers</span>
                 <strong>{latestPaidCustomerWatchdogRun.decision ?? "not run"}</strong>
                 <span>{latestPaidCustomerWatchdogRun.checked_customer_count ?? 0} checked · {latestPaidCustomerWatchdogRun.repaired_customer_count ?? 0} repaired</span>
@@ -395,6 +409,20 @@ export default async function AdminPage() {
                 <span>{launchRunbook.status ?? "unknown"}</span>
                 <span>limit {launchRunbook.canary_limit ?? 20}</span>
                 <span>{launchRunbook.operator_guard ?? "guarded"}</span>
+              </div>
+              <div className="segment-row">
+                <span className="readiness-chip">{canaryOperatorPacket.status ?? "packet"}</span>
+                <strong>Redacted canary proof packet</strong>
+                <span>quality {canaryOperatorPacket.canary_quality_decision ?? "unknown"}</span>
+                <span>inbox {canaryOperatorPacket.inbox_integrity_decision ?? "unknown"}</span>
+                <span>reply {canaryOperatorPacket.reply_safety_decision ?? "unknown"}</span>
+              </div>
+              <div className="segment-row">
+                <span className="readiness-chip">{canarySendWindow.status ?? "window"}</span>
+                <strong>First-day no-send window</strong>
+                <span>{canarySendWindow.planned_count ?? 0} planned</span>
+                <span>observer 30m</span>
+                <span>rollback guarded</span>
               </div>
               <div className="segment-row">
                 <span className="readiness-chip">{leadStockpile.decision ?? "stockpile"}</span>

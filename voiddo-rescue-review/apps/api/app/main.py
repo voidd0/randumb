@@ -103,8 +103,8 @@ from .lead_stockpile_health import latest_lead_stockpile_health_runs, lead_stock
 from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates, stage_live_outreach_batch
 from .canary_batch_quality import canary_batch_quality
 from .canary_checkout_simulation import run_canary_checkout_simulation
-from .canary_operator_packet import build_canary_operator_packet
-from .canary_send_window_plan import build_canary_send_window_plan
+from .canary_operator_packet import build_canary_operator_packet, latest_canary_operator_packet
+from .canary_send_window_plan import build_canary_send_window_plan, latest_canary_send_window_plan
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
@@ -586,10 +586,20 @@ async def outreach_live_queue_operator_packet_post(request: Request):
     }
 
 
+@app.get("/admin/outreach/live-queue/operator-packet", dependencies=[Depends(require_admin)])
+def outreach_live_queue_operator_packet_get(limit: int = 20):
+    return {"ok": True, "packet": latest_canary_operator_packet()}
+
+
 @app.post("/admin/outreach/live-queue/send-window-plan", dependencies=[Depends(require_admin)])
 async def outreach_live_queue_send_window_plan_post(request: Request):
     payload = await request.json()
     return {"ok": True, "plan": build_canary_send_window_plan(int(payload.get("limit", 20)), store=True)}
+
+
+@app.get("/admin/outreach/live-queue/send-window-plan", dependencies=[Depends(require_admin)])
+def outreach_live_queue_send_window_plan_get(limit: int = 20):
+    return {"ok": True, "plan": latest_canary_send_window_plan()}
 
 
 @app.post("/admin/outreach/live-queue/stage", dependencies=[Depends(require_admin)])

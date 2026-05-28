@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from psycopg.types.json import Jsonb
 
 from .canary_operator_packet import build_canary_operator_packet
-from .db import execute
+from .db import execute, fetch_one
 from .outreach_live_queue import live_outreach_queue_candidates
 from .p0 import json_safe
 
@@ -98,3 +98,16 @@ def build_canary_send_window_plan(limit: int = 20, store: bool = True) -> dict[s
             ("completed" if not blockers else "blocked", Jsonb(result)),
         )
     return result
+
+
+def latest_canary_send_window_plan() -> dict[str, Any]:
+    row = fetch_one(
+        """
+        SELECT result_json
+        FROM agent_runs
+        WHERE agent = 'canary_send_window_plan_agent'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    return dict(row["result_json"]) if row and row.get("result_json") else {"decision": "MISSING_CANARY_WINDOW_PLAN", "blockers": ["window_plan_not_generated"], **SAFE_FLAGS}
