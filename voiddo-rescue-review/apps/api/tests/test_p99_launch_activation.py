@@ -11,6 +11,7 @@ from app.launch_activation import apply_launch_activation, launch_activation_rea
 from app.main import app
 from app.outreach_live_queue import live_outreach_queue_candidates, stage_live_outreach_batch
 from app.canary_batch_quality import canary_batch_quality
+from app.canary_checkout_simulation import run_canary_checkout_simulation
 from app.p0 import transport_gate_status
 
 
@@ -24,6 +25,7 @@ def admin_headers() -> dict[str, str]:
 def _cleanup(token: str) -> None:
     execute("DELETE FROM launch_activation_runs WHERE result_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM agent_runs WHERE agent = 'canary_batch_quality_agent' AND result_json::text LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM agent_runs WHERE agent = 'canary_checkout_simulation_agent' AND result_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM outreach_messages WHERE subject LIKE %s OR body LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM campaign_preflight_runs WHERE result_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM campaign_preview_reviews WHERE campaign_lead_id IN (SELECT id FROM campaign_leads WHERE preview_json::text LIKE %s)", (f"%{token}%",))
@@ -220,3 +222,13 @@ def test_transport_gate_exposes_live_quota_and_blocks_daily_cap():
         assert gate["checks"]["live_quota"]["raw_recipient_addresses_included"] is False
     finally:
         _cleanup(token)
+
+
+def test_canary_checkout_simulation_blocks_when_no_candidate(monkeypatch):
+    import app.canary_checkout_simulation as simulation
+
+    monkeypatch.setattr(simulation, "canary_batch_quality", lambda limit, store=False: {"items": [], "send_mail": False, "live_outreach_allowed": False})
+    result = run_canary_checkout_simulation(cleanup_after=True)
+    assert result["decision"] == "NO_CANARY_CANDIDATE"
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
