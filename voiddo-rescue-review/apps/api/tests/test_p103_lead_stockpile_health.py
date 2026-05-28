@@ -110,6 +110,40 @@ def test_lead_stockpile_run_records_evidence_without_apply(monkeypatch):
         execute("DELETE FROM lead_stockpile_health_runs WHERE id = %s", (result["run_id"],))
 
 
+def test_lead_stockpile_apply_discovers_sources_when_target_stockpile_is_short(monkeypatch):
+    _patch_snapshot_inputs(monkeypatch, approved=25, live_candidates=20, source_candidates=0)
+    calls: list[str] = []
+
+    def fake_discovery(limit_targets=3, per_target_limit=25, dry_run=False):
+        calls.append("discovery")
+        return {
+            "status": "completed",
+            "created_sources": 2,
+            "found_count": 12,
+            "with_email_count": 3,
+            "send_mail": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+
+    monkeypatch.setattr(stockpile_module, "regional_lead_discovery_cycle", fake_discovery)
+    monkeypatch.setattr(stockpile_module, "refresh_campaign_previews_if_needed", lambda *args, **kwargs: {"status": "refreshed_no_send", "send_mail": False})
+    monkeypatch.setattr(stockpile_module, "auto_review_campaign_previews", lambda *args, **kwargs: {"status": "completed", "send_mail": False})
+    monkeypatch.setattr(stockpile_module, "queue_outreach_preview", lambda *args, **kwargs: {"created": 0, "send_mail": False})
+    monkeypatch.setattr(stockpile_module, "campaign_preflight_batch", lambda *args, **kwargs: {"status": "completed", "send_mail": False})
+
+    result = run_lead_stockpile_health(50, 20, 100, apply=True)
+    try:
+        assert calls == ["discovery"]
+        action_names = [item["name"] for item in result["actions"]["executed"]]
+        assert "regional_lead_discovery_cycle" in action_names
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        execute("DELETE FROM lead_stockpile_health_runs WHERE id = %s", (result["run_id"],))
+
+
 def test_lead_stockpile_admin_and_agents_are_gated_no_send(monkeypatch):
     _patch_snapshot_inputs(monkeypatch, approved=21, live_candidates=20)
     assert client.get("/admin/lead-stockpile-health").status_code == 401
