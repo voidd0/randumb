@@ -132,7 +132,7 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None) -> tup
 def send_message_if_allowed(message_id: str) -> dict:
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, lead_id, audit_id, mailbox, subject, body, status FROM outreach_messages WHERE id = %s", (message_id,))
+            cur.execute("SELECT id, lead_id, audit_id, mailbox, subject, body, html_body, status FROM outreach_messages WHERE id = %s", (message_id,))
             message = cur.fetchone()
             if not message:
                 return {"sent": False, "reason": "message_not_found"}
@@ -172,6 +172,8 @@ def send_message_if_allowed(message_id: str) -> dict:
         msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     msg.set_content(message["body"])
+    if message.get("html_body"):
+        msg.add_alternative(message["html_body"], subtype="html")
     with smtplib.SMTP(os.environ.get("SMTP_HOST", "mail.voiddo.com"), int(os.environ.get("SMTP_PORT", "587")), timeout=30) as smtp:
         smtp.ehlo()
         smtp.starttls(context=ssl.create_default_context())

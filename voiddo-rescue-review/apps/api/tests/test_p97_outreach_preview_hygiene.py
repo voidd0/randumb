@@ -126,6 +126,11 @@ def test_queue_outreach_preview_remains_dry_run_and_suppresses_raw_recipients():
         assert result["smtp_called"] is False
         assert result["live_outreach_allowed"] is False
         assert result["raw_recipient_addresses_included"] is False
+        row = fetch_one("SELECT body, html_body FROM outreach_messages WHERE body LIKE %s ORDER BY created_at DESC LIMIT 1", (f"%qa97-{token}.clinic%",))
+        assert row
+        assert "/unsubscribe/u_" in row["body"]
+        assert row["html_body"].startswith("<!doctype html>")
+        assert "Managed website rescue by vøiddo" in row["html_body"]
     finally:
         if preview_batch_id:
             execute("DELETE FROM outreach_preview_batches WHERE id = %s", (preview_batch_id,))

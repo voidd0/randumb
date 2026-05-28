@@ -29,6 +29,7 @@ from psycopg.types.json import Jsonb
 from .billing import PRODUCTS, price_id_for
 from .config import Settings, get_settings
 from .db import connect_dict, execute, fetch_all, fetch_one
+from .email_templates import render_email_template
 from .inbox import classify_reply
 from .security import lead_id_from_unsubscribe_token, unsubscribe_token_for_lead
 
@@ -2495,6 +2496,7 @@ def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
         SELECT
                cl.id AS campaign_lead_id,
                cl.campaign_id,
+               cl.audit_id,
                l.id AS lead_id,
                l.email,
                b.name AS business_name,
@@ -2543,6 +2545,7 @@ def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
             {
                 "campaign_lead_id": str(row["campaign_lead_id"]),
                 "campaign_id": str(row["campaign_id"]),
+                "audit_id": str(row["audit_id"]),
                 "lead_id": str(row["lead_id"]),
                 "recipient_hash": hashlib.sha256(str(row["email"]).strip().lower().encode("utf-8")).hexdigest()[:24],
                 "business_name": row["business_name"],
@@ -2577,17 +2580,26 @@ def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
     preview_batch = prepare_outreach_preview(limit)
     created = 0
     for item in preview_batch["preview_json"]:
-        body = (
-            f"Hi team,\n\nI checked {item['domain']} today and found a possible issue that may affect customer enquiries:\n\n"
-            f"{item['main_issue_short']}\n\nScreenshots and test details:\n{item['audit_url']}\n\n"
-            f"Public non-invasive website check.\nUnsubscribe: {item['unsubscribe_url']}"
+        rendered = render_email_template(
+            "first_audit_notice",
+            "en",
+            {
+                "business_name": item["business_name"],
+                "name_or_team": "team",
+                "domain": item["domain"],
+                "main_issue_short": item["main_issue_short"],
+                "audit_url": item["audit_url"],
+                "unsubscribe_url": item["unsubscribe_url"],
+                "one_time_price": "$99",
+                "monthly_price": "$19",
+            },
         )
         execute(
             """
-            INSERT INTO outreach_messages(lead_id, mailbox, subject, body, status)
-            VALUES (%s, 'audit@voiddorescue.com', %s, %s, 'preview')
+            INSERT INTO outreach_messages(lead_id, audit_id, mailbox, subject, body, html_body, status)
+            VALUES (%s, %s, 'audit@voiddorescue.com', %s, %s, %s, 'preview')
             """,
-            (item["lead_id"], f"Possible issue on {item['business_name']} website", body),
+            (item["lead_id"], item["audit_id"], rendered["subject"], rendered["text"], rendered["html"]),
         )
         created += 1
     return {
