@@ -14,6 +14,7 @@ from .outreach_post_send_observer import outreach_post_send_observer
 from .p0 import json_safe
 from .quality_plugins import latest_quality_summary
 from .reply_safety_rehearsal import run_reply_safety_rehearsal
+from .inbox_integrity_gate import run_inbox_integrity_gate
 
 
 SAFE_FLAGS = {
@@ -46,6 +47,7 @@ def run_launch_rehearsal(limit: int = 20, apply_pause: bool = False) -> dict[str
     mailer = mailer_policy_score()
     visual = latest_quality_summary()
     reply_safety = run_reply_safety_rehearsal(store=True)
+    inbox_integrity = run_inbox_integrity_gate(24, store=True)
     huanshu_rows = [
         row for row in (visual or {}).get("runs", [])
         if row.get("tool") == "huanshu"
@@ -133,6 +135,22 @@ def run_launch_rehearsal(limit: int = 20, apply_pause: bool = False) -> dict[str
                 "auto_replies_paused": reply_safety.get("auto_replies_paused"),
             },
             "reply_safety_rehearsal_not_pass",
+        ),
+        _step(
+            "inbox_integrity_gate_pass",
+            inbox_integrity.get("decision") == "PASS_INBOX_INTEGRITY_GATE"
+            and inbox_integrity.get("send_mail") is False
+            and inbox_integrity.get("live_outreach_allowed") is False
+            and int(inbox_integrity.get("raw_email_event_payload_count") or 0) == 0
+            and int(inbox_integrity.get("raw_email_system_event_payload_count") or 0) == 0,
+            {
+                "decision": inbox_integrity.get("decision"),
+                "event_count": inbox_integrity.get("event_count"),
+                "system_event_count": inbox_integrity.get("system_event_count"),
+                "blockers": inbox_integrity.get("blockers"),
+                "auto_replies_paused": inbox_integrity.get("auto_replies_paused"),
+            },
+            "inbox_integrity_gate_not_pass",
         ),
         _step(
             "visual_quality_clean",
