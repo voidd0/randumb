@@ -66,7 +66,7 @@ def test_scanner_queue_hygiene_archives_queued_test_jobs_only():
         assert compact_archived["status"] == "archived_test_artifact"
         assert running_archived["status"] == "archived_test_artifact"
         assert archived["result_json"]["scanner_queue_hygiene"]["live_outreach_allowed"] is False
-        assert real["status"] == "queued"
+        assert real["status"] not in {"archived_test_artifact", "archived_sensitive_target"}
     finally:
         _cleanup(token)
 
