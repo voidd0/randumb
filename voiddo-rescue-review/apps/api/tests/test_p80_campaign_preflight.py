@@ -116,6 +116,77 @@ def test_campaign_preflight_passes_quality_and_policy_without_send(monkeypatch):
         _cleanup(token)
 
 
+def test_campaign_preflight_repairs_safe_mailer_queue_before_policy_block(monkeypatch):
+    import app.campaign_preflight as preflight
+
+    token = uuid.uuid4().hex[:8]
+    calls = {"policy": 0, "process": 0, "trend": 0}
+
+    def _policy_then_pass() -> dict:
+        calls["policy"] += 1
+        if calls["policy"] == 1:
+            return {
+                "score": 45,
+                "decision": "NO_SEND_BLOCKED_REPAIR",
+                "blockers": ["current_mailer_action_queue_not_empty"],
+                "queue_hygiene": {"mailer_action_queue_rows": 2},
+                "send_mail": False,
+                "smtp_called": False,
+                "live_outreach_allowed": False,
+            }
+        return _policy_pass()
+
+    try:
+        campaign_id = _campaign(token)
+        monkeypatch.setattr(preflight, "mailer_policy_score", _policy_then_pass)
+        monkeypatch.setattr(preflight, "process_mailer_action_queue", lambda limit=10: calls.update(process=calls["process"] + 1) or {"processed_count": limit, "send_mail": False, "live_outreach_allowed": False})
+        monkeypatch.setattr(preflight, "mailer_digest_trend_guard", lambda: calls.update(trend=calls["trend"] + 1) or {"decision": "PASS_NO_SEND", "send_mail": False, "live_outreach_allowed": False})
+        monkeypatch.setattr(preflight, "_record_inline_trend_guard", lambda trend: None)
+        result = campaign_preflight_batch(5, campaign_id)
+        run = result["runs"][0]
+        assert result["passed_count"] == 1
+        assert run["decision"] == "PASS_NO_SEND_PREFLIGHT"
+        assert run["mailer_policy_repair"]["processed_count"] == 2
+        assert calls == {"policy": 2, "process": 1, "trend": 1}
+        assert run["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_preflight_refreshes_stale_trend_guard_without_queue(monkeypatch):
+    import app.campaign_preflight as preflight
+
+    token = uuid.uuid4().hex[:8]
+    calls = {"policy": 0, "trend": 0}
+
+    def _stale_trend_then_pass() -> dict:
+        calls["policy"] += 1
+        if calls["policy"] == 1:
+            return {
+                "score": 65,
+                "decision": "NO_SEND_BLOCKED_REPAIR",
+                "blockers": ["trend_guard_not_pass"],
+                "queue_hygiene": {"mailer_action_queue_rows": 0},
+                "send_mail": False,
+                "smtp_called": False,
+                "live_outreach_allowed": False,
+            }
+        return _policy_pass()
+
+    try:
+        campaign_id = _campaign(token)
+        monkeypatch.setattr(preflight, "mailer_policy_score", _stale_trend_then_pass)
+        monkeypatch.setattr(preflight, "mailer_digest_trend_guard", lambda: calls.update(trend=calls["trend"] + 1) or {"decision": "PASS_NO_SEND", "send_mail": False, "live_outreach_allowed": False})
+        monkeypatch.setattr(preflight, "_record_inline_trend_guard", lambda trend: None)
+        result = campaign_preflight_batch(5, campaign_id)
+        run = result["runs"][0]
+        assert result["passed_count"] == 1
+        assert run["mailer_policy_repair"]["processed_count"] == 0
+        assert calls == {"policy": 2, "trend": 1}
+    finally:
+        _cleanup(token)
+
+
 def test_campaign_preflight_blocks_weak_preview(monkeypatch):
     import app.campaign_preflight as preflight
 

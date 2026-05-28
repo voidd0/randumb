@@ -8,7 +8,8 @@ from .campaign_preview_quality import campaign_preview_quality_pack
 from .campaign_preview_reviews import campaign_preview_review_summary
 from .campaign_preflight_status import PREFLIGHT_FRESH_MINUTES, latest_campaign_preflight_status
 from .db import execute, fetch_all, fetch_one
-from .mailer_control_room import mailer_policy_score
+from .mailer_action_queue import process_mailer_action_queue
+from .mailer_control_room import mailer_digest_trend_guard, mailer_policy_score
 from .p0 import json_safe, transport_gate_status
 
 
@@ -42,10 +43,39 @@ def _campaign_ids(limit: int, campaign_id: str | None = None) -> list[str]:
     return [str(row["id"]) for row in rows]
 
 
+def _record_inline_trend_guard(trend: dict[str, Any]) -> None:
+    execute(
+        """
+        INSERT INTO agent_runs(agent, status, result_json, started_at, completed_at)
+        VALUES ('mailer_digest_trend_guard_agent', 'completed', %s, now(), now())
+        """,
+        (Jsonb(trend),),
+    )
+
+
 def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
     quality = campaign_preview_quality_pack(campaign_id, limit)
     reviews = campaign_preview_review_summary(campaign_id)
     policy = mailer_policy_score()
+    policy_repair = None
+    policy_blockers = policy.get("blockers") or []
+    if policy.get("decision") == "NO_SEND_BLOCKED_REPAIR" and (
+        "current_mailer_action_queue_not_empty" in policy_blockers or "trend_guard_not_pass" in policy_blockers
+    ):
+        queued = int(((policy.get("queue_hygiene") or {}).get("mailer_action_queue_rows") or 0))
+        if queued <= 20:
+            processed = process_mailer_action_queue(limit=queued) if queued > 0 else {"processed_count": 0}
+            trend = mailer_digest_trend_guard()
+            _record_inline_trend_guard(trend)
+            policy = mailer_policy_score()
+            policy_repair = {
+                "attempted": True,
+                "processed_count": int(processed.get("processed_count") or 0),
+                "trend_decision": trend.get("decision"),
+                "send_mail": False,
+                "smtp_called": False,
+                "live_outreach_allowed": False,
+            }
     transport = transport_gate_status({"email": "redacted@example.test", "body": "Unsubscribe: https://go.rescue.voiddo.com/unsubscribe/preview"})
 
     blockers: list[str] = []
@@ -79,6 +109,7 @@ def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
             "preview_review_summary": reviews,
             "mailer_policy_score": int(policy.get("score") or 0),
             "mailer_policy_decision": policy.get("decision"),
+            "mailer_policy_repair": policy_repair,
             "transport_allowed": bool(transport.get("allowed")),
             "transport_reason": transport.get("reason"),
             **SAFE_FLAGS,
