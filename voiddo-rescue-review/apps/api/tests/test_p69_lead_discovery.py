@@ -130,6 +130,42 @@ def test_overpass_lead_discovery_records_empty_source_without_preflight_candidat
         _cleanup(name)
 
 
+def test_overpass_lead_discovery_filters_excluded_large_brands_before_source_readiness(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    city = f"RetailCity{token}"
+    name = f"overpass-US-{city}-contractors"
+    monkeypatch.setitem(discovery_module.CITY_AREAS, ("US", city.lower()), city)
+    monkeypatch.setattr(
+        discovery_module,
+        "_fetch_overpass",
+        lambda query: {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 456,
+                    "tags": {
+                        "name": "Home Depot",
+                        "website": "https://homedepot.com",
+                    },
+                }
+            ]
+        },
+    )
+    try:
+        result = overpass_lead_discovery("US", city, "contractors", "en", 10, dry_run=False)
+        assert result["status"] == "empty_source_recorded"
+        assert result["source_status"] == "no_safe_public_rows"
+        assert result["found_count"] == 0
+        assert result["excluded_row_count"] == 1
+        source = fetch_one("SELECT status, config_json FROM scout_sources WHERE id = %s", (result["source_id"],))
+        assert source["status"] == "no_safe_public_rows"
+        assert source["config_json"]["discovery_result"] == "only_excluded_or_sensitive_rows"
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup(name)
+
+
 def test_apollo_organization_discovery_is_gated_and_redacted(monkeypatch):
     token = uuid.uuid4().hex[:8]
     city = f"ApolloCity{token}"

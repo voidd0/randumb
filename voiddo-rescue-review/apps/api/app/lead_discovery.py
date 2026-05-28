@@ -10,7 +10,7 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from .db import fetch_all
-from .scouts import create_scout_source, run_scout_source_readiness, website_url_for
+from .scouts import create_scout_source, is_excluded_sensitive_target, run_scout_source_readiness, website_url_for
 
 TEST_COUNTRY_PATTERN = r"^(P7|P8|P9|P10|P11|P12|P59|P60|P61|P62|P63|P68|P72|P73|P74)"
 
@@ -666,6 +666,7 @@ def overpass_lead_discovery(
     payload = _fetch_overpass(query)
     rows = []
     seen_sites: set[str] = set()
+    excluded_row_count = 0
     for element in payload.get("elements") or []:
         row = _element_to_row(element, country, city, language, niche)
         if not row:
@@ -674,11 +675,15 @@ def overpass_lead_discovery(
         if site_key in seen_sites:
             continue
         seen_sites.add(site_key)
+        if is_excluded_sensitive_target(row.get("business_name", ""), row.get("website_url", ""), row.get("website_url", ""), niche):
+            excluded_row_count += 1
+            continue
         rows.append(row)
         if len(rows) >= safe_limit:
             break
     csv_text = _rows_to_csv(rows)
-    source_status = "preflight_ready" if rows else "no_rows_public_source"
+    source_status = "preflight_ready" if rows else ("no_safe_public_rows" if excluded_row_count else "no_rows_public_source")
+    discovery_result = "rows_found" if rows else ("only_excluded_or_sensitive_rows" if excluded_row_count else "no_public_rows_found")
     source = create_scout_source(
         {
             "name": f"overpass-{country.upper()}-{city}-{niche}",
@@ -690,7 +695,8 @@ def overpass_lead_discovery(
             "config_json": {
                 "csv": csv_text,
                 "source": "overpass_osm_public_poi",
-                "discovery_result": "rows_found" if rows else "no_public_rows_found",
+                "discovery_result": discovery_result,
+                "excluded_row_count": excluded_row_count,
             },
         }
     )
@@ -705,6 +711,7 @@ def overpass_lead_discovery(
         "niche": niche,
         "language": language,
         "found_count": len(rows),
+        "excluded_row_count": excluded_row_count,
         "with_email_count": len([row for row in rows if row.get("email")]),
         "with_website_count": len([row for row in rows if row.get("website_url")]),
         "readiness": {
