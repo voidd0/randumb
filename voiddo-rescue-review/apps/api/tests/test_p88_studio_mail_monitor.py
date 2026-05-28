@@ -10,7 +10,7 @@ from app.db import execute, fetch_one
 from app.main import app
 from app.autonomous_agents import run_agent
 from app.owner_command_control import owner_command_control_summary
-from app.studio_mail_monitor import classify_studio_mail, ingest_studio_mail_messages, latest_studio_mail_messages
+from app.studio_mail_monitor import classify_studio_mail, ingest_studio_mail_messages, latest_studio_mail_messages, studio_mail_monitor_health
 
 
 client = TestClient(app)
@@ -132,6 +132,34 @@ def test_owner_command_agent_is_redacted_no_send(monkeypatch):
     finally:
         _cleanup(token)
         get_settings.cache_clear()
+
+
+def test_studio_mail_monitor_health_tracks_fresh_timer_runs():
+    token = uuid.uuid4().hex[:8]
+    try:
+        result = ingest_studio_mail_messages([_message(token, f"sender-{token}@example.test", "health", f"health {token}")], dry_run=True)
+        assert result["scanned_count"] == 1
+        health = studio_mail_monitor_health(15)
+        assert health["status"] == "PASS_STUDIO_MAIL_MONITOR_HEALTH"
+        assert health["decision"] == "PASS"
+        assert health["latest_run"]["age_seconds"] <= 15 * 60
+        assert health["send_mail"] is False
+        assert health["live_outreach_allowed"] is False
+        agent = run_agent("studio_mail_monitor_health_agent", {"max_age_minutes": 15})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["status"] == "PASS_STUDIO_MAIL_MONITOR_HEALTH"
+    finally:
+        _cleanup(token)
+
+
+def test_studio_mail_alias_uses_x_original_to_for_catchall_messages():
+    token = uuid.uuid4().hex[:8]
+    message = _message(token, f"person-{token}@example.test", "support", "support body", "em@voiddo.com")
+    message["x_original_to"] = "support@voiddo.com"
+    classified = classify_studio_mail(message)
+    assert classified["alias"] == "support@voiddo.com"
+    assert classified["classification"] == "personal_or_support"
+    assert classified["human_review_required"] is True
 
 
 def test_studio_mail_classifies_unsubscribe_and_suppresses_without_reply():

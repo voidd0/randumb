@@ -63,7 +63,7 @@ from .campaign_preview_hygiene import archive_campaign_preview_artifacts, archiv
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .campaign_preview_reviews import auto_review_campaign_previews
 from .campaign_review_remediation import held_preview_remediation_candidates, remediate_held_preview_reviews
-from .studio_mail_monitor import latest_studio_mail_messages
+from .studio_mail_monitor import latest_studio_mail_messages, studio_mail_monitor_health
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
 from .lead_discovery import apollo_organization_discovery, lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, quality_aware_regional_target_plan, regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle, stockpile_expansion_target_plan
 from .revenue_simulation import run_synthetic_lead_simulation
@@ -310,6 +310,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("limit", 25)),
         ),
         "studio_mail_monitor_agent": lambda: latest_studio_mail_messages(int(payload.get("limit", 20))),
+        "studio_mail_monitor_health_agent": lambda: studio_mail_monitor_health(int(payload.get("max_age_minutes", 15))),
         "visual_qa_agent": lambda: visual_qa_evidence_snapshot(),
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
         "deliverability_agent": lambda: {"dry_run": True, "signals": mail_signal_summary()},
@@ -574,6 +575,8 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("mail_qa_agent", {}),
         ("mailer_status_agent", {}),
         ("mail_signal_learning_agent", {}),
+        ("studio_mail_monitor_health_agent", {"max_age_minutes": 15}),
+        ("studio_mail_monitor_agent", {"limit": 20}),
         ("clean_window_recheck_agent", {}),
         ("post_window_recheck_agent", {}),
         ("warmup_block_recovery_snapshot_agent", {"limit": 50}),

@@ -7,7 +7,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .config import get_settings
-from .db import execute, fetch_all
+from .db import execute, fetch_all, fetch_one
 from .p0 import json_safe, store_owner_command
 
 
@@ -431,5 +431,50 @@ def latest_studio_mail_runs(limit: int = 10) -> dict[str, Any]:
             }
             for row in rows
         ],
+        **SAFE_FLAGS,
+    }
+
+
+def studio_mail_monitor_health(max_age_minutes: int = 15) -> dict[str, Any]:
+    max_age_minutes = max(1, min(int(max_age_minutes or 15), 120))
+    latest = fetch_one(
+        """
+        SELECT status, dry_run, scanned_count, stored_count, owner_command_count,
+               high_priority_count, human_review_count, send_mail, smtp_called,
+               live_outreach_allowed, raw_private_addresses_included, secrets_included,
+               extract(epoch from (now() - created_at)) AS age_seconds,
+               created_at
+        FROM studio_mail_monitor_runs
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    blockers: list[str] = []
+    if not latest:
+        blockers.append("missing_studio_mail_monitor_run")
+    else:
+        age_seconds = int(latest["age_seconds"] or 0)
+        if age_seconds > max_age_minutes * 60:
+            blockers.append("studio_mail_monitor_stale")
+        for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_private_addresses_included", "secrets_included"]:
+            if latest.get(flag):
+                blockers.append(f"unsafe_{flag}")
+    decision = "PASS" if not blockers else "FAIL_BLOCK_LAUNCH"
+    return {
+        "status": "PASS_STUDIO_MAIL_MONITOR_HEALTH" if decision == "PASS" else "FAIL_STUDIO_MAIL_MONITOR_HEALTH",
+        "decision": decision,
+        "blockers": blockers,
+        "max_age_minutes": max_age_minutes,
+        "latest_run": {
+            "status": latest.get("status") if latest else "MISSING",
+            "dry_run": bool(latest.get("dry_run")) if latest else None,
+            "age_seconds": int(latest.get("age_seconds") or 0) if latest else None,
+            "scanned_count": int(latest.get("scanned_count") or 0) if latest else 0,
+            "stored_count": int(latest.get("stored_count") or 0) if latest else 0,
+            "owner_command_count": int(latest.get("owner_command_count") or 0) if latest else 0,
+            "high_priority_count": int(latest.get("high_priority_count") or 0) if latest else 0,
+            "human_review_count": int(latest.get("human_review_count") or 0) if latest else 0,
+            "created_at": latest["created_at"].isoformat() if latest and latest.get("created_at") else None,
+        },
         **SAFE_FLAGS,
     }
