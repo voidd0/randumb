@@ -13,6 +13,7 @@ from app.campaign_review_remediation import held_preview_remediation_candidates,
 from app.db import execute, fetch_one
 from app.lead_scoring import score_lead
 from app.main import app
+from app.p0 import queue_outreach_preview
 from app.scouts import create_campaign, prepare_campaign_gated
 
 
@@ -25,6 +26,8 @@ def admin_headers() -> dict[str, str]:
 
 def _cleanup(token: str) -> None:
     execute("DELETE FROM agent_runs WHERE agent IN ('campaign_control_room_agent', 'campaign_control_room_prepare_agent') AND result_json::text LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM outreach_messages WHERE body LIKE %s OR subject LIKE %s", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM outreach_preview_batches WHERE preview_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM campaign_review_remediation_runs WHERE result_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM scanner_jobs WHERE url LIKE %s OR result_json::text LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM codex_tasks WHERE input_json::text LIKE %s", (f"%{token}%",))
@@ -177,6 +180,10 @@ def test_campaign_preview_rows_show_latest_no_send_preflight_decision():
             }
         )
         prepare_campaign_gated(str(campaign["id"]), 70, 20)
+        campaign_lead = fetch_one("SELECT id FROM campaign_leads WHERE campaign_id = %s LIMIT 1", (campaign["id"],))
+        review_campaign_preview(str(campaign_lead["id"]), "approved", "QA59 preflight status approved")
+        queued = queue_outreach_preview(100)
+        assert queued["send_mail"] is False
         execute(
             """
             INSERT INTO campaign_readiness_snapshots(campaign_id, status, lead_count, qualified_count, min_audit_strength, economics_decision, mail_safety_decision, visual_safety_decision, blockers_json, summary_json)
