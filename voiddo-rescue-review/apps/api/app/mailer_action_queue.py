@@ -99,6 +99,106 @@ def _audit_recipient_resolution(action: dict[str, Any], customer_id: str | None,
     )
 
 
+def archive_mailer_nonactionable_artifacts() -> dict[str, Any]:
+    """Archive no-send customer-mail artifacts that are known to be non-actionable.
+
+    These rows can be created by sandbox checkout/customer lifecycle tests or by
+    historical QA-domain runs. They must not count as live mail policy blockers,
+    but real customer transport failures remain visible.
+    """
+    qa_queue = execute(
+        """
+        WITH updated AS (
+            UPDATE mailer_action_queue
+            SET status = 'archived_test_artifact',
+                result_json = COALESCE(result_json, '{}'::jsonb) || '{"archived_by":"mailer_nonactionable_artifact_hygiene"}'::jsonb,
+                updated_at = now()
+            WHERE action_type = ANY(%s)
+              AND status IN ('queued', 'send_ready', 'blocked', 'gate_blocked', 'transport_blocked', 'review_required')
+              AND (
+                    payload_json->>'customer_is_qa' = 'true'
+                 OR COALESCE(result_json->'blockers', '[]'::jsonb) ? 'customer_email_test_domain'
+                 OR COALESCE(gate_result_json->'blockers', '[]'::jsonb) ? 'customer_mail_qa_artifact'
+              )
+            RETURNING id
+        )
+        SELECT count(*) AS count FROM updated
+        """,
+        (list(CUSTOMER_MAIL_ACTIONS),),
+    )
+    qa_ledger = execute(
+        """
+        WITH updated AS (
+            UPDATE mailer_send_ledger
+            SET status = 'archived_test_artifact',
+                result_json = COALESCE(result_json, '{}'::jsonb) || '{"archived_by":"mailer_nonactionable_artifact_hygiene"}'::jsonb,
+                updated_at = now()
+            WHERE action_type = ANY(%s)
+              AND status IN ('transport_blocked', 'failed')
+              AND (
+                    COALESCE(result_json->'blockers', '[]'::jsonb) ? 'customer_email_test_domain'
+                 OR COALESCE(gate_result_json->'blockers', '[]'::jsonb) ? 'customer_mail_qa_artifact'
+              )
+            RETURNING id
+        )
+        SELECT count(*) AS count FROM updated
+        """,
+        (list(CUSTOMER_MAIL_ACTIONS),),
+    )
+    orphan_queue = execute(
+        """
+        WITH updated AS (
+            UPDATE mailer_action_queue maq
+            SET status = 'archived_orphaned_customer_action',
+                result_json = COALESCE(maq.result_json, '{}'::jsonb) || '{"archived_by":"mailer_nonactionable_artifact_hygiene","reason":"customer_record_missing"}'::jsonb,
+                updated_at = now()
+            WHERE maq.action_type = ANY(%s)
+              AND maq.status IN ('transport_blocked', 'failed')
+              AND COALESCE(maq.result_json->'blockers', '[]'::jsonb) ? 'customer_not_found'
+              AND NULLIF(maq.payload_json->>'customer_id', '') IS NOT NULL
+              AND (maq.payload_json->>'customer_id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM customers c
+                    WHERE c.id = NULLIF(maq.payload_json->>'customer_id', '')::uuid
+              )
+            RETURNING id
+        )
+        SELECT count(*) AS count FROM updated
+        """,
+        (list(CUSTOMER_MAIL_ACTIONS),),
+    )
+    orphan_ledger = execute(
+        """
+        WITH updated AS (
+            UPDATE mailer_send_ledger msl
+            SET status = 'archived_orphaned_customer_action',
+                result_json = COALESCE(msl.result_json, '{}'::jsonb) || '{"archived_by":"mailer_nonactionable_artifact_hygiene","reason":"customer_record_missing"}'::jsonb,
+                updated_at = now()
+            FROM mailer_action_queue maq
+            WHERE msl.action_id = maq.id
+              AND msl.action_type = ANY(%s)
+              AND msl.status IN ('transport_blocked', 'failed')
+              AND COALESCE(msl.result_json->'blockers', '[]'::jsonb) ? 'customer_not_found'
+              AND maq.status = 'archived_orphaned_customer_action'
+            RETURNING msl.id
+        )
+        SELECT count(*) AS count FROM updated
+        """,
+        (list(CUSTOMER_MAIL_ACTIONS),),
+    )
+    return json_safe(
+        {
+            "archived_queue_test_artifacts": int(qa_queue["count"] or 0) if qa_queue else 0,
+            "archived_ledger_test_artifacts": int(qa_ledger["count"] or 0) if qa_ledger else 0,
+            "archived_queue_orphaned_customer_actions": int(orphan_queue["count"] or 0) if orphan_queue else 0,
+            "archived_ledger_orphaned_customer_actions": int(orphan_ledger["count"] or 0) if orphan_ledger else 0,
+            "send_mail": False,
+            "live_outreach_allowed": False,
+        }
+    )
+
+
 def resolve_customer_recipient(action: dict[str, Any]) -> dict[str, Any]:
     payload = action.get("payload_json") or {}
     customer_id = str(payload.get("customer_id") or "")
@@ -172,6 +272,20 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
     signals = mail_signal_summary(24)
     blockers: list[str] = []
     action_type = action["action_type"]
+    payload = action.get("payload_json") or {}
+    if action_type in CUSTOMER_MAIL_ACTIONS and payload.get("customer_is_qa"):
+        return {
+            "status": "archived_test_artifact",
+            "blockers": ["customer_mail_qa_artifact"],
+            "send_mail": False,
+            "send_ready": False,
+            "live_outreach_allowed": False,
+            "customer_mail": True,
+            "throttle": None,
+            "template_qa": None,
+            "campaign_preflight": None,
+            "reason": "archived_test_artifact",
+        }
     if action_type in HIGH_RISK_ACTIONS:
         blockers.append("high_risk_action_requires_review")
     if action_type in {"cold_outreach", "send_outreach", "outreach_preview"}:
@@ -181,7 +295,6 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
             blockers.append("first_live_send_flag_false")
     campaign_preflight = None
     if action_type in {"cold_outreach", "send_outreach"}:
-        payload = action.get("payload_json") or {}
         campaign_preflight = latest_campaign_preflight_status(str(payload.get("campaign_id") or ""))
         if not campaign_preflight["allowed"]:
             blockers.append(campaign_preflight["reason"])
@@ -432,9 +545,11 @@ def send_customer_mail(limit: int = 10) -> dict[str, Any]:
         try:
             smtp_result = send_customer_mail_via_smtp(row, preview)
             if not smtp_result.get("sent"):
+                transport_blocker = smtp_result.get("blocker", "smtp_transport_not_ready")
+                status = "archived_test_artifact" if transport_blocker == "customer_email_test_domain" else "transport_blocked"
                 result = {
-                    "status": "transport_blocked",
-                    "blockers": [smtp_result.get("blocker", "smtp_transport_not_ready")],
+                    "status": status,
+                    "blockers": [transport_blocker],
                     "send_mail": False,
                     "smtp_called": bool(smtp_result.get("smtp_called")),
                     "raw_recipient_included": False,
@@ -442,7 +557,7 @@ def send_customer_mail(limit: int = 10) -> dict[str, Any]:
                 updated = execute(
                     """
                     UPDATE mailer_action_queue
-                    SET status = 'transport_blocked',
+                    SET status = %s,
                         gate_result_json = %s,
                         result_json = %s,
                         attempt_count = attempt_count + 1,
@@ -450,9 +565,9 @@ def send_customer_mail(limit: int = 10) -> dict[str, Any]:
                     WHERE id = %s
                     RETURNING id, action_type, risk_level, status, mailbox, recipient_hash, template_key, gate_result_json, result_json, attempt_count, updated_at
                     """,
-                    (Jsonb(json_safe({**gate, "transport_blocker": result["blockers"][0]})), Jsonb(json_safe(result)), row["id"]),
+                    (status, Jsonb(json_safe({**gate, "transport_blocker": result["blockers"][0]})), Jsonb(json_safe(result)), row["id"]),
                 )
-                record_send_ledger(dict(updated), "transport_blocked", {**gate, "transport_blocker": result["blockers"][0]}, result)
+                record_send_ledger(dict(updated), status, {**gate, "transport_blocker": result["blockers"][0]}, result)
                 actions.append(dict(updated))
                 continue
             result = {

@@ -138,7 +138,7 @@ def test_test_customer_email_domain_blocks_transport(monkeypatch):
         action = _send_ready_action(marker, customer_id)
         result = send_customer_mail(10)
         item = next(row for row in result["actions"] if row["id"] == action["id"])
-        assert item["status"] == "transport_blocked"
+        assert item["status"] == "archived_test_artifact"
         assert "customer_email_test_domain" in item["result_json"]["blockers"]
         audit = fetch_one("SELECT * FROM recipient_resolver_audit WHERE action_id = %s ORDER BY created_at DESC LIMIT 1", (action["id"],))
         assert audit["status"] == "blocked"

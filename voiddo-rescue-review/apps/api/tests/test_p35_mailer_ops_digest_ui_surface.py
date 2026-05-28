@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
-from app.mailer_action_queue import process_mailer_action_queue
+from app.mailer_action_queue import archive_mailer_nonactionable_artifacts, process_mailer_action_queue
 from app.mailer_control_room import cleanup_mailer_digest_history, mailer_digest_summary, mailer_digest_trend_guard, write_owner_status_report
 from app.mailer_ops_actions import run_mailer_ops_action
 from app.main import app
@@ -20,7 +20,9 @@ def admin_headers() -> dict[str, str]:
 
 
 def clean_trend_guard_runtime() -> None:
+    archive_mailer_nonactionable_artifacts()
     process_mailer_action_queue(100)
+    archive_mailer_nonactionable_artifacts()
 
 
 def test_digest_summary_endpoint_requires_auth_and_exposes_evidence():

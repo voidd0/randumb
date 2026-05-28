@@ -545,6 +545,18 @@ def _customer_mail_hash(email: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
 
 
+def _is_qa_customer_email(email: str) -> bool:
+    normalized = (email or "").strip().lower()
+    if "@" not in normalized:
+        return True
+    domain = normalized.rsplit("@", 1)[-1]
+    return (
+        domain in {"voiddorescue.local", "example.test", "localhost", "test"}
+        or domain.endswith(".test")
+        or domain.endswith(".local")
+    )
+
+
 def enqueue_customer_mail_action(
     action_type: str,
     customer_id: str,
@@ -558,6 +570,7 @@ def enqueue_customer_mail_action(
         "customer_id": customer_id,
         "product_key": product_key,
         "source_event": source_event,
+        "customer_is_qa": _is_qa_customer_email(customer_email),
         **(payload or {}),
     }
     idempotency_parts = [

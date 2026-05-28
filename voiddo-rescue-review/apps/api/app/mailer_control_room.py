@@ -9,7 +9,7 @@ from psycopg.types.json import Jsonb
 
 from .config import get_settings
 from .db import execute, fetch_all, fetch_one
-from .mailer_action_queue import enqueue_mailer_action
+from .mailer_action_queue import archive_mailer_nonactionable_artifacts, enqueue_mailer_action
 from .mailer_autonomy import mailer_status_snapshot
 from .mailer_ops_actions import mailer_ops_action_summary, mailer_ops_retention_report_history
 from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary, runtime_state_snapshot, warmup_calendar_health
@@ -34,8 +34,39 @@ def _active_mailer_action_queue_count() -> int:
         """
         SELECT count(*) AS count
         FROM mailer_action_queue
-        WHERE status IN ('queued', 'send_ready', 'blocked', 'gate_blocked', 'transport_blocked', 'review_required')
-           OR risk_level = 'HIGH_RISK'
+        WHERE (
+                status IN ('queued', 'send_ready', 'blocked', 'gate_blocked', 'transport_blocked', 'review_required')
+             OR risk_level = 'HIGH_RISK'
+        )
+          AND status NOT IN ('archived_test_artifact', 'archived_orphaned_customer_action')
+          AND NOT (COALESCE(result_json->'blockers', '[]'::jsonb) ? 'customer_email_test_domain')
+          AND NOT (COALESCE(gate_result_json->'blockers', '[]'::jsonb) ? 'customer_mail_qa_artifact')
+        """
+    )
+    return int(row["count"] or 0) if row else 0
+
+
+def _problem_send_ledger_count() -> int:
+    row = fetch_one(
+        """
+        SELECT count(*) AS count
+        FROM mailer_send_ledger
+        WHERE status IN ('transport_blocked', 'failed')
+          AND NOT (COALESCE(result_json->'blockers', '[]'::jsonb) ? 'customer_email_test_domain')
+        """
+    )
+    return int(row["count"] or 0) if row else 0
+
+
+def _problem_recipient_resolver_audit_count() -> int:
+    row = fetch_one(
+        """
+        SELECT count(*) AS count
+        FROM recipient_resolver_audit r
+        LEFT JOIN mailer_action_queue maq ON maq.id = r.action_id
+        WHERE r.status = 'blocked'
+          AND r.reason <> 'customer_email_test_domain'
+          AND COALESCE(maq.status, '') NOT IN ('archived_test_artifact', 'archived_orphaned_customer_action')
         """
     )
     return int(row["count"] or 0) if row else 0
@@ -234,6 +265,7 @@ def mailer_digest_summary() -> dict[str, Any]:
 
 
 def mailer_digest_trend_guard(limit: int = 8) -> dict[str, Any]:
+    archive_mailer_nonactionable_artifacts()
     capped = max(1, min(int(limit or 8), 25))
     digest_rows = _rows(
         """
@@ -261,8 +293,8 @@ def mailer_digest_trend_guard(limit: int = 8) -> dict[str, Any]:
     retention_count = fetch_one("SELECT count(*) AS count FROM mailer_ops_retention_reports")
     action_queue = {"count": _active_mailer_action_queue_count()}
     action_queue_total = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
-    send_ledger = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
-    resolver_audit = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
+    send_ledger = {"count": _problem_send_ledger_count()}
+    resolver_audit = {"count": _problem_recipient_resolver_audit_count()}
 
     regressions: list[str] = []
     if not digest_rows:
@@ -402,14 +434,15 @@ def latest_mailer_digest_trend_guard_summary() -> dict[str, Any]:
 
 
 def mailer_policy_score() -> dict[str, Any]:
+    archive_mailer_nonactionable_artifacts()
     trend = latest_mailer_digest_trend_guard_summary()
     signals = mail_signal_summary(24)
     warmup = warmup_calendar_health()
     mail_qa = latest_mail_qa_decision()
     action_queue = {"count": _active_mailer_action_queue_count()}
     action_queue_total = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
-    send_ledger = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
-    resolver_audit = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
+    send_ledger = {"count": _problem_send_ledger_count()}
+    resolver_audit = {"count": _problem_recipient_resolver_audit_count()}
     queue_counts = {
         "mailer_action_queue_rows": int((action_queue or {}).get("count", 0) or 0),
         "mailer_action_queue_total_rows": int((action_queue_total or {}).get("count", 0) or 0),

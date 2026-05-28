@@ -72,8 +72,9 @@ def _latest_campaign_readiness(limit: int = 5) -> list[dict[str, Any]]:
 
 def _customer_lifecycle_candidates(limit: int) -> list[dict[str, Any]]:
     rows = fetch_all(
-        """
+        f"""
         SELECT c.id, c.business_id,
+               {_qa_customer_predicate('c')} AS is_qa_customer,
                count(DISTINCT p.id) AS payment_count,
                count(DISTINCT s.id) AS subscription_count,
                count(DISTINCT f.id) AS fix_request_count,
@@ -88,7 +89,7 @@ def _customer_lifecycle_candidates(limit: int) -> list[dict[str, Any]]:
         WHERE EXISTS (SELECT 1 FROM payments p2 WHERE p2.customer_id = c.id)
            OR EXISTS (SELECT 1 FROM subscriptions s2 WHERE s2.customer_id = c.id)
            OR EXISTS (SELECT 1 FROM fix_requests f2 WHERE f2.customer_id = c.id)
-        GROUP BY c.id, c.business_id, c.created_at
+        GROUP BY c.id, c.business_id, c.email, c.paddle_customer_id, c.created_at
         ORDER BY c.created_at DESC
         LIMIT %s
         """,
@@ -98,6 +99,7 @@ def _customer_lifecycle_candidates(limit: int) -> list[dict[str, Any]]:
         {
             "customer_id": str(row["id"]),
             "business_id": str(row["business_id"]) if row["business_id"] else None,
+            "customer_is_qa": bool(row["is_qa_customer"]),
             "payment_count": int(row["payment_count"] or 0),
             "subscription_count": int(row["subscription_count"] or 0),
             "fix_request_count": int(row["fix_request_count"] or 0),
@@ -166,6 +168,7 @@ def prepare_customer_lifecycle(limit: int = 25, dry_run: bool = True) -> dict[st
                     "paddle_transaction_id": payment["paddle_transaction_id"],
                     "product_key": payment["product_key"],
                     "mode": "lifecycle_recovery",
+                    "customer_is_qa": customer["customer_is_qa"],
                 },
             )
             action_count += 1
@@ -179,6 +182,7 @@ def prepare_customer_lifecycle(limit: int = 25, dry_run: bool = True) -> dict[st
                     "paddle_subscription_id": subscription["paddle_subscription_id"],
                     "product_key": subscription["product_key"],
                     "mode": "subscription_lifecycle",
+                    "customer_is_qa": customer["customer_is_qa"],
                 },
             )
             action_count += 1
@@ -193,6 +197,7 @@ def prepare_customer_lifecycle(limit: int = 25, dry_run: bool = True) -> dict[st
                     "source_event": "revenue_loop.fix_request",
                     "fix_request_id": str(fix["id"]),
                     "product_key": fix["product_key"],
+                    "customer_is_qa": customer["customer_is_qa"],
                 },
             )
             action_count += 1

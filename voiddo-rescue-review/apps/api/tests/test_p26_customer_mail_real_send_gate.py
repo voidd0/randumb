@@ -52,10 +52,11 @@ def _clean_mail_gates(monkeypatch, *, sending_enabled: bool = True, real_enabled
     monkeypatch.setattr(queue, "record_throttle_send", lambda scope, scope_key, reason="sent": {"scope": scope, "scope_key": scope_key, "reason": reason})
 
 
-def test_customer_mail_real_send_default_blocked():
+def test_customer_mail_real_send_default_blocked(monkeypatch):
     marker = "p26-default-blocked"
     try:
         _cleanup(marker)
+        _clean_mail_gates(monkeypatch, sending_enabled=True, real_enabled=False)
         _send_ready_action(marker)
         result = send_customer_mail(10)
         action = next(item for item in result["actions"] if item["action_type"] == "customer_onboarding")

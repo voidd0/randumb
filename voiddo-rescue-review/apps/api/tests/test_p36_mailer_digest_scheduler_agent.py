@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
-from app.mailer_action_queue import process_mailer_action_queue
+from app.mailer_action_queue import archive_mailer_nonactionable_artifacts, process_mailer_action_queue
 from app.mailer_control_room import cleanup_mailer_policy_score_history, latest_mailer_business_kpi_history, latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, latest_mailer_policy_score_regression_guard_summary, mailer_business_kpi_snapshot, mailer_digest_summary, mailer_policy_score, mailer_policy_score_regression_guard, mailer_policy_score_retention_summary, mailer_self_audit_matrix_snapshot
 from app.main import app
 from fastapi.testclient import TestClient
@@ -30,7 +30,9 @@ def _cleanup(action_id: str | None = None) -> None:
 
 
 def _clean_trend_runtime() -> None:
+    archive_mailer_nonactionable_artifacts()
     process_mailer_action_queue(100)
+    archive_mailer_nonactionable_artifacts()
 
 
 def test_mailer_digest_agent_exists_and_generates_report():
