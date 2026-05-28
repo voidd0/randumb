@@ -32,6 +32,14 @@ def _hash_recipient(value: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
 
 
+def _is_test_customer_email(email: str) -> bool:
+    normalized = (email or "").strip().lower()
+    if "@" not in normalized:
+        return True
+    domain = normalized.rsplit("@", 1)[-1]
+    return domain in {"voiddorescue.local", "example.test", "localhost", "test"} or domain.endswith(".test") or domain.endswith(".local")
+
+
 def _count(sql: str, params: tuple = ()) -> int:
     row = fetch_one(sql, params)
     return int(row["count"]) if row else 0
@@ -109,6 +117,9 @@ def resolve_customer_recipient(action: dict[str, Any]) -> dict[str, Any]:
     email = str(customer["email"]).strip().lower()
     domain = email.rsplit("@", 1)[-1] if "@" in email else ""
     recipient_hash = _hash_recipient(email)
+    if _is_test_customer_email(email):
+        _audit_recipient_resolution(action, customer_id, recipient_hash, "blocked", "customer_email_test_domain")
+        return {"resolved": False, "blocker": "customer_email_test_domain", "recipient_hash": recipient_hash}
     suppressed = fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s) OR lower(domain) = lower(%s)", (email, domain))
     if suppressed:
         _audit_recipient_resolution(action, customer_id, recipient_hash, "blocked", "recipient_suppressed")

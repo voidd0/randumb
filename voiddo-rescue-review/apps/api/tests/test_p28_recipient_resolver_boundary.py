@@ -65,7 +65,7 @@ def _clean_mail_gates(monkeypatch) -> None:
 
 def test_resolver_returns_customer_email_only_inside_transport_boundary():
     marker = "p28-resolve"
-    raw = f"buyer-{marker}@example.test"
+    raw = f"buyer-{marker}@gmail.com"
     try:
         _cleanup(marker)
         customer_id = _customer(marker, raw)
@@ -96,7 +96,7 @@ def test_missing_customer_blocks_transport(monkeypatch):
 
 def test_suppressed_customer_blocks_transport(monkeypatch):
     marker = "p28-suppressed"
-    raw = f"buyer-{marker}@example.test"
+    raw = f"buyer-{marker}@gmail.com"
     try:
         _cleanup(marker)
         _clean_mail_gates(monkeypatch)
@@ -113,7 +113,7 @@ def test_suppressed_customer_blocks_transport(monkeypatch):
 
 def test_resolver_audit_omits_raw_customer_email():
     marker = "p28-audit-privacy"
-    raw = f"buyer-{marker}@example.test"
+    raw = f"buyer-{marker}@gmail.com"
     try:
         _cleanup(marker)
         customer_id = _customer(marker, raw)
@@ -124,6 +124,27 @@ def test_resolver_audit_omits_raw_customer_email():
         assert audit["status"] == "resolved"
         assert raw not in str(audit)
         assert audit["recipient_hash"]
+    finally:
+        _cleanup(marker)
+
+
+def test_test_customer_email_domain_blocks_transport(monkeypatch):
+    marker = "p28-test-domain-block"
+    raw = f"buyer-{marker}@voiddorescue.local"
+    try:
+        _cleanup(marker)
+        _clean_mail_gates(monkeypatch)
+        customer_id = _customer(marker, raw)
+        action = _send_ready_action(marker, customer_id)
+        result = send_customer_mail(10)
+        item = next(row for row in result["actions"] if row["id"] == action["id"])
+        assert item["status"] == "transport_blocked"
+        assert "customer_email_test_domain" in item["result_json"]["blockers"]
+        audit = fetch_one("SELECT * FROM recipient_resolver_audit WHERE action_id = %s ORDER BY created_at DESC LIMIT 1", (action["id"],))
+        assert audit["status"] == "blocked"
+        assert audit["reason"] == "customer_email_test_domain"
+        assert raw not in str(result)
+        assert raw not in str(audit)
     finally:
         _cleanup(marker)
 
