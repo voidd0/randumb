@@ -16,6 +16,8 @@ def _customer_lookup(customer_id: str | None = None, email: str | None = None, p
         row = fetch_one("SELECT * FROM customers WHERE paddle_customer_id = %s", (paddle_customer_id,))
     elif email:
         row = fetch_one("SELECT * FROM customers WHERE lower(email) = lower(%s)", (email,))
+    else:
+        row = fetch_one("SELECT * FROM customers ORDER BY updated_at DESC NULLS LAST, created_at DESC LIMIT 1")
     if not row:
         raise ValueError("customer_not_found")
     return dict(row)
@@ -57,7 +59,18 @@ def ensure_fix_codex_task(fix_request_id: str) -> dict[str, Any]:
 
 
 def customer_journey_snapshot(customer_id: str | None = None, email: str | None = None, paddle_customer_id: str | None = None) -> dict[str, Any]:
-    customer = _customer_lookup(customer_id, email, paddle_customer_id)
+    try:
+        customer = _customer_lookup(customer_id, email, paddle_customer_id)
+    except ValueError:
+        return {
+            "status": "idle_no_customer",
+            "result_json": {"dashboard_ready": False, "reason": "customer_not_found"},
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
     from .customer_access import ensure_customer_access_token
 
     access = ensure_customer_access_token(str(customer["id"]))
@@ -91,6 +104,11 @@ def customer_journey_snapshot(customer_id: str | None = None, email: str | None 
             "monitoring": monitoring,
             "access": {"token_ready": True, "new_token_created": access["token_created"], "token_id": access["token_id"]},
             "dashboard_ready": True,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
         }
     )
     row = execute(

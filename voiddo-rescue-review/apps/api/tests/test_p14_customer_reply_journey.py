@@ -63,6 +63,18 @@ def test_customer_journey_creates_fix_codex_task_and_dashboard_payload():
         _cleanup(token)
 
 
+def test_customer_journey_default_snapshot_selects_latest_customer_without_send():
+    token = uuid.uuid4().hex[:8]
+    try:
+        customer_id = _paid_customer(token)
+        journey = customer_journey_snapshot()
+        assert journey["result_json"]["dashboard_ready"] is True
+        assert journey["result_json"]["send_mail"] is False
+        assert journey["customer_id"] == uuid.UUID(customer_id)
+    finally:
+        _cleanup(token)
+
+
 def test_customer_journey_admin_endpoint_requires_auth_and_returns_fix_queue():
     token = uuid.uuid4().hex[:8]
     try:
