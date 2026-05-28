@@ -182,6 +182,46 @@ def test_lead_supply_buildout_runs_bounded_safe_cycle(monkeypatch):
     assert result["live_outreach_allowed"] is False
 
 
+def test_lead_supply_buildout_uses_stockpile_expansion_before_regional_fallback(monkeypatch):
+    snapshots = iter([
+        _health(45, source_candidates=0),
+        _health(45, source_candidates=1),
+        _health(45, source_candidates=1),
+        _health(65, source_candidates=0),
+        _health(65, source_candidates=0),
+        _health(65, source_candidates=0),
+    ])
+    calls: list[str] = []
+    monkeypatch.setattr(buildout_module, "lead_stockpile_health_snapshot", lambda *args: next(snapshots))
+
+    def _stockpile(*args, **kwargs):
+        calls.append("stockpile_expansion")
+        return {"status": "completed", "created_sources": 1, "found_count": 3, "non_empty_sources": 1, "send_mail": False}
+
+    def _regional(*args, **kwargs):
+        calls.append("regional")
+        return {"status": "completed", "created_sources": 1, "found_count": 2, "send_mail": False}
+
+    def _advance(*args, **kwargs):
+        calls.append("advance")
+        return {"status": "completed", "source_queue": {"queued_count": 1}, "scout_processing": {"processed": 1, "results": [{"found": 3, "accepted": 2, "scanner_jobs": 2}]}, "send_mail": False}
+
+    monkeypatch.setattr(buildout_module, "stockpile_expansion_discovery_cycle", _stockpile)
+    monkeypatch.setattr(buildout_module, "regional_lead_discovery_cycle", _regional)
+    monkeypatch.setattr(buildout_module, "advance_source_to_campaign", _advance)
+    monkeypatch.setattr(buildout_module, "scanner_completion_watch", lambda *args, **kwargs: {"status": "idle_no_new_completions", "send_mail": False})
+    monkeypatch.setattr(buildout_module, "refresh_campaign_previews_if_needed", lambda *args, **kwargs: {"status": "completed", "send_mail": False})
+    monkeypatch.setattr(buildout_module, "auto_review_campaign_previews", lambda *args, **kwargs: {"status": "completed", "send_mail": False})
+    monkeypatch.setattr(buildout_module, "campaign_preflight_batch", lambda *args, **kwargs: {"status": "completed", "send_mail": False})
+
+    result = lead_supply_buildout(target_preview_count=100, max_cycles=1, apply=True)
+    assert calls == ["stockpile_expansion", "advance"]
+    assert result["cycles"][0]["actions"][0]["name"] == "stockpile_expansion_discovery_cycle"
+    assert result["cycles"][0]["actions"][1]["accepted_count"] == 2
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+
+
 def test_lead_supply_buildout_summarizes_nested_source_campaign_counts():
     result = buildout_module._action_summary(
         {
@@ -200,6 +240,7 @@ def test_lead_supply_buildout_summarizes_nested_source_campaign_counts():
     assert result["found_count"] == 7
     assert result["campaign_previews_created"] == 2
     assert result["blocker_count"] == 0
+    assert result["error_count"] == 0
     assert result["send_mail"] is False
     assert result["live_outreach_allowed"] is False
 
@@ -225,6 +266,24 @@ def test_lead_supply_buildout_summarizes_nested_scout_processing_results():
     assert result["accepted_count"] == 3
     assert result["created_scanner_jobs"] == 3
     assert result["campaign_previews_created"] == 2
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+
+
+def test_lead_supply_buildout_summarizes_discovery_error_types():
+    result = buildout_module._action_summary(
+        {
+            "name": "regional_lead_discovery_cycle",
+            "status": "failed",
+            "errors": [
+                {"country": "UK", "city": "St Albans", "error": "RuntimeError"},
+                {"country": "UK", "city": "Guildford", "error": "TimeoutError"},
+                {"country": "UK", "city": "Oxford", "error": "RuntimeError"},
+            ],
+        }
+    )
+    assert result["error_count"] == 3
+    assert result["error_types"] == ["RuntimeError", "TimeoutError"]
     assert result["send_mail"] is False
     assert result["live_outreach_allowed"] is False
 

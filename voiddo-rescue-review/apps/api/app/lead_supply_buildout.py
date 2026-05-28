@@ -6,7 +6,7 @@ from typing import Any
 from .campaign_preflight import campaign_preflight_batch
 from .campaign_preview_refresh import refresh_campaign_previews_if_needed
 from .campaign_preview_reviews import auto_review_campaign_previews
-from .lead_discovery import regional_lead_discovery_cycle
+from .lead_discovery import regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle
 from .lead_stockpile_health import lead_stockpile_health_snapshot
 from .lead_supply_autopilot import lead_supply_autopilot
 from .p0 import json_safe, queue_outreach_preview
@@ -62,6 +62,7 @@ def _action_summary(action: dict[str, Any]) -> dict[str, Any]:
     scout_accepted = sum(int(item.get("accepted") or item.get("accepted_count") or 0) for item in scout_results if isinstance(item, dict))
     scout_jobs = sum(int(item.get("scanner_jobs") or item.get("created_scanner_jobs") or 0) for item in scout_results if isinstance(item, dict))
     blockers = action.get("blockers") or []
+    errors = action.get("errors") or []
     return {
         "name": action.get("name"),
         "status": action.get("status") or action.get("decision") or "completed",
@@ -84,6 +85,8 @@ def _action_summary(action: dict[str, Any]) -> dict[str, Any]:
         "processed": int(action.get("processed") or scout_processing.get("processed") or 0),
         "campaign_previews_created": int(action.get("campaign_previews_created") or preview_generation.get("created") or 0),
         "blocker_count": len(blockers),
+        "error_count": len(errors),
+        "error_types": sorted({str(item.get("error") or item.get("error_type") or "unknown") for item in errors if isinstance(item, dict)})[:5],
         **SAFE_FLAGS,
     }
 
@@ -156,6 +159,15 @@ def lead_supply_buildout(
                     **SAFE_FLAGS,
                 }
             )
+
+        if (
+            int(current.get("approved_preview_count") or 0) < target
+            and int(current.get("approved_preview_count") or 0) >= canary
+            and int(current.get("source_candidate_count") or 0) == 0
+        ):
+            expansion = stockpile_expansion_discovery_cycle(limit_targets=2, per_target_limit=25, dry_run=False, max_seconds=120)
+            actions.append(_action_summary({"name": "stockpile_expansion_discovery_cycle", **expansion}))
+            current = lead_stockpile_health_snapshot(target, canary, safe_limit)
 
         if int(current.get("approved_preview_count") or 0) < target and int(current.get("source_candidate_count") or 0) == 0:
             discovery = regional_lead_discovery_cycle(limit_targets=2, per_target_limit=20, dry_run=False)
