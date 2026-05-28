@@ -33,16 +33,19 @@ EXCLUDED_LARGE_BRAND_TOKENS = {
     "healthsystem",
     "hilton",
     "holidayinn",
+    "homedepot",
     "hopkinsmedicine",
     "hospital",
     "hyatt",
     "ihg",
     "instagram",
     "linkedin",
+    "lowes",
     "lq.com",
     "marriott",
     "medicalcenter",
     "medicalcentre",
+    "menards",
     "motel6",
     "mydentist",
     "nhs",
@@ -55,10 +58,23 @@ EXCLUDED_LARGE_BRAND_TOKENS = {
     "twitter",
     "university",
     "wales.nhs.uk",
+    "walmart",
     "wyndham",
     "wyndhamhotels",
     "x.com",
     "laserclinics",
+}
+EXCLUDED_LARGE_BRAND_DOMAINS = {
+    "homedepot.com",
+    "lowes.com",
+    "walmart.com",
+    "amazon.com",
+    "costco.com",
+    "target.com",
+    "menards.com",
+    "ikea.com",
+    "acehardware.com",
+    "tractorsupply.com",
 }
 SUPPORTED_SCOUT_TYPES = {
     "manual_csv_scout",
@@ -236,7 +252,11 @@ def _is_excluded_large_brand(business_name: str, domain: str, website: str = "")
     if any(token in combined for token in EXCLUDED_LARGE_BRAND_TOKENS):
         return True
     normalized_domain = normalize_domain(domain or website)
-    return normalized_domain in {"facebook.com", "instagram.com", "linkedin.com", "twitter.com", "x.com"} or normalized_domain.endswith(".business.site")
+    return (
+        normalized_domain in EXCLUDED_LARGE_BRAND_DOMAINS
+        or normalized_domain in {"facebook.com", "instagram.com", "linkedin.com", "twitter.com", "x.com"}
+        or normalized_domain.endswith(".business.site")
+    )
 
 
 def is_excluded_sensitive_target(business_name: str, domain: str, website: str = "", niche: str = "") -> bool:

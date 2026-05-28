@@ -138,6 +138,21 @@ def test_scout_rejects_large_dental_chain_brand():
         _cleanup_token(token)
 
 
+def test_scout_rejects_large_retailer_domains_from_public_sources():
+    token = uuid.uuid4().hex[:8]
+    csv_text = "business_name,website_url,email,country,niche\nHome Depot,https://homedepot.com,a@homedepot.com,US,contractors\n"
+    try:
+        source = create_scout_source({"name": f"large-retailer-{token}", "source_type": "manual_csv_scout", "config_json": {"csv": csv_text}})
+        run = create_scout_run(str(source["id"]))
+        result = process_scout_run(str(run["id"]))
+        assert result["accepted"] == 0
+        assert result["rejected"] == 1
+        row = fetch_one("SELECT rejection_reason FROM scout_leads WHERE domain = 'homedepot.com' AND scout_run_id = %s", (run["id"],))
+        assert row["rejection_reason"] == "excluded_large_enterprise"
+    finally:
+        _cleanup_token(token)
+
+
 def test_lead_scoring_explains_reasoning():
     token = uuid.uuid4().hex[:8]
     try:
