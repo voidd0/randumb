@@ -224,6 +224,26 @@ STOCKPILE_EXPANSION_MARKETS: list[tuple[str, str, str]] = [
     ("CA", "Kingston", "dentists"),
     ("CA", "Guelph", "dentists"),
     ("CA", "Kamloops", "dentists"),
+    ("CA", "Regina", "contractors"),
+    ("CA", "Windsor", "contractors"),
+    ("CA", "Sudbury", "contractors"),
+    ("CA", "Oshawa", "contractors"),
+    ("CA", "Abbotsford", "contractors"),
+    ("CA", "Kitchener", "clinics"),
+    ("CA", "Burlington", "clinics"),
+    ("CA", "Oakville", "clinics"),
+    ("IE", "Dundalk", "dentists"),
+    ("IE", "Portlaoise", "dentists"),
+    ("IE", "Tullamore", "dentists"),
+    ("IE", "Castlebar", "dentists"),
+    ("US", "Bozeman", "dentists"),
+    ("US", "Provo", "dentists"),
+    ("US", "Rochester", "law firms"),
+    ("US", "Mobile", "law firms"),
+    ("UK", "Bath", "dentists"),
+    ("UK", "Cheltenham", "dentists"),
+    ("UK", "Norwich", "dentists"),
+    ("UK", "Exeter", "law firms"),
 ]
 
 STOCKPILE_EXPANSION_TARGETS: list[dict[str, Any]] = [
@@ -689,6 +709,8 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         FROM latest
         JOIN scout_sources ss ON ss.id = latest.source_id
         WHERE upper(COALESCE(ss.country, '')) !~ %s
+          AND ss.country IS NOT NULL
+          AND ss.niche IS NOT NULL
         GROUP BY ss.country, ss.niche
         """,
         (TEST_COUNTRY_PATTERN,),
@@ -719,8 +741,6 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         if source_name in existing_source_names:
             continue
         segment = segment_scores.get(key)
-        if not segment:
-            continue
         perf = performance.get(
             key,
             {
@@ -733,11 +753,22 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
                 "pause_count": 0,
             },
         )
+        performance_only = bool(
+            not segment
+            and perf["source_count"] > 0
+            and perf["qualified_rate"] >= 0.18
+            and perf["email_coverage"] >= 0.5
+            and perf["average_final_score"] >= 45
+            and perf["pause_count"] <= perf["promote_count"] + 1
+        )
+        if not segment and not performance_only:
+            continue
+        effective_segment = segment or {"approved_count": 0, "average_score": perf["average_final_score"]}
         if perf["source_count"] >= 3 and perf["pause_count"] > perf["promote_count"] and perf["qualified_rate"] < 0.08:
             continue
         expansion_score = round(
-            (segment["approved_count"] * 8)
-            + (segment["average_score"] * 0.35)
+            (effective_segment["approved_count"] * 8)
+            + (effective_segment["average_score"] * 0.35)
             + (perf["qualified_rate"] * 90)
             + (perf["email_coverage"] * 35)
             + (perf["issue_signal_rate"] * 25)
@@ -752,9 +783,10 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
                 "source_name": source_name,
                 "expansion_score": expansion_score,
                 "guidance": {
-                    "strategy": "expand_segments_with_existing_approved_preview_yield",
-                    "approved_count": segment["approved_count"],
-                    "average_score": segment["average_score"],
+                    "strategy": "expand_segments_with_existing_approved_preview_yield_or_strong_source_performance",
+                    "segment_origin": "approved_preview_yield" if segment else "performance_signal",
+                    "approved_count": effective_segment["approved_count"],
+                    "average_score": effective_segment["average_score"],
                     "source_performance": perf,
                 },
             }
@@ -820,13 +852,50 @@ def stockpile_expansion_discovery_cycle(limit_targets: int = 3, per_target_limit
                 )
             )
         except Exception as exc:
-            errors.append({"country": target["country"], "city": target["city"], "niche": target["niche"], "error": type(exc).__name__})
+            error_type = type(exc).__name__
+            errors.append({"country": target["country"], "city": target["city"], "niche": target["niche"], "error": error_type})
+            source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
+            if source_name not in {str(item.get("source_name") or "") for item in created}:
+                try:
+                    source = create_scout_source(
+                        {
+                            "name": source_name,
+                            "source_type": "business_directory_import_scout",
+                            "country": target["country"].upper(),
+                            "language": target.get("language") or "en",
+                            "niche": target["niche"],
+                            "status": "source_attempt_failed",
+                            "config_json": {
+                                "source": "overpass_osm_public_poi",
+                                "discovery_result": "source_attempt_failed",
+                                "error_type": error_type,
+                            },
+                        }
+                    )
+                    created.append(
+                        {
+                            "status": "source_attempt_failed",
+                            "source_id": str(source["id"]),
+                            "source_name": source["name"],
+                            "source_status": "source_attempt_failed",
+                            "country": target["country"].upper(),
+                            "city": target["city"],
+                            "niche": target["niche"],
+                            "language": target.get("language") or "en",
+                            "found_count": 0,
+                            "with_email_count": 0,
+                            "with_website_count": 0,
+                        }
+                    )
+                except Exception:
+                    pass
     return {
         "status": "completed" if created or not errors else "failed",
         "selected_count": len(targets),
         "created_sources": len([item for item in created if item.get("source_id")]),
         "non_empty_sources": len([item for item in created if item.get("status") == "source_created"]),
         "empty_sources": len([item for item in created if item.get("status") == "empty_source_recorded"]),
+        "failed_source_attempts": len([item for item in created if item.get("status") == "source_attempt_failed"]),
         "found_count": sum(int(item.get("found_count", 0)) for item in created),
         "with_email_count": sum(int(item.get("with_email_count", 0)) for item in created),
         "errors": errors,

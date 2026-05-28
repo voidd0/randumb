@@ -295,6 +295,59 @@ def test_stockpile_expansion_target_plan_ranks_by_quality_and_filters_weak_segme
     assert plan["raw_recipient_addresses_included"] is False
 
 
+def test_stockpile_expansion_target_plan_explores_strong_performance_only_segments(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    monkeypatch.setattr(
+        discovery_module,
+        "STOCKPILE_EXPANSION_TARGETS",
+        [
+            {"country": "CA", "city": f"StrongPerf{token}", "language": "en", "niche": "contractors", "priority": 100},
+            {"country": "UK", "city": f"WeakPerf{token}", "language": "en", "niche": "dentists", "priority": 99},
+        ],
+    )
+
+    def fake_fetch_all(sql, params=()):
+        if "SELECT name FROM scout_sources" in sql:
+            return []
+        if "FROM scout_source_performance_scores" in sql:
+            return [
+                {
+                    "country": "CA",
+                    "niche": "contractors",
+                    "source_count": 1,
+                    "qualified_rate": 1.0,
+                    "average_final_score": 72,
+                    "email_coverage": 1.0,
+                    "issue_signal_rate": 1.0,
+                    "promote_count": 0,
+                    "pause_count": 0,
+                },
+                {
+                    "country": "UK",
+                    "niche": "dentists",
+                    "source_count": 9,
+                    "qualified_rate": 0.04,
+                    "average_final_score": 38,
+                    "email_coverage": 0.42,
+                    "issue_signal_rate": 0.2,
+                    "promote_count": 0,
+                    "pause_count": 5,
+                },
+            ]
+        return []
+
+    monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
+    plan = stockpile_expansion_target_plan(5)
+    assert plan["status"] == "ready"
+    assert plan["selected_count"] == 1
+    assert plan["targets"][0]["city"] == f"StrongPerf{token}"
+    assert plan["targets"][0]["guidance"]["segment_origin"] == "performance_signal"
+    assert plan["targets"][0]["guidance"]["approved_count"] == 0
+    assert "send_mail" not in plan["targets"][0]
+    assert plan["send_mail"] is False
+    assert plan["live_outreach_allowed"] is False
+
+
 def test_stockpile_expansion_discovery_cycle_is_no_send(monkeypatch):
     token = uuid.uuid4().hex[:8]
     city = f"StockpileCity{token}"
@@ -342,6 +395,37 @@ def test_stockpile_expansion_discovery_cycle_is_no_send(monkeypatch):
         agent = run_agent("stockpile_expansion_target_plan_agent", {"limit_targets": 1})
         assert agent["status"] == "completed"
         assert agent["result_json"]["send_mail"] is False
+    finally:
+        _cleanup(source_name)
+
+
+def test_stockpile_expansion_discovery_records_failed_public_source_attempt(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    city = f"FailedTarget{token}"
+    source_name = f"overpass-CA-{city}-contractors"
+    monkeypatch.setattr(
+        discovery_module,
+        "stockpile_expansion_target_plan",
+        lambda limit_targets=3: {
+            "status": "ready",
+            "selected_count": 1,
+            "targets": [{"country": "CA", "city": city, "language": "en", "niche": "contractors", "guidance": {"segment_origin": "performance_signal"}}],
+            "send_mail": False,
+            "live_outreach_allowed": False,
+        },
+    )
+    monkeypatch.setattr(discovery_module, "_fetch_overpass", lambda query: (_ for _ in ()).throw(RuntimeError("public_source_unavailable")))
+    try:
+        result = stockpile_expansion_discovery_cycle(1, 5, dry_run=False)
+        row = fetch_one("SELECT status, config_json FROM scout_sources WHERE name = %s", (source_name,))
+        assert result["status"] == "completed"
+        assert result["failed_source_attempts"] == 1
+        assert row["status"] == "source_attempt_failed"
+        assert row["config_json"]["discovery_result"] == "source_attempt_failed"
+        assert row["config_json"]["error_type"] == "RuntimeError"
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+        assert "public_source_unavailable" not in str(result)
     finally:
         _cleanup(source_name)
 
