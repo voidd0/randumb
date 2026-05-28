@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.db import fetch_one
 from app.canary_operator_packet import build_canary_operator_packet
+from app.canary_send_window_plan import build_canary_send_window_plan
 from app.launch_rehearsal import run_launch_rehearsal
 from app.main import app
 from app.p0 import execute_owner_command
@@ -69,4 +70,17 @@ def test_canary_operator_packet_is_redacted_and_no_send():
     assert packet["live_outreach_sent_count"] == 0
     assert packet["rehearsal_sent_count"] == 0
     assert "@" not in str(packet)
+    assert after["count"] == before["count"]
+
+
+def test_canary_send_window_plan_is_no_send_and_rate_limited():
+    before = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE status = 'queued'")
+    plan = build_canary_send_window_plan(5, store=True)
+    after = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE status = 'queued'")
+    assert plan["send_mail"] is False
+    assert plan["live_outreach_allowed"] is False
+    assert plan["planned_count"] <= 5
+    assert plan["max_hourly_domain_count"] <= 5
+    assert plan["daily_cap"] == 20
+    assert "@" not in str(plan)
     assert after["count"] == before["count"]
