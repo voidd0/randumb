@@ -118,6 +118,7 @@ def test_lead_stockpile_apply_discovers_sources_when_target_stockpile_is_short(m
         calls.append("stockpile_expansion")
         return {
             "status": "no_stockpile_expansion_targets",
+            "selected_count": 0,
             "created_sources": 0,
             "found_count": 0,
             "with_email_count": 0,
@@ -153,6 +154,40 @@ def test_lead_stockpile_apply_discovers_sources_when_target_stockpile_is_short(m
         action_names = [item["name"] for item in result["actions"]["executed"]]
         assert "stockpile_expansion_discovery_cycle" in action_names
         assert "regional_lead_discovery_cycle" in action_names
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        execute("DELETE FROM lead_stockpile_health_runs WHERE id = %s", (result["run_id"],))
+
+
+def test_lead_stockpile_apply_does_not_generic_fallback_after_ranked_target_attempt(monkeypatch):
+    _patch_snapshot_inputs(monkeypatch, approved=25, live_candidates=20, source_candidates=0)
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        stockpile_module,
+        "stockpile_expansion_discovery_cycle",
+        lambda *args, **kwargs: {
+            "status": "completed",
+            "selected_count": 2,
+            "created_sources": 2,
+            "non_empty_sources": 0,
+            "empty_sources": 2,
+            "send_mail": False,
+            "live_outreach_allowed": False,
+        },
+    )
+    monkeypatch.setattr(stockpile_module, "regional_lead_discovery_cycle", lambda *args, **kwargs: calls.append("regional") or {})
+    monkeypatch.setattr(stockpile_module, "refresh_campaign_previews_if_needed", lambda *args, **kwargs: {"status": "refreshed_no_send", "send_mail": False})
+    monkeypatch.setattr(stockpile_module, "auto_review_campaign_previews", lambda *args, **kwargs: {"status": "completed", "send_mail": False})
+    monkeypatch.setattr(stockpile_module, "queue_outreach_preview", lambda *args, **kwargs: {"created": 0, "send_mail": False})
+    monkeypatch.setattr(stockpile_module, "campaign_preflight_batch", lambda *args, **kwargs: {"status": "completed", "send_mail": False})
+
+    result = run_lead_stockpile_health(50, 20, 100, apply=True)
+    try:
+        assert calls == []
+        assert [item["name"] for item in result["actions"]["executed"]].count("stockpile_expansion_discovery_cycle") == 1
+        assert "regional_lead_discovery_cycle" not in [item["name"] for item in result["actions"]["executed"]]
         assert result["send_mail"] is False
         assert result["live_outreach_allowed"] is False
     finally:

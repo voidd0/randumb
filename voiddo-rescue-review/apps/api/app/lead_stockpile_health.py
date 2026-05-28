@@ -204,7 +204,7 @@ def run_lead_stockpile_health(
                     "result": stockpile_expansion_discovery_cycle(limit_targets=3, per_target_limit=35, dry_run=False),
                 }
             )
-            if not int(actions["executed"][-1]["result"].get("created_sources", 0) or 0):
+            if not int(actions["executed"][-1]["result"].get("selected_count", 0) or 0):
                 actions["executed"].append(
                     {
                         "name": "regional_lead_discovery_cycle",

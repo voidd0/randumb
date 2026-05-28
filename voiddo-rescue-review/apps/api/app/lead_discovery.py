@@ -349,6 +349,7 @@ def overpass_lead_discovery(
         if len(rows) >= safe_limit:
             break
     csv_text = _rows_to_csv(rows)
+    source_status = "preflight_ready" if rows else "no_rows_public_source"
     source = create_scout_source(
         {
             "name": f"overpass-{country.upper()}-{city}-{niche}",
@@ -356,15 +357,20 @@ def overpass_lead_discovery(
             "country": country.upper(),
             "language": language,
             "niche": niche,
-            "status": "preflight_ready",
-            "config_json": {"csv": csv_text, "source": "overpass_osm_public_poi"},
+            "status": source_status,
+            "config_json": {
+                "csv": csv_text,
+                "source": "overpass_osm_public_poi",
+                "discovery_result": "rows_found" if rows else "no_public_rows_found",
+            },
         }
     )
     readiness = run_scout_source_readiness(str(source["id"]))
     return {
-        "status": "source_created",
+        "status": "source_created" if rows else "empty_source_recorded",
         "source_id": str(source["id"]),
         "source_name": source["name"],
+        "source_status": source_status,
         "country": country.upper(),
         "city": city,
         "niche": niche,
@@ -380,6 +386,7 @@ def overpass_lead_discovery(
         },
         "created_scout_runs": 0,
         "created_scanner_jobs": 0,
+        "empty_target_recorded": not bool(rows),
         "send_mail": False,
         "smtp_called": False,
         "live_outreach_allowed": False,
@@ -435,7 +442,9 @@ def regional_lead_discovery_cycle(limit_targets: int = 2, per_target_limit: int 
     return {
         "status": "completed" if created or not errors else "failed",
         "selected_count": len(targets),
-        "created_sources": len([item for item in created if item.get("status") == "source_created"]),
+        "created_sources": len([item for item in created if item.get("source_id")]),
+        "non_empty_sources": len([item for item in created if item.get("status") == "source_created"]),
+        "empty_sources": len([item for item in created if item.get("status") == "empty_source_recorded"]),
         "found_count": sum(int(item.get("found_count", 0)) for item in created),
         "with_email_count": sum(int(item.get("with_email_count", 0)) for item in created),
         "errors": errors,
@@ -449,6 +458,7 @@ def regional_lead_discovery_cycle(limit_targets: int = 2, per_target_limit: int 
                 "found_count": item.get("found_count", 0),
                 "with_email_count": item.get("with_email_count", 0),
                 "readiness": item.get("readiness", {}),
+                "source_status": item.get("source_status"),
             }
             for item in created
         ],
@@ -577,7 +587,9 @@ def performance_guided_regional_discovery_cycle(limit_targets: int = 3, per_targ
     return {
         "status": "completed" if created or not errors else "failed",
         "selected_count": len(targets),
-        "created_sources": len([item for item in created if item.get("status") == "source_created"]),
+        "created_sources": len([item for item in created if item.get("source_id")]),
+        "non_empty_sources": len([item for item in created if item.get("status") == "source_created"]),
+        "empty_sources": len([item for item in created if item.get("status") == "empty_source_recorded"]),
         "found_count": sum(int(item.get("found_count", 0)) for item in created),
         "with_email_count": sum(int(item.get("with_email_count", 0)) for item in created),
         "errors": errors,
@@ -591,6 +603,7 @@ def performance_guided_regional_discovery_cycle(limit_targets: int = 3, per_targ
                 "found_count": item.get("found_count", 0),
                 "with_email_count": item.get("with_email_count", 0),
                 "readiness": item.get("readiness", {}),
+                "source_status": item.get("source_status"),
             }
             for item in created
         ],
@@ -782,7 +795,9 @@ def stockpile_expansion_discovery_cycle(limit_targets: int = 3, per_target_limit
     return {
         "status": "completed" if created or not errors else "failed",
         "selected_count": len(targets),
-        "created_sources": len([item for item in created if item.get("status") == "source_created"]),
+        "created_sources": len([item for item in created if item.get("source_id")]),
+        "non_empty_sources": len([item for item in created if item.get("status") == "source_created"]),
+        "empty_sources": len([item for item in created if item.get("status") == "empty_source_recorded"]),
         "found_count": sum(int(item.get("found_count", 0)) for item in created),
         "with_email_count": sum(int(item.get("with_email_count", 0)) for item in created),
         "errors": errors,
@@ -796,6 +811,7 @@ def stockpile_expansion_discovery_cycle(limit_targets: int = 3, per_target_limit
                 "found_count": item.get("found_count", 0),
                 "with_email_count": item.get("with_email_count", 0),
                 "readiness": item.get("readiness", {}),
+                "source_status": item.get("source_status"),
             }
             for item in created
         ],

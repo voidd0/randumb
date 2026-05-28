@@ -100,6 +100,27 @@ def test_overpass_lead_discovery_creates_redacted_source_from_public_rows(monkey
         _cleanup(name)
 
 
+def test_overpass_lead_discovery_records_empty_source_without_preflight_candidate(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    city = f"EmptyCity{token}"
+    name = f"overpass-EE-{city}-dentists"
+    monkeypatch.setitem(discovery_module.CITY_AREAS, ("EE", city.lower()), city)
+    monkeypatch.setattr(discovery_module, "_fetch_overpass", lambda query: {"elements": []})
+    try:
+        result = overpass_lead_discovery("EE", city, "dentists", "en", 10, dry_run=False)
+        assert result["status"] == "empty_source_recorded"
+        assert result["source_status"] == "no_rows_public_source"
+        assert result["found_count"] == 0
+        assert result["empty_target_recorded"] is True
+        source = fetch_one("SELECT status, config_json FROM scout_sources WHERE id = %s", (result["source_id"],))
+        assert source["status"] == "no_rows_public_source"
+        assert source["config_json"]["discovery_result"] == "no_public_rows_found"
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup(name)
+
+
 def test_overpass_lead_discovery_endpoint_and_agent_are_safe():
     assert client.post("/admin/lead-discovery/overpass", json={"dry_run": True}).status_code == 401
     response = client.post(
