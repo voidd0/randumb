@@ -159,6 +159,7 @@ def lead_supply_buildout(
                     **SAFE_FLAGS,
                 }
             )
+            current = lead_stockpile_health_snapshot(target, canary, safe_limit)
 
         if (
             int(current.get("approved_preview_count") or 0) < target

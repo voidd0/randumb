@@ -348,6 +348,88 @@ STOCKPILE_EXPANSION_TARGETS: list[dict[str, Any]] = [
     for index, (country, city, niche) in enumerate(STOCKPILE_EXPANSION_MARKETS)
 ]
 
+DEEP_EXPANSION_MARKETS: list[tuple[str, str, str]] = [
+    ("US", "Plano", "dentists"),
+    ("US", "Frisco", "dentists"),
+    ("US", "Cary", "dentists"),
+    ("US", "Raleigh", "clinics"),
+    ("US", "Durham", "clinics"),
+    ("US", "Chapel Hill", "clinics"),
+    ("US", "Scottsdale", "beauty salons"),
+    ("US", "Tempe", "beauty salons"),
+    ("US", "Chandler", "dentists"),
+    ("US", "Gilbert", "dentists"),
+    ("US", "Mesa", "contractors"),
+    ("US", "Irvine", "law firms"),
+    ("US", "Pasadena", "law firms"),
+    ("US", "Santa Barbara", "local tourism"),
+    ("US", "Santa Rosa", "dentists"),
+    ("US", "Tacoma", "contractors"),
+    ("US", "Olympia", "law firms"),
+    ("US", "Bellingham", "local tourism"),
+    ("US", "Burlington", "dentists"),
+    ("US", "Manchester", "law firms"),
+    ("CA", "Surrey", "dentists"),
+    ("CA", "Burnaby", "dentists"),
+    ("CA", "Richmond", "beauty salons"),
+    ("CA", "Coquitlam", "clinics"),
+    ("CA", "Langley", "contractors"),
+    ("CA", "Abbotsford", "dentists"),
+    ("CA", "Nanaimo", "beauty salons"),
+    ("CA", "Victoria", "dentists"),
+    ("CA", "Kelowna", "clinics"),
+    ("CA", "Waterloo", "law firms"),
+    ("CA", "Kitchener", "dentists"),
+    ("CA", "Guelph", "clinics"),
+    ("UK", "Milton Keynes", "dentists"),
+    ("UK", "Tunbridge Wells", "law firms"),
+    ("UK", "Woking", "dentists"),
+    ("UK", "Sevenoaks", "law firms"),
+    ("UK", "Bath", "clinics"),
+    ("UK", "York", "dentists"),
+    ("UK", "Chester", "law firms"),
+    ("UK", "Worcester", "clinics"),
+    ("UK", "Durham", "law firms"),
+    ("UK", "Salisbury", "clinics"),
+    ("UK", "Guildford", "dentists"),
+    ("UK", "St Albans", "dentists"),
+    ("IE", "Navan", "dentists"),
+    ("IE", "Carlow", "dentists"),
+    ("IE", "Letterkenny", "dentists"),
+    ("IE", "Sligo", "local tourism"),
+    ("IE", "Wexford", "beauty salons"),
+    ("IE", "Kilkenny", "law firms"),
+    ("IE", "Killarney", "dentists"),
+    ("IE", "Tralee", "local tourism"),
+    ("IE", "Clonmel", "dentists"),
+    ("IE", "Mallow", "contractors"),
+    ("AU", "Wollongong", "clinics"),
+    ("AU", "Geelong", "dentists"),
+    ("AU", "Ballarat", "dentists"),
+    ("AU", "Bendigo", "beauty salons"),
+    ("AU", "Newcastle", "law firms"),
+    ("AU", "Maitland", "dentists"),
+    ("AU", "Albury", "clinics"),
+    ("AU", "Toowoomba", "dentists"),
+    ("AU", "Cairns", "clinics"),
+    ("AU", "Hobart", "dentists"),
+    ("NZ", "Tauranga", "clinics"),
+    ("NZ", "Hamilton", "dentists"),
+    ("NZ", "Napier", "local tourism"),
+    ("NZ", "Nelson", "dentists"),
+    ("NZ", "New Plymouth", "beauty salons"),
+    ("NZ", "Whangarei", "dentists"),
+    ("NZ", "Rotorua", "dentists"),
+    ("NZ", "Dunedin", "dentists"),
+    ("NZ", "Invercargill", "law firms"),
+    ("NZ", "Palmerston North", "dentists"),
+]
+
+DEEP_EXPANSION_TARGETS: list[dict[str, Any]] = [
+    {"country": country, "city": city, "language": "en", "niche": niche, "priority": 85 - index, "tier": "deep_expansion"}
+    for index, (country, city, niche) in enumerate(DEEP_EXPANSION_MARKETS)
+]
+
 NICHE_EXPANSION_PRIORITY = {
     "dentists": 18,
     "law firms": 16,
@@ -452,7 +534,7 @@ def quality_aware_regional_target_plan(limit_targets: int = 5) -> dict[str, Any]
     performance = _source_segment_performance_summary()
     candidates: list[dict[str, Any]] = []
     blocked_segments: list[dict[str, Any]] = []
-    target_pool = [*lead_discovery_target_plan(False)["targets"], *RESERVE_REGIONAL_TARGETS, *STOCKPILE_EXPANSION_TARGETS]
+    target_pool = [*lead_discovery_target_plan(False)["targets"], *RESERVE_REGIONAL_TARGETS, *STOCKPILE_EXPANSION_TARGETS, *DEEP_EXPANSION_TARGETS]
     for target in target_pool:
         source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
         if source_name in existing_source_names:
@@ -1162,7 +1244,7 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         for row in performance_rows
     }
     candidates: list[dict[str, Any]] = []
-    for target in STOCKPILE_EXPANSION_TARGETS:
+    for target in [*STOCKPILE_EXPANSION_TARGETS, *DEEP_EXPANSION_TARGETS]:
         key = (target["country"].upper(), target["niche"])
         source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
         if source_name in existing_source_names:
