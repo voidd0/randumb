@@ -5,7 +5,6 @@ import argparse
 import fcntl
 import json
 import os
-import subprocess
 import sys
 from http.client import RemoteDisconnected
 from pathlib import Path
@@ -167,32 +166,16 @@ def run_agent(api_base: str, token: str, agent: str, payload: dict, timeout: int
     last_error: Exception | None = None
     for _attempt in range(max(1, attempts)):
         try:
-            completed = subprocess.run(
-                [
-                    "curl",
-                    "-fsS",
-                    "--connect-timeout",
-                    "10",
-                    "--max-time",
-                    str(max(15, timeout)),
-                    "-X",
-                    "POST",
-                    "-H",
-                    "Content-Type: application/json",
-                    "-H",
-                    f"X-Admin-Token: {token}",
-                    "--data-binary",
-                    "@-",
-                    f"{api_base.rstrip('/')}/admin/agents/{agent}",
-                ],
-                input=json.dumps(payload).encode("utf-8"),
-                capture_output=True,
-                timeout=max(20, timeout + 5),
-                check=True,
+            request = Request(
+                f"{api_base.rstrip('/')}/admin/agents/{agent}",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json", "X-Admin-Token": token},
+                method="POST",
             )
-            result = json.loads(completed.stdout.decode("utf-8"))
+            with urlopen(request, timeout=max(15, timeout)) as response:
+                result = json.loads(response.read().decode("utf-8"))
             return result.get("run", {}) if isinstance(result, dict) else {}
-        except (ConnectionResetError, TimeoutError, URLError, RemoteDisconnected, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        except (ConnectionResetError, TimeoutError, URLError, RemoteDisconnected, json.JSONDecodeError) as exc:
             last_error = exc
     return {
         "agent": agent,

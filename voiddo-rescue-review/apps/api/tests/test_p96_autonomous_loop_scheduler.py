@@ -137,6 +137,35 @@ def test_run_agent_retries_transient_connection_reset(monkeypatch):
     assert result["result_json"]["send_mail"] is False
 
 
+def test_run_agent_uses_in_process_request_not_curl_argv(monkeypatch):
+    observed = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"run":{"agent":"mail_qa_agent","status":"completed","result_json":{"send_mail":false,"live_outreach_allowed":false}}}'
+
+    def fake_urlopen(request, timeout):
+        observed["url"] = request.full_url
+        observed["token_header"] = request.headers.get("X-admin-token")
+        observed["body"] = request.data
+        observed["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr(loop_script, "urlopen", fake_urlopen)
+    result = loop_script.run_agent("http://api.local", "secret-token", "mail_qa_agent", {"limit": 1}, 30)
+    assert result["status"] == "completed"
+    assert observed["url"] == "http://api.local/admin/agents/mail_qa_agent"
+    assert observed["token_header"] == "secret-token"
+    assert b'"limit": 1' in observed["body"]
+    assert not hasattr(loop_script, "subprocess")
+
+
 def test_run_loop_retries_remote_disconnected(monkeypatch):
     calls = {"count": 0}
 
