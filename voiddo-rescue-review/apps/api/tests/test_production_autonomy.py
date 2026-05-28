@@ -329,6 +329,14 @@ def test_agent_runs_are_recorded():
     assert int(stored["count"]) >= 1
 
 
+def test_reporting_alias_agents_are_no_send():
+    for agent in ["runtime_state_report_agent", "daily_business_report_agent", "blockers_report_agent"]:
+        result = run_agent(agent)
+        assert result["status"] == "completed"
+        assert result["result_json"].get("send_mail") is False
+        assert result["result_json"].get("live_outreach_allowed") is False
+
+
 def test_daily_loop_runs_dry_without_live_outreach():
     result = run_daily_loop()
     assert result["live_outreach"] is False
