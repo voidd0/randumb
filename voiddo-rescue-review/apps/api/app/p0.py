@@ -2461,6 +2461,7 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
     settings = get_settings()
     email = (payload.get("email") or "").strip().lower()
     body = payload.get("body") or ""
+    html_body = payload.get("html_body") or ""
     unsubscribe_url = one_click_unsubscribe_url_from_body(body)
     checks = {
         "outreach_dry_run": settings.outreach_dry_run,
@@ -2470,6 +2471,7 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
         "visual_qa_decision": latest_decision("visual_qa_runs"),
         "has_unsubscribe": bool(unsubscribe_url),
         "unsubscribe_one_click_ready": bool(unsubscribe_url),
+        "html_body_ready": bool(str(html_body).strip().lower().startswith("<!doctype html>")),
         "suppressed": False,
     }
     if email:
@@ -2487,6 +2489,8 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
         return {"allowed": False, "reason": "recipient_suppressed", "checks": checks}
     if not checks["has_unsubscribe"]:
         return {"allowed": False, "reason": "missing_unsubscribe", "checks": checks}
+    if not checks["html_body_ready"]:
+        return {"allowed": False, "reason": "missing_html_body", "checks": checks}
     return {"allowed": True, "reason": "all_gates_passed", "checks": checks}
 
 

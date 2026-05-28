@@ -492,3 +492,7 @@ def test_transport_refuses_without_flags_and_when_suppressed_or_missing_unsubscr
     missing = transport_gate_status({"email": "lead2@example.com", "body": "hello"})
     assert not missing["allowed"]
     assert missing["reason"] == "missing_unsubscribe"
+
+    missing_html = transport_gate_status({"email": "lead3@example.com", "body": f"Unsubscribe: https://go.rescue.voiddo.com/unsubscribe/u_{uuid.uuid4()}.abc"})
+    assert not missing_html["allowed"]
+    assert missing_html["reason"] == "missing_html_body"

@@ -90,7 +90,7 @@ def _latest_campaign_preflight(cur, campaign_id: str | None) -> dict:
     }
 
 
-def transport_gate(email: str, body: str, campaign_id: str | None = None) -> tuple[bool, str, dict]:
+def transport_gate(email: str, body: str, campaign_id: str | None = None, html_body: str = "") -> tuple[bool, str, dict]:
     unsubscribe_url = unsubscribe_url_from_body(body)
     checks = {
         "outreach_dry_run": os.environ.get("OUTREACH_DRY_RUN", "true").lower() == "true",
@@ -100,6 +100,7 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None) -> tup
         "visual_qa_decision": _latest_decision("visual_qa_runs"),
         "has_unsubscribe": bool(unsubscribe_url),
         "unsubscribe_one_click_ready": bool(unsubscribe_url),
+        "html_body_ready": bool(str(html_body or "").strip().lower().startswith("<!doctype html>")),
         "suppressed": False,
         "campaign_preflight": {"allowed": False, "reason": "not_checked"},
         "warmup_maturity": {"allowed": False, "reason": "not_checked"},
@@ -126,6 +127,8 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None) -> tup
         return False, "recipient_suppressed", checks
     if not checks["has_unsubscribe"]:
         return False, "missing_unsubscribe", checks
+    if not checks["html_body_ready"]:
+        return False, "missing_html_body", checks
     return True, "all_gates_passed", checks
 
 
@@ -152,7 +155,7 @@ def send_message_if_allowed(message_id: str) -> dict:
             )
             campaign = cur.fetchone()
             campaign_id = str(campaign["campaign_id"]) if campaign else None
-    allowed, reason, checks = transport_gate(email, message["body"], campaign_id)
+    allowed, reason, checks = transport_gate(email, message["body"], campaign_id, str(message.get("html_body") or ""))
     if not allowed:
         with connect() as conn:
             with conn.cursor() as cur:

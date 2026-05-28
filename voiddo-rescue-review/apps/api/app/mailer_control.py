@@ -26,7 +26,7 @@ def evaluate_outbound_message(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception as exc:
         qa = {"passed": False, "issues": [f"template_error:{type(exc).__name__}"], "score": 0}
     suppressed = bool(fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,))) if email else False
-    transport = transport_gate_status({"email": email, "body": body})
+    transport = transport_gate_status({"email": email, "body": body, "html_body": rendered.get("html") if rendered else payload.get("html_body", "")})
     campaign_preflight = (
         latest_campaign_preflight_status(str(payload.get("campaign_id") or ""))
         if payload.get("campaign_id") and not payload.get("skip_campaign_preflight")
