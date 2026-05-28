@@ -88,6 +88,23 @@ def fetch_unseen(host: str, port: int, username: str, password: str, limit: int)
     return messages
 
 
+def mark_seen(host: str, port: int, username: str, password: str, uids: list[str]) -> int:
+    clean_uids = [uid for uid in uids if uid and uid.isdigit()]
+    if not clean_uids:
+        return 0
+    marked = 0
+    ctx = ssl.create_default_context()
+    with imaplib.IMAP4_SSL(host, port, ssl_context=ctx, timeout=30) as imap:
+        imap.login(username, password)
+        imap.select("INBOX")
+        for uid in clean_uids:
+            status, _ = imap.uid("store", uid, "+FLAGS", "(\\Seen)")
+            if status == "OK":
+                marked += 1
+        imap.logout()
+    return marked
+
+
 def post_ingest(api_base: str, token: str, messages: list[dict], dry_run: bool) -> dict:
     payload = json.dumps({"messages": messages, "dry_run": dry_run}).encode("utf-8")
     request = Request(
@@ -120,6 +137,15 @@ def main() -> None:
     messages = fetch_unseen(args.imap_host, args.imap_port, args.username, password, max(1, min(args.limit, 50)))
     result = post_ingest(args.api_base, token, messages, args.dry_run)
     ingest = result.get("ingest", {})
+    seen_marked_count = 0
+    if result.get("ok") and not args.dry_run:
+        seen_marked_count = mark_seen(
+            args.imap_host,
+            args.imap_port,
+            args.username,
+            password,
+            [str(message.get("uid") or "") for message in messages],
+        )
     print(
         json.dumps(
             {
@@ -129,6 +155,7 @@ def main() -> None:
                 "stored_count": ingest.get("stored_count", 0),
                 "owner_command_count": ingest.get("owner_command_count", 0),
                 "high_priority_count": ingest.get("high_priority_count", 0),
+                "seen_marked_count": seen_marked_count,
                 "send_mail": ingest.get("send_mail", False),
                 "live_outreach_allowed": ingest.get("live_outreach_allowed", False),
             },
