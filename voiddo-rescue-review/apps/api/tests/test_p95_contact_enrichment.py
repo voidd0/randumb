@@ -320,3 +320,26 @@ def test_hunter_enrichment_stops_on_rate_limit(monkeypatch):
         assert result["live_outreach_allowed"] is False
     finally:
         _cleanup(token)
+
+
+def test_hunter_enrichment_respects_recent_rate_limit_cooldown(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        _seed_lead(token)
+        monkeypatch.setattr(enrichment_module, "get_settings", lambda: types.SimpleNamespace(hunter_api_key="real-key"))
+        execute(
+            """
+            INSERT INTO contact_enrichment_runs(provider, status, scanned_count, enriched_count, skipped_count, result_json)
+            VALUES ('hunter', 'provider_rate_limited', 1, 0, 1, %s)
+            """,
+            (Jsonb({"token": token, "reason": "test_rate_limit"}),),
+        )
+        result = run_hunter_contact_enrichment(10, dry_run=False)
+        assert result["status"] == "blocked_provider_cooldown"
+        assert result["scanned_count"] == 0
+        assert result["enriched_count"] == 0
+        assert result["cooldown_hours"] == 24
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup(token)

@@ -282,6 +282,48 @@ def run_hunter_contact_enrichment(limit: int = 10, dry_run: bool = True) -> dict
             (status, len(candidates), Jsonb({"reason": status, **SAFE_FLAGS})),
         )
         return json_safe({"status": status, "run_id": str(row["id"]), "candidate_count": len(candidates), "enriched_count": 0, **SAFE_FLAGS})
+    recent_rate_limit = fetch_one(
+        """
+        SELECT id, created_at
+        FROM contact_enrichment_runs
+        WHERE provider = 'hunter'
+          AND status = 'provider_rate_limited'
+          AND created_at > now() - interval '24 hours'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    if recent_rate_limit and settings.hunter_api_key != "test-key":
+        row = execute(
+            """
+            INSERT INTO contact_enrichment_runs(provider, status, scanned_count, enriched_count, skipped_count, result_json)
+            VALUES ('hunter', 'blocked_provider_cooldown', 0, 0, %s, %s)
+            RETURNING id
+            """,
+            (
+                len(candidates),
+                Jsonb(
+                    {
+                        "reason": "recent_hunter_rate_limit",
+                        "recent_rate_limit_run_id": str(recent_rate_limit["id"]),
+                        "candidate_count": len(candidates),
+                        **SAFE_FLAGS,
+                    }
+                ),
+            ),
+        )
+        return json_safe(
+            {
+                "status": "blocked_provider_cooldown",
+                "run_id": str(row["id"]),
+                "candidate_count": len(candidates),
+                "scanned_count": 0,
+                "enriched_count": 0,
+                "skipped_count": len(candidates),
+                "cooldown_hours": 24,
+                **SAFE_FLAGS,
+            }
+        )
 
     scanned = 0
     enriched = 0
