@@ -9,7 +9,7 @@ from .campaign_preflight import campaign_preflight_batch
 from .campaign_preview_reviews import auto_review_campaign_previews
 from .campaign_preview_refresh import refresh_campaign_previews_if_needed
 from .db import execute, fetch_all, fetch_one
-from .lead_discovery import regional_lead_discovery_cycle
+from .lead_discovery import regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle
 from .outreach_live_queue import live_outreach_queue_candidates
 from .p0 import json_safe, queue_outreach_preview
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
@@ -200,10 +200,17 @@ def run_lead_stockpile_health(
         if before["approved_preview_count"] < before["target_preview_count"] and before["source_candidate_count"] == 0:
             actions["executed"].append(
                 {
-                    "name": "regional_lead_discovery_cycle",
-                    "result": regional_lead_discovery_cycle(limit_targets=3, per_target_limit=25, dry_run=False),
+                    "name": "stockpile_expansion_discovery_cycle",
+                    "result": stockpile_expansion_discovery_cycle(limit_targets=3, per_target_limit=35, dry_run=False),
                 }
             )
+            if not int(actions["executed"][-1]["result"].get("created_sources", 0) or 0):
+                actions["executed"].append(
+                    {
+                        "name": "regional_lead_discovery_cycle",
+                        "result": regional_lead_discovery_cycle(limit_targets=3, per_target_limit=25, dry_run=False),
+                    }
+                )
         if before["source_candidate_count"] > 0 and before["scanner_active_count"] <= 3:
             actions["executed"].append(
                 {

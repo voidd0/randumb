@@ -59,7 +59,7 @@ from .campaign_preview_reviews import auto_review_campaign_previews
 from .campaign_review_remediation import held_preview_remediation_candidates, remediate_held_preview_reviews
 from .studio_mail_monitor import latest_studio_mail_messages
 from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buyer_journey_scenario
-from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, regional_lead_discovery_cycle
+from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle, stockpile_expansion_target_plan
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
@@ -184,6 +184,12 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             dry_run=bool(payload.get("dry_run", False)),
         ),
         "performance_guided_target_plan_agent": lambda: performance_guided_target_plan(int(payload.get("limit_targets", 5))),
+        "stockpile_expansion_target_plan_agent": lambda: stockpile_expansion_target_plan(int(payload.get("limit_targets", 5))),
+        "stockpile_expansion_discovery_agent": lambda: stockpile_expansion_discovery_cycle(
+            int(payload.get("limit_targets", 3)),
+            int(payload.get("per_target_limit", 35)),
+            dry_run=bool(payload.get("dry_run", False)),
+        ),
         "overpass_lead_discovery_agent": lambda: overpass_lead_discovery(
             payload.get("country", "US"),
             payload.get("city", "Boise"),
@@ -596,6 +602,8 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
         "regional_lead_discovery_agent",
         "performance_guided_target_plan_agent",
         "performance_guided_lead_discovery_agent",
+        "stockpile_expansion_target_plan_agent",
+        "stockpile_expansion_discovery_agent",
         "source_campaign_operator_followup_advance_agent",
         "lead_stockpile_health_agent",
         "lead_stockpile_health_advance_agent",

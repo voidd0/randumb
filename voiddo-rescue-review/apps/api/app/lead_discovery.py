@@ -169,6 +169,38 @@ SECONDARY_TEST_TARGETS: list[dict[str, Any]] = [
     {"country": "EE", "city": "Tallinn", "language": "en", "niche": "dentists", "priority": 40},
 ]
 
+STOCKPILE_EXPANSION_MARKETS: list[tuple[str, str, str]] = [
+    ("IE", "Dingle", "local tourism"),
+    ("IE", "Westport", "local tourism"),
+    ("IE", "Kenmare", "local tourism"),
+    ("IE", "Clifden", "local tourism"),
+    ("IE", "Doolin", "local tourism"),
+    ("IE", "Lahinch", "local tourism"),
+    ("IE", "Naas", "dentists"),
+    ("IE", "Carlow", "dentists"),
+    ("IE", "Letterkenny", "dentists"),
+    ("US", "Athens", "dentists"),
+    ("US", "Flagstaff", "dentists"),
+    ("US", "Salem", "dentists"),
+    ("US", "Missoula", "dentists"),
+    ("US", "Gainesville", "law firms"),
+    ("US", "Columbia", "law firms"),
+    ("US", "Roanoke", "law firms"),
+    ("UK", "Durham", "dentists"),
+    ("UK", "Worcester", "dentists"),
+    ("UK", "Shrewsbury", "dentists"),
+    ("UK", "Salisbury", "dentists"),
+    ("UK", "St Albans", "law firms"),
+    ("CA", "Waterloo", "dentists"),
+    ("CA", "Lethbridge", "dentists"),
+    ("CA", "Medicine Hat", "dentists"),
+]
+
+STOCKPILE_EXPANSION_TARGETS: list[dict[str, Any]] = [
+    {"country": country, "city": city, "language": "en", "niche": niche, "priority": 120 - index}
+    for index, (country, city, niche) in enumerate(STOCKPILE_EXPANSION_MARKETS)
+]
+
 
 def lead_discovery_target_plan(include_secondary: bool = False) -> dict[str, Any]:
     targets = [*FIRST_TIER_TARGETS, *(SECONDARY_TEST_TARGETS if include_secondary else [])]
@@ -527,6 +559,133 @@ def performance_guided_regional_discovery_cycle(limit_targets: int = 3, per_targ
                 dry_run=False,
             )
             created.append(result)
+        except Exception as exc:
+            errors.append({"country": target["country"], "city": target["city"], "niche": target["niche"], "error": type(exc).__name__})
+    return {
+        "status": "completed" if created or not errors else "failed",
+        "selected_count": len(targets),
+        "created_sources": len([item for item in created if item.get("status") == "source_created"]),
+        "found_count": sum(int(item.get("found_count", 0)) for item in created),
+        "with_email_count": sum(int(item.get("with_email_count", 0)) for item in created),
+        "errors": errors,
+        "targets": [{"country": item["country"], "city": item["city"], "niche": item["niche"], "language": item["language"], "guidance": item.get("guidance", {})} for item in targets],
+        "results": [
+            {
+                "source_id": item.get("source_id"),
+                "country": item.get("country"),
+                "city": item.get("city"),
+                "niche": item.get("niche"),
+                "found_count": item.get("found_count", 0),
+                "with_email_count": item.get("with_email_count", 0),
+                "readiness": item.get("readiness", {}),
+            }
+            for item in created
+        ],
+        "plan": {key: value for key, value in plan.items() if key != "targets"},
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit_targets or 5), 12))
+    existing_source_names = {str(row["name"]) for row in fetch_all("SELECT name FROM scout_sources WHERE name LIKE %s", ("overpass-%",))}
+    proven_segments = fetch_all(
+        """
+        WITH latest_reviews AS (
+          SELECT DISTINCT ON (campaign_lead_id) campaign_lead_id, action
+          FROM campaign_preview_reviews
+          ORDER BY campaign_lead_id, created_at DESC
+        )
+        SELECT c.country, c.niche, count(*) AS approved_count, avg(cl.score) AS average_score
+        FROM campaign_leads cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        JOIN latest_reviews lr ON lr.campaign_lead_id = cl.id AND lr.action = 'approved'
+        WHERE cl.status = 'preview'
+          AND c.status IN ('draft', 'preview_ready')
+        GROUP BY c.country, c.niche
+        """
+    )
+    segment_scores = {
+        (str(row["country"] or "").upper(), str(row["niche"] or "")): {
+            "approved_count": int(row["approved_count"] or 0),
+            "average_score": float(row["average_score"] or 0),
+        }
+        for row in proven_segments
+    }
+    selected: list[dict[str, Any]] = []
+    for target in STOCKPILE_EXPANSION_TARGETS:
+        key = (target["country"].upper(), target["niche"])
+        source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
+        if source_name in existing_source_names:
+            continue
+        segment = segment_scores.get(key)
+        if not segment:
+            continue
+        selected.append(
+            {
+                **target,
+                "source_name": source_name,
+                "guidance": {
+                    "strategy": "expand_segments_with_existing_approved_preview_yield",
+                    "approved_count": segment["approved_count"],
+                    "average_score": segment["average_score"],
+                },
+            }
+        )
+        if len(selected) >= safe_limit:
+            break
+    return {
+        "status": "ready" if selected else "no_stockpile_expansion_targets",
+        "selected_count": len(selected),
+        "targets": selected,
+        "proven_segment_count": len(segment_scores),
+        "strategy": "quality_aware_stockpile_expansion_from_segments_with_approved_previews",
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def stockpile_expansion_discovery_cycle(limit_targets: int = 3, per_target_limit: int = 35, dry_run: bool = True) -> dict[str, Any]:
+    safe_target_limit = max(1, min(int(limit_targets or 3), 8))
+    safe_per_target_limit = max(1, min(int(per_target_limit or 35), 50))
+    plan = stockpile_expansion_target_plan(safe_target_limit)
+    targets = plan["targets"]
+    if dry_run or not targets:
+        return {
+            "status": "dry_run" if dry_run else "no_stockpile_expansion_targets",
+            "selected_count": len(targets),
+            "targets": targets,
+            "created_sources": 0,
+            "found_count": 0,
+            "with_email_count": 0,
+            "plan": plan,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    created = []
+    errors = []
+    for target in targets:
+        try:
+            created.append(
+                overpass_lead_discovery(
+                    target["country"],
+                    target["city"],
+                    target["niche"],
+                    target.get("language") or "en",
+                    safe_per_target_limit,
+                    dry_run=False,
+                )
+            )
         except Exception as exc:
             errors.append({"country": target["country"], "city": target["city"], "niche": target["niche"], "error": type(exc).__name__})
     return {

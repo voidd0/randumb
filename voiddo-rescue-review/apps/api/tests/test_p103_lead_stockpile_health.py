@@ -114,6 +114,19 @@ def test_lead_stockpile_apply_discovers_sources_when_target_stockpile_is_short(m
     _patch_snapshot_inputs(monkeypatch, approved=25, live_candidates=20, source_candidates=0)
     calls: list[str] = []
 
+    def fake_stockpile_expansion(limit_targets=3, per_target_limit=35, dry_run=False):
+        calls.append("stockpile_expansion")
+        return {
+            "status": "no_stockpile_expansion_targets",
+            "created_sources": 0,
+            "found_count": 0,
+            "with_email_count": 0,
+            "send_mail": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+
     def fake_discovery(limit_targets=3, per_target_limit=25, dry_run=False):
         calls.append("discovery")
         return {
@@ -127,6 +140,7 @@ def test_lead_stockpile_apply_discovers_sources_when_target_stockpile_is_short(m
             "secrets_included": False,
         }
 
+    monkeypatch.setattr(stockpile_module, "stockpile_expansion_discovery_cycle", fake_stockpile_expansion)
     monkeypatch.setattr(stockpile_module, "regional_lead_discovery_cycle", fake_discovery)
     monkeypatch.setattr(stockpile_module, "refresh_campaign_previews_if_needed", lambda *args, **kwargs: {"status": "refreshed_no_send", "send_mail": False})
     monkeypatch.setattr(stockpile_module, "auto_review_campaign_previews", lambda *args, **kwargs: {"status": "completed", "send_mail": False})
@@ -135,8 +149,9 @@ def test_lead_stockpile_apply_discovers_sources_when_target_stockpile_is_short(m
 
     result = run_lead_stockpile_health(50, 20, 100, apply=True)
     try:
-        assert calls == ["discovery"]
+        assert calls == ["stockpile_expansion", "discovery"]
         action_names = [item["name"] for item in result["actions"]["executed"]]
+        assert "stockpile_expansion_discovery_cycle" in action_names
         assert "regional_lead_discovery_cycle" in action_names
         assert result["send_mail"] is False
         assert result["live_outreach_allowed"] is False

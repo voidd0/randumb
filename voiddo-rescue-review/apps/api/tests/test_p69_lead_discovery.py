@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 import app.lead_discovery as discovery_module
 from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
-from app.lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, regional_lead_discovery_cycle
+from app.lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle, stockpile_expansion_target_plan
 from app.main import app
 
 
@@ -165,6 +165,83 @@ def test_regional_lead_discovery_cycle_selects_unprocessed_targets(monkeypatch):
     finally:
         for target in targets:
             _cleanup(f"overpass-EE-{target['city']}-dentists")
+
+
+def test_stockpile_expansion_target_plan_uses_approved_preview_segments(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    monkeypatch.setattr(
+        discovery_module,
+        "STOCKPILE_EXPANSION_TARGETS",
+        [
+            {"country": "IE", "city": f"YieldTown{token}", "language": "en", "niche": "local tourism", "priority": 100},
+            {"country": "AU", "city": f"EmptyTown{token}", "language": "en", "niche": "contractors", "priority": 90},
+        ],
+    )
+
+    def fake_fetch_all(sql, params=()):
+        if "SELECT name FROM scout_sources" in sql:
+            return []
+        return [{"country": "IE", "niche": "local tourism", "approved_count": 8, "average_score": 81.5}]
+
+    monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
+    plan = stockpile_expansion_target_plan(5)
+    assert plan["status"] == "ready"
+    assert plan["selected_count"] == 1
+    assert plan["targets"][0]["city"] == f"YieldTown{token}"
+    assert plan["targets"][0]["guidance"]["approved_count"] == 8
+    assert plan["send_mail"] is False
+    assert plan["live_outreach_allowed"] is False
+
+
+def test_stockpile_expansion_discovery_cycle_is_no_send(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    city = f"StockpileCity{token}"
+    monkeypatch.setattr(
+        discovery_module,
+        "stockpile_expansion_target_plan",
+        lambda limit_targets=3: {
+            "status": "ready",
+            "selected_count": 1,
+            "targets": [{"country": "EE", "city": city, "language": "en", "niche": "dentists", "guidance": {"approved_count": 2}}],
+            "send_mail": False,
+            "live_outreach_allowed": False,
+        },
+    )
+    monkeypatch.setitem(discovery_module.CITY_AREAS, ("EE", city.lower()), city)
+    monkeypatch.setattr(
+        discovery_module,
+        "_fetch_overpass",
+        lambda query: {
+            "elements": [
+                {
+                    "type": "node",
+                    "id": 691,
+                    "tags": {
+                        "name": f"P69 Stockpile Clinic {token}",
+                        "website": f"https://p69-stockpile-{token}.clinic",
+                        "contact:email": f"hello-stockpile-{token}@p69-stockpile-{token}.clinic",
+                    },
+                }
+            ]
+        },
+    )
+    source_name = f"overpass-EE-{city}-dentists"
+    try:
+        dry = stockpile_expansion_discovery_cycle(1, 5, dry_run=True)
+        assert dry["status"] == "dry_run"
+        assert dry["created_sources"] == 0
+        live = stockpile_expansion_discovery_cycle(1, 5, dry_run=False)
+        assert live["status"] == "completed"
+        assert live["created_sources"] == 1
+        assert live["with_email_count"] == 1
+        assert live["send_mail"] is False
+        assert live["smtp_called"] is False
+        assert f"hello-stockpile-{token}" not in str(live)
+        agent = run_agent("stockpile_expansion_target_plan_agent", {"limit_targets": 1})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["send_mail"] is False
+    finally:
+        _cleanup(source_name)
 
 
 def test_regional_lead_discovery_endpoint_and_agent_are_no_send():
