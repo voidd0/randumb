@@ -37,6 +37,7 @@ from .security import lead_id_from_unsubscribe_token, unsubscribe_token_for_lead
 ONETIME_FIX_PRODUCTS = {"audit_onetime", "contact_form_repair", "emergency_fix"}
 EXCLUDED_NICHES = {"banks", "bank", "government", "hospital", "hospitals", "gambling", "adult", "crypto", "political"}
 OWNER_EMAIL_FALLBACK = ""
+TEST_COUNTRY_PATTERN = r"^(P7|P8|P9|P10|P11|P12|P59|P60|P61|P62|P63|P68|P72|P73|P74|P77|P83)"
 RUNTIME_PAUSE_KEYS = {
     "scanner": "pause_scanner",
     "outreach": "pause_outreach",
@@ -1414,6 +1415,11 @@ def scout_source_queue_preview_snapshot(limit: int = 20) -> dict[str, Any]:
         JOIN latest ON latest.source_id = s.id
         WHERE latest.status = 'PASS_SOURCE_READY'
           AND s.status IN ('active', 'preflight_ready')
+          AND upper(COALESCE(s.country, '')) !~ %s
+          AND lower(COALESCE(s.name, '')) NOT LIKE 'p%%-%%'
+          AND lower(COALESCE(s.name, '')) NOT LIKE 'ready-source-%%'
+          AND lower(COALESCE(s.name, '')) NOT LIKE 'blocked-source-%%'
+          AND lower(COALESCE(s.name, '')) NOT LIKE 'prov-%%'
           AND NOT EXISTS (
             SELECT 1 FROM scout_runs sr
             WHERE sr.source_id = s.id
@@ -1422,7 +1428,7 @@ def scout_source_queue_preview_snapshot(limit: int = 20) -> dict[str, Any]:
         ORDER BY latest.created_at DESC, s.created_at DESC
         LIMIT %s
         """,
-        (safe_limit,),
+        (TEST_COUNTRY_PATTERN, safe_limit),
     )
     scores = [int(row.get("readiness_score") or 0) for row in rows]
     return {

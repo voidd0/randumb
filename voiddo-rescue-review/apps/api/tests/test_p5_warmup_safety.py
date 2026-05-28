@@ -261,14 +261,14 @@ def test_scout_source_queue_preview_snapshot_is_no_send():
     try:
         source = create_scout_source(
             {
-                "name": f"p83-queue-{token}",
+                "name": f"queue-source-{token}",
                 "source_type": "manual_csv_scout",
-                "country": "P83",
+                "country": "CA",
                 "niche": "dentists",
                 "config_json": {
                     "csv": (
                         "business_name,website_url,email,country,niche,source_url,confidence\n"
-                        f"P83,https://p83-{token}.example.test,owner@p83-{token}.example.test,P83,dentists,https://directory.example/{token},95\n"
+                        f"Queue Test,https://queue-{token}.example.test,owner@queue-{token}.example.test,CA,dentists,https://directory.example/{token},95\n"
                     )
                 },
             }
@@ -286,9 +286,9 @@ def test_scout_source_queue_preview_snapshot_is_no_send():
         assert metrics["scout_source_queue_created_scout_runs"] == 0
         assert metrics["scout_source_queue_created_scanner_jobs"] == 0
     finally:
-        execute("DELETE FROM scout_runs WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"p83-queue-{token}",))
-        execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"p83-queue-{token}",))
-        execute("DELETE FROM scout_sources WHERE name LIKE %s", (f"p83-queue-{token}",))
+        execute("DELETE FROM scout_runs WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"queue-source-{token}",))
+        execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s)", (f"queue-source-{token}",))
+        execute("DELETE FROM scout_sources WHERE name LIKE %s", (f"queue-source-{token}",))
 
 
 def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
