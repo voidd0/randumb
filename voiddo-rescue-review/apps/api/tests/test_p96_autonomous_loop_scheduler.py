@@ -98,4 +98,7 @@ def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
     assert result["loop"]["mode"] == "core"
     assert len(calls) == len(loop_script.CORE_AGENTS)
     assert calls[0][0] == "mail_throttle_agent"
+    assert [agent for agent, _payload in calls].index("outreach_preview_queue_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
+    assert [agent for agent, _payload in calls].index("outreach_preview_dedupe_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
+    assert [agent for agent, _payload in calls].index("campaign_preflight_orphan_hygiene_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
     assert calls[-1][0] == "mailer_policy_score_agent"
