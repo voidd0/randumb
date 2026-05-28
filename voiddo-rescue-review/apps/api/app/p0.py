@@ -800,6 +800,8 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
     subject = message.get("subject", "")
     body = message.get("body", "")
     sender = parseaddr(message.get("sender", ""))[1] or message.get("sender", "")
+    sender_hash = recipient_hash(sender)
+    sender_provider = email_provider(sender)
     classified = classify_reply(subject, body)
     classification = classified["classification"]
     human = bool(classified["human_review_required"])
@@ -830,7 +832,7 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
                 INSERT INTO email_events(event_type, payload_json, mailbox, uid, message_id, classification, human_review_required)
                 VALUES ('inbound_reply', %s, %s, %s, %s, %s, %s)
                 """,
-                (Jsonb({"sender": sender, "subject": subject, "thread_id": str(thread_id)}), mailbox, uid, message_id, classification, human),
+                (Jsonb({"sender_hash": sender_hash, "sender_provider": sender_provider, "subject": subject, "thread_id": str(thread_id)}), mailbox, uid, message_id, classification, human),
             )
             if classification == "unsubscribe":
                 cur.execute(
@@ -850,8 +852,8 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
                         "bounce" if classification == "bounce" else "inbox_reply",
                         "warning" if classification == "bounce" else "info",
                         mailbox,
-                        recipient_hash(sender),
-                        email_provider(sender),
+                        sender_hash,
+                        sender_provider,
                         message_id,
                         f"classified:{classification}",
                     ),
@@ -859,19 +861,19 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
             if classification in {"legal_threat", "security_accusation", "angry"}:
                 cur.execute(
                     "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, 'critical', %s, %s)",
-                    (f"inbox.{classification}", "Unsafe reply requires human review", Jsonb({"sender": sender, "subject": subject})),
+                    (f"inbox.{classification}", "Unsafe reply requires human review", Jsonb({"sender_hash": sender_hash, "sender_provider": sender_provider, "subject": subject})),
                 )
             if any(marker in body.lower() for marker in ["found it in spam", "in spam", "spam folder"]):
                 cur.execute(
                     "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
-                    ("deliverability.spam_observed", "warning", "Test inbox spam placement signal observed", Jsonb({"sender_hash": recipient_hash(sender), "subject": subject})),
+                    ("deliverability.spam_observed", "warning", "Test inbox spam placement signal observed", Jsonb({"sender_hash": sender_hash, "subject": subject})),
                 )
                 cur.execute(
                     """
                     INSERT INTO mail_signals(signal_type, severity, source, mailbox, recipient_hash, provider, message_id, raw_summary)
                     VALUES ('spam_signal', 'warning', 'inbox_engine', %s, %s, %s, %s, 'test inbox spam placement observed')
                     """,
-                    (mailbox, recipient_hash(sender), email_provider(sender), message_id),
+                    (mailbox, sender_hash, sender_provider, message_id),
                 )
         conn.commit()
     return {"stored": True, "duplicate": False, "classification": classification, "human_review_required": human}

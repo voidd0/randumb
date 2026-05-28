@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
 from app.db import connect_dict
+from app.db import fetch_one
 from app.main import app
 from app.p0 import (
     create_scanner_job,
@@ -117,6 +118,29 @@ def test_inbox_persistence_idempotency_and_unsubscribe_suppression():
     assert first["stored"] is True
     assert first["classification"] == "unsubscribe"
     assert second["duplicate"] is True
+
+
+def test_inbound_persistence_redacts_sender_in_events():
+    token = uuid.uuid4().hex
+    sender = f"legal-{token}@example.test"
+    message_id = f"<legal-{token}@example.test>"
+    result = persist_inbound_message(
+        {
+            "mailbox": "support",
+            "uid": token,
+            "message_id": message_id,
+            "sender": sender,
+            "subject": "Legal",
+            "body": "My lawyer will contact you.",
+        }
+    )
+    assert result["stored"] is True
+    event = fetch_one("SELECT payload_json FROM email_events WHERE message_id = %s", (message_id,))
+    system_event = fetch_one("SELECT payload_json FROM system_events WHERE type = 'inbox.legal_threat' AND payload_json->>'subject' = 'Legal' ORDER BY created_at DESC LIMIT 1")
+    assert event and "sender_hash" in event["payload_json"]
+    assert sender not in str(event["payload_json"])
+    assert system_event and "sender_hash" in system_event["payload_json"]
+    assert sender not in str(system_event["payload_json"])
 
 
 def test_owner_command_safe_auto_and_high_risk_blocked():
