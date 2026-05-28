@@ -6,6 +6,7 @@ import fcntl
 import json
 import os
 import sys
+from http.client import RemoteDisconnected
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -108,15 +109,21 @@ def assert_safe(summary: dict) -> None:
         raise RuntimeError("daily_loop_agent_failures")
 
 
-def run_loop(api_base: str, token: str, timeout: int) -> dict:
+def run_loop(api_base: str, token: str, timeout: int, attempts: int = 2) -> dict:
     request = Request(
         f"{api_base.rstrip('/')}/admin/daily-loop/run",
         data=b"{}",
         headers={"Content-Type": "application/json", "X-Admin-Token": token},
         method="POST",
     )
-    with urlopen(request, timeout=timeout) as response:
-        return json.loads(response.read().decode("utf-8"))
+    last_error: Exception | None = None
+    for _attempt in range(max(1, attempts)):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except (ConnectionResetError, TimeoutError, URLError, RemoteDisconnected) as exc:
+            last_error = exc
+    raise last_error or RuntimeError("daily_loop_request_failed")
 
 
 def run_agent(api_base: str, token: str, agent: str, payload: dict, timeout: int, attempts: int = 2) -> dict:
@@ -132,7 +139,7 @@ def run_agent(api_base: str, token: str, agent: str, payload: dict, timeout: int
             with urlopen(request, timeout=timeout) as response:
                 result = json.loads(response.read().decode("utf-8"))
             return result.get("run", {}) if isinstance(result, dict) else {}
-        except (ConnectionResetError, TimeoutError, URLError) as exc:
+        except (ConnectionResetError, TimeoutError, URLError, RemoteDisconnected) as exc:
             last_error = exc
     return {
         "agent": agent,
@@ -194,7 +201,7 @@ def main() -> int:
             assert_safe(summary)
         print(json.dumps(summary, sort_keys=True))
         return 0
-    except (RuntimeError, URLError, TimeoutError) as exc:
+    except (RuntimeError, URLError, TimeoutError, RemoteDisconnected) as exc:
         print(
             json.dumps(
                 {

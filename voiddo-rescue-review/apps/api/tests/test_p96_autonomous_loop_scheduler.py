@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from http.client import RemoteDisconnected
 import importlib.util
 from pathlib import Path
 
@@ -131,6 +132,32 @@ def test_run_agent_retries_transient_connection_reset(monkeypatch):
     assert calls["count"] == 2
     assert result["status"] == "completed"
     assert result["result_json"]["send_mail"] is False
+
+
+def test_run_loop_retries_remote_disconnected(monkeypatch):
+    calls = {"count": 0}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"ok":true,"loop":{"agents":0,"runs":[],"live_outreach":false}}'
+
+    def flaky_urlopen(_request, timeout):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RemoteDisconnected("closed")
+        return Response()
+
+    monkeypatch.setattr(loop_script, "urlopen", flaky_urlopen)
+    result = loop_script.run_loop("http://api.local", "token", 30)
+    assert calls["count"] == 2
+    assert result["ok"] is True
+    assert result["loop"]["live_outreach"] is False
 
 
 def test_run_agent_returns_no_send_failure_after_retry_exhaustion(monkeypatch):
