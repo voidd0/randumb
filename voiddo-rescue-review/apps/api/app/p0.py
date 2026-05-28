@@ -2474,14 +2474,47 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
 def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
     rows = fetch_all(
         """
-        SELECT l.id AS lead_id, l.email, b.name AS business_name, b.domain, a.public_slug, a.summary
-        FROM leads l
+        SELECT
+               cl.id AS campaign_lead_id,
+               cl.campaign_id,
+               l.id AS lead_id,
+               l.email,
+               b.name AS business_name,
+               b.domain,
+               a.public_slug,
+               a.summary,
+               COALESCE(ls.final_score, cl.score, l.score, 0) AS final_score
+        FROM campaign_leads cl
+        JOIN campaigns c ON c.id = cl.campaign_id
+        JOIN leads l ON l.id = cl.lead_id
         JOIN businesses b ON b.id = l.business_id
-        JOIN audits a ON a.business_id = b.id
-        WHERE l.score >= 70
+        JOIN audits a ON a.id = cl.audit_id
+        LEFT JOIN LATERAL (
+            SELECT final_score
+            FROM lead_scores ls
+            WHERE ls.lead_id = l.id AND ls.audit_id = a.id
+            ORDER BY ls.created_at DESC
+            LIMIT 1
+        ) ls ON true
+        LEFT JOIN LATERAL (
+            SELECT action
+            FROM campaign_preview_reviews r
+            WHERE r.campaign_lead_id = cl.id
+            ORDER BY r.created_at DESC
+            LIMIT 1
+        ) latest_review ON true
+        WHERE cl.status = 'preview'
+          AND latest_review.action = 'approved'
+          AND COALESCE(ls.final_score, cl.score, l.score, 0) >= 70
           AND l.email IS NOT NULL
+          AND lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
+          AND lower(COALESCE(b.domain, '')) NOT IN ('example.com', 'localhost')
+          AND lower(COALESCE(l.source, '')) NOT LIKE 'p%%_test%%'
+          AND lower(COALESCE(l.source, '')) NOT LIKE 'test%%'
+          AND lower(COALESCE(l.source, '')) NOT LIKE '%%_test'
           AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(s.email) = lower(l.email))
-        ORDER BY l.created_at DESC
+          AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(s.domain) = lower(b.domain))
+        ORDER BY COALESCE(ls.final_score, cl.score, l.score, 0) DESC, cl.updated_at DESC
         LIMIT %s
         """,
         (limit,),
@@ -2490,13 +2523,19 @@ def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
     for row in rows:
         preview.append(
             {
+                "campaign_lead_id": str(row["campaign_lead_id"]),
+                "campaign_id": str(row["campaign_id"]),
                 "lead_id": str(row["lead_id"]),
-                "email": row["email"],
+                "recipient_hash": hashlib.sha256(str(row["email"]).strip().lower().encode("utf-8")).hexdigest()[:24],
                 "business_name": row["business_name"],
                 "domain": row["domain"],
                 "audit_url": f"{get_settings().audit_base_url}/r/{row['public_slug']}",
                 "main_issue_short": row["summary"],
+                "final_score": int(row["final_score"] or 0),
+                "source": "approved_campaign_preview",
                 "dry_run": True,
+                "send_mail": False,
+                "live_outreach_allowed": False,
             }
         )
     batch = execute(
@@ -2507,7 +2546,12 @@ def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
         """,
         (len(preview), Jsonb(preview)),
     )
-    return dict(batch)
+    result = dict(batch)
+    result["send_mail"] = False
+    result["smtp_called"] = False
+    result["live_outreach_allowed"] = False
+    result["raw_recipient_addresses_included"] = False
+    return result
 
 
 def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
@@ -2527,7 +2571,15 @@ def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
             (item["lead_id"], f"Possible issue on {item['business_name']} website", body),
         )
         created += 1
-    return {"created": created, "dry_run_only": True, "preview_batch_id": str(preview_batch["id"])}
+    return {
+        "created": created,
+        "dry_run_only": True,
+        "preview_batch_id": str(preview_batch["id"]),
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+    }
 
 
 def import_lead_batch(name: str, csv_text: str, country: str | None = None, niche: str | None = None, score_threshold: int = 70) -> dict[str, Any]:
