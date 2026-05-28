@@ -69,8 +69,8 @@ def test_ready_source_queue_candidates_are_redacted_and_preview_only():
     result = prepare_scout_source_from_adapter(
         "domain_list",
         {
-            "name": f"p81-source-{token}",
-            "text": f"p81-{token}.example.test",
+            "name": f"qa81-source-{token}",
+            "text": f"qa81-{token}.clinic",
             "country": "EE",
             "language": "en",
             "niche": "dentists",
@@ -98,6 +98,42 @@ def test_ready_source_queue_candidates_are_redacted_and_preview_only():
         execute("DELETE FROM scout_runs WHERE source_id = %s", (result["source"]["id"],))
         execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (result["source"]["id"],))
         execute("DELETE FROM scout_sources WHERE id = %s", (result["source"]["id"],))
+
+
+def test_ready_source_queue_auto_selection_excludes_synthetic_sources():
+    token = uuid.uuid4().hex[:8]
+    real = prepare_scout_source_from_adapter(
+        "domain_list",
+        {
+            "name": f"qa-real-source-{token}",
+            "text": f"qa-real-{token}.clinic",
+            "country": "IE",
+            "language": "en",
+            "niche": "dentists",
+        },
+    )
+    synthetic = prepare_scout_source_from_adapter(
+        "domain_list",
+        {
+            "name": f"ready-source-{token}",
+            "text": f"p9-synthetic-{token}.example.test",
+            "country": "P9",
+            "language": "en",
+            "niche": "dentists",
+        },
+    )
+    try:
+        candidates = ready_scout_source_queue_candidates(20)
+        ids = {item["source"]["id"] for item in candidates["candidates"]}
+        assert real["source"]["id"] in ids
+        assert synthetic["source"]["id"] not in ids
+        assert candidates["send_mail"] is False
+        assert candidates["raw_recipient_addresses_included"] is False
+    finally:
+        for source in [real["source"], synthetic["source"]]:
+            execute("DELETE FROM scout_runs WHERE source_id = %s", (source["id"],))
+            execute("DELETE FROM scout_source_readiness_checks WHERE source_id = %s", (source["id"],))
+            execute("DELETE FROM scout_sources WHERE id = %s", (source["id"],))
 
 
 def test_ready_source_queue_activation_is_idempotent(monkeypatch):

@@ -29,11 +29,11 @@ def _cleanup(token: str) -> None:
 
 
 def _completed_audit_without_score(token: str) -> tuple[str, str]:
-    domain = f"p72-{token}.example.test"
+    domain = f"qa72-{token}.clinic"
     business = execute(
         """
         INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
-        VALUES (%s, 'US', 'Score City', 'en', 'dentists', 'p72_test', %s, %s, %s, 'scouted')
+        VALUES (%s, 'US', 'Score City', 'en', 'dentists', 'qa72_fixture', %s, %s, %s, 'scouted')
         RETURNING id
         """,
         (f"P72 Clinic {token}", f"https://{domain}", domain, f"hello-{token}@{domain}"),
@@ -41,7 +41,7 @@ def _completed_audit_without_score(token: str) -> tuple[str, str]:
     lead = execute(
         """
         INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
-        VALUES (%s, %s, 'p72_test', 'scouted', 0, 'en', 'US', 'Score City', 'dentists')
+        VALUES (%s, %s, 'qa72_fixture', 'scouted', 0, 'en', 'US', 'Score City', 'dentists')
         RETURNING id
         """,
         (business["id"], f"hello-{token}@{domain}"),
@@ -52,7 +52,7 @@ def _completed_audit_without_score(token: str) -> tuple[str, str]:
         VALUES (%s, %s, %s, %s, 'completed', 62, 'Public contact path may be weak.', %s, now())
         RETURNING id
         """,
-        (business["id"], lead["id"], domain, f"https://{domain}", f"p72-{token}"),
+        (business["id"], lead["id"], domain, f"https://{domain}", f"qa72-{token}"),
     )
     for issue_type in ["contact_path", "mobile_cta", "metadata"]:
         execute(
@@ -62,6 +62,35 @@ def _completed_audit_without_score(token: str) -> tuple[str, str]:
             """,
             (audit["id"], issue_type),
         )
+    return str(lead["id"]), str(audit["id"])
+
+
+def _example_test_audit_without_score(token: str) -> tuple[str, str]:
+    domain = f"p72-artifact-{token}.example.test"
+    business = execute(
+        """
+        INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
+        VALUES (%s, 'US', 'Score City', 'en', 'dentists', 'p72_test', %s, %s, %s, 'scouted')
+        RETURNING id
+        """,
+        (f"P72 Artifact {token}", f"https://{domain}", domain, f"artifact-{token}@{domain}"),
+    )
+    lead = execute(
+        """
+        INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
+        VALUES (%s, %s, 'p72_test', 'scouted', 0, 'en', 'US', 'Score City', 'dentists')
+        RETURNING id
+        """,
+        (business["id"], f"artifact-{token}@{domain}"),
+    )
+    audit = execute(
+        """
+        INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+        VALUES (%s, %s, %s, %s, 'completed', 80, 'Synthetic test artifact.', %s, now())
+        RETURNING id
+        """,
+        (business["id"], lead["id"], domain, f"https://{domain}", f"p72-artifact-{token}"),
+    )
     return str(lead["id"]), str(audit["id"])
 
 
@@ -105,5 +134,17 @@ def test_post_scan_lead_score_backfill_endpoint_and_agent_are_no_send():
         assert agent["result_json"]["send_mail"] is False
         assert agent["result_json"]["smtp_called"] is False
         assert agent["result_json"]["live_outreach_allowed"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_post_scan_lead_score_backfill_excludes_example_test_artifacts():
+    token = uuid.uuid4().hex[:8]
+    try:
+        lead_id, audit_id = _example_test_audit_without_score(token)
+        result = backfill_post_scan_lead_scores(50, dry_run=False)
+        assert result["send_mail"] is False
+        assert not any(item["lead_id"] == lead_id for item in result["scores"])
+        assert fetch_one("SELECT 1 FROM lead_scores WHERE lead_id = %s AND audit_id = %s", (lead_id, audit_id)) is None
     finally:
         _cleanup(token)

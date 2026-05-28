@@ -68,6 +68,7 @@ SUPPORTED_SCOUT_TYPES = {
     "wordpress_footprint_scout",
 }
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+TEST_COUNTRY_PATTERN = r"^(P7|P8|P9|P10|P11|P12|P59|P60|P61|P62|P63|P68|P72|P73|P74)"
 
 
 def _json_safe(value: Any) -> Any:
@@ -871,7 +872,20 @@ def process_scout_run_gated(run_id: str) -> dict[str, Any]:
 def ready_scout_source_queue_candidates(limit: int = 20, source_id: str | None = None) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 20), 100))
     source_filter = "AND s.id = %s" if source_id else ""
+    source_hygiene_filter = (
+        """
+          AND upper(COALESCE(s.country, '')) !~ %s
+          AND lower(COALESCE(s.name, '')) NOT LIKE 'p%%-%%'
+          AND lower(COALESCE(s.name, '')) NOT LIKE 'ready-source-%%'
+          AND lower(COALESCE(s.name, '')) NOT LIKE 'blocked-source-%%'
+          AND lower(COALESCE(s.name, '')) NOT LIKE 'prov-%%'
+        """
+        if not source_id
+        else ""
+    )
     params: tuple[Any, ...] = (source_id, safe_limit) if source_id else (safe_limit,)
+    if not source_id:
+        params = (TEST_COUNTRY_PATTERN, safe_limit)
     rows = fetch_all(
         f"""
         WITH latest AS (
@@ -888,6 +902,7 @@ def ready_scout_source_queue_candidates(limit: int = 20, source_id: str | None =
         WHERE latest.status = 'PASS_SOURCE_READY'
           AND s.status IN ('active', 'preflight_ready')
           {source_filter}
+          {source_hygiene_filter}
           AND NOT EXISTS (
             SELECT 1 FROM scout_runs sr
             WHERE sr.source_id = s.id

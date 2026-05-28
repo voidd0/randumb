@@ -148,6 +148,11 @@ def backfill_post_scan_lead_scores(limit: int = 50, dry_run: bool = True) -> dic
         WHERE a.status = 'completed'
           AND a.lead_id IS NOT NULL
           AND l.email IS NOT NULL
+          AND lower(COALESCE(a.domain, '')) NOT LIKE '%%.example.test'
+          AND lower(COALESCE(a.url, '')) NOT LIKE '%%.example.test%%'
+          AND lower(COALESCE(l.email, '')) NOT LIKE '%%.example.test'
+          AND lower(COALESCE(l.source, '')) NOT LIKE 'p%%\\_test' ESCAPE '\\'
+          AND lower(COALESCE(l.source, '')) NOT LIKE 'test%%'
           AND NOT EXISTS (
             SELECT 1 FROM lead_scores ls
             WHERE ls.lead_id = a.lead_id

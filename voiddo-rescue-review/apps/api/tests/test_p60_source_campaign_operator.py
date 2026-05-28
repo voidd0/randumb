@@ -38,8 +38,8 @@ def _source(token: str) -> str:
     result = prepare_scout_source_from_adapter(
         "directory",
         {
-            "name": f"p60-source-{token}",
-            "csv": f"name,website,email,city,source_url\nP60,https://p60-{token}.example.test,owner@p60-{token}.example.test,Tallinn,https://directory.example.test/p60-{token}\n",
+            "name": f"qa60-source-{token}",
+            "csv": f"name,website,email,city,source_url\nQA60,https://qa60-{token}.example.test,owner@qa60-{token}.example.test,Tallinn,https://directory.example.test/qa60-{token}\n",
             "country": "EE",
             "language": "en",
             "niche": "dentists",
@@ -75,7 +75,7 @@ def test_source_campaign_operator_snapshot_is_no_send_and_redacted():
         assert snapshot["send_mail"] is False
         assert snapshot["live_outreach_allowed"] is False
         assert snapshot["raw_recipient_addresses_included"] is False
-        assert f"owner@p60-{token}" not in text
+        assert f"owner@qa60-{token}" not in text
     finally:
         _cleanup(source_id, token)
 
