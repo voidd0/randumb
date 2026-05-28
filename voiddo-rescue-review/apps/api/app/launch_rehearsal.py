@@ -5,6 +5,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .db import execute, fetch_all
+from .canary_batch_quality import canary_batch_quality
 from .launch_activation import launch_activation_readiness, launch_activation_runbook
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .mailer_control_room import mailer_policy_score
@@ -38,6 +39,7 @@ def run_launch_rehearsal(limit: int = 20, apply_pause: bool = False) -> dict[str
     activation = launch_activation_readiness(safe_limit)
     runbook = launch_activation_runbook(safe_limit)
     queue = live_outreach_queue_candidates(safe_limit)
+    canary_quality = canary_batch_quality(safe_limit, store=True)
     stage = stage_live_outreach_batch(safe_limit, dry_run=True, requested_by="launch_rehearsal")
     observer = outreach_post_send_observer(24, apply_pause=apply_pause)
     mailer = mailer_policy_score()
@@ -75,6 +77,20 @@ def run_launch_rehearsal(limit: int = 20, apply_pause: bool = False) -> dict[str
             int(queue.get("candidate_count") or 0) > 0 and queue.get("raw_recipient_addresses_included") is False,
             {"candidate_count": queue.get("candidate_count")},
             "live_queue_empty_or_not_redacted",
+        ),
+        _step(
+            "canary_batch_quality_pass",
+            canary_quality.get("decision") == "PASS_CANARY_BATCH_QUALITY",
+            {
+                "decision": canary_quality.get("decision"),
+                "candidate_count": canary_quality.get("candidate_count"),
+                "segment_count": canary_quality.get("segment_count"),
+                "campaign_count": canary_quality.get("campaign_count"),
+                "recipient_domain_count": canary_quality.get("recipient_domain_count"),
+                "blockers": canary_quality.get("blockers"),
+                "warnings": canary_quality.get("warnings"),
+            },
+            "canary_batch_quality_not_pass",
         ),
         _step(
             "dry_run_stage_blocks_safely",

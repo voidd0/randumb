@@ -35,7 +35,8 @@ def test_launch_rehearsal_is_dry_run_and_records_evidence():
     assert result["result"]["staged_count"] == 0
     assert result["result"]["sent_count"] == 0
     assert result["result"]["preview_candidate_count"] >= 0
-    assert result["run"]["step_count"] >= 8
+    assert result["run"]["step_count"] >= 9
+    assert any(step["name"] == "canary_batch_quality_pass" for step in result["result"]["steps"])
     assert after["count"] == before["count"]
     assert "@" not in str(result)
 

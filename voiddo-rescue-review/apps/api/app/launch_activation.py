@@ -31,8 +31,16 @@ def _latest_preflight_counts(limit: int = 25) -> dict[str, Any]:
         SELECT DISTINCT ON (c.id) c.id AS campaign_id, p.decision, p.blocker_count, p.ready_count, p.created_at
         FROM campaigns c
         JOIN campaign_leads cl ON cl.campaign_id = c.id AND cl.status = 'preview'
+        JOIN LATERAL (
+          SELECT action
+          FROM campaign_preview_reviews
+          WHERE campaign_lead_id = cl.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) latest_review ON true
         LEFT JOIN campaign_preflight_runs p ON p.campaign_id = c.id
         WHERE c.status IN ('preview_ready', 'draft')
+          AND latest_review.action = 'approved'
         ORDER BY c.id, p.created_at DESC NULLS LAST
         LIMIT %s
         """,
