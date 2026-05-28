@@ -12,7 +12,7 @@ export default function Page() {
       <main id="main" className="main">
         <section className="hero hero-proof">
           <div>
-            <div className="eyebrow">Autonomous website rescue for local businesses</div>
+            <div className="eyebrow">Managed website rescue for local businesses</div>
             <h1>Vøiddo Rescue</h1>
             <p className="lede">
               Public browser checks, proof audit pages, controlled outreach, Paddle checkout, onboarding,
@@ -29,7 +29,7 @@ export default function Page() {
             </div>
           </div>
           <div className="console" aria-label="Pipeline preview">
-            <div className="console-head"><span>autonomous revenue chain</span><span className="pulse" /></div>
+            <div className="console-head"><span>website rescue chain</span><span className="pulse" /></div>
             <div className="rows">
               {[
                 ["scan", "public browser check", "safe"],
@@ -64,7 +64,7 @@ export default function Page() {
           </div>
         </section>
       </main>
-      <footer className="footer">Built by vøiddo — a small studio shipping AI-flavoured products, free dev tools, Chrome extensions and weird browser games.</footer>
+      <footer className="footer">Built by vøiddo — a small studio shipping web products, dev tools, Chrome extensions and browser games.</footer>
     </div>
   );
 }

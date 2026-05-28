@@ -19,7 +19,7 @@ export default function CustomerPage() {
           <div className="panel">
             <h2>Onboarding steps</h2>
             <div className="row"><span className="tag">1</span><span>Review the current audit and top issues</span><span className="score">ready</span></div>
-            <div className="row"><span className="tag">2</span><span>Install the read-only WordPress agent when needed</span><span className="score">optional</span></div>
+            <div className="row"><span className="tag">2</span><span>Install the read-only WordPress connector when needed</span><span className="score">optional</span></div>
             <div className="row"><span className="tag">3</span><span>Track fix request and monitoring updates</span><span className="score">queued</span></div>
           </div>
         </section>

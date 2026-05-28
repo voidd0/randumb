@@ -102,7 +102,7 @@ export default async function CustomerTokenDashboard({ params }: { params: Promi
             )) : (
               <>
                 <div className="row"><span className="tag">ready</span><span>Review the latest audit and fix scope</span><span className="score">step 1</span></div>
-                <div className="row"><span className="tag">optional</span><span>Connect the read-only WordPress agent when requested</span><span className="score">step 2</span></div>
+                <div className="row"><span className="tag">optional</span><span>Connect the read-only WordPress connector when requested</span><span className="score">step 2</span></div>
                 <div className="row"><span className="tag">active</span><span>Receive monitoring and repair status updates</span><span className="score">step 3</span></div>
               </>
             )}
