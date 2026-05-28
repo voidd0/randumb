@@ -135,7 +135,11 @@ def test_source_campaign_operator_admin_and_agents_are_no_send():
     assert response.json()["operator"]["send_mail"] is False
     agent = run_agent("source_campaign_operator_agent", {"limit": 5})
     advance = run_agent("source_campaign_operator_advance_agent", {"limit": 5, "dry_run": True})
+    followup = run_agent("source_campaign_operator_followup_advance_agent", {"limit": 5, "dry_run": True})
     assert agent["status"] == "completed"
     assert advance["status"] == "completed"
+    assert followup["status"] == "completed"
     assert agent["result_json"]["send_mail"] is False
     assert advance["result_json"]["send_mail"] is False
+    assert followup["result_json"]["send_mail"] is False
+    assert followup["result_json"]["live_outreach_allowed"] is False
