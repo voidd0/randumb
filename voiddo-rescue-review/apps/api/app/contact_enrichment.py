@@ -158,7 +158,9 @@ def contact_enrichment_candidates(limit: int = 25) -> dict[str, Any]:
         """
         SELECT l.id AS lead_id, b.id AS business_id, b.name AS business_name, b.domain,
                b.website_url, l.country, l.city, l.language, l.niche,
-               a.id AS audit_id, a.public_slug, COALESCE(ls.final_score, l.score, 0) AS final_score
+               a.id AS audit_id, a.public_slug, COALESCE(ls.final_score, l.score, 0) AS final_score,
+               COALESCE(issue_stats.issue_count, 0) AS issue_count,
+               COALESCE(issue_stats.critical_high_count, 0) AS critical_high_count
         FROM leads l
         JOIN businesses b ON b.id = l.business_id
         JOIN LATERAL (
@@ -176,13 +178,22 @@ def contact_enrichment_candidates(limit: int = 25) -> dict[str, Any]:
           ORDER BY created_at DESC
           LIMIT 1
         ) ls ON true
+        LEFT JOIN LATERAL (
+          SELECT count(*) AS issue_count,
+                 count(*) FILTER (WHERE severity IN ('critical', 'high')) AS critical_high_count
+          FROM audit_issues ai
+          WHERE ai.audit_id = a.id
+        ) issue_stats ON true
         WHERE l.source = 'scout_agent'
           AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
           AND COALESCE(b.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
           AND (l.email IS NULL OR l.email = '')
           AND COALESCE(b.domain, '') <> ''
           AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(COALESCE(s.domain, '')) = lower(COALESCE(b.domain, '')))
-        ORDER BY COALESCE(ls.final_score, l.score, 0) DESC, a.checked_at DESC NULLS LAST
+        ORDER BY COALESCE(issue_stats.critical_high_count, 0) DESC,
+                 COALESCE(issue_stats.issue_count, 0) DESC,
+                 COALESCE(ls.final_score, l.score, 0) DESC,
+                 a.checked_at DESC NULLS LAST
         LIMIT %s
         """,
         (fetch_limit,),
@@ -215,6 +226,8 @@ def contact_enrichment_candidates(limit: int = 25) -> dict[str, Any]:
                 "language": payload.get("language"),
                 "niche": payload.get("niche"),
                 "final_score": int(payload.get("final_score") or 0),
+                "issue_count": int(payload.get("issue_count") or 0),
+                "critical_high_count": int(payload.get("critical_high_count") or 0),
             }
         )
         if len(candidates) >= safe_limit:

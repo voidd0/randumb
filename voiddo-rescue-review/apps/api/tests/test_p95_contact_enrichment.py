@@ -47,7 +47,7 @@ def _seed_lead(token: str) -> dict[str, str]:
     lead = execute(
         """
         INSERT INTO leads(business_id, source, status, score, language, country, city, niche)
-        VALUES (%s, 'scout_agent', 'scouted', 76, 'en', 'UK', 'Cardiff', 'dentists')
+        VALUES (%s, 'scout_agent', 'scouted', 99, 'en', 'UK', 'Cardiff', 'dentists')
         RETURNING id
         """,
         (business["id"],),
@@ -60,13 +60,15 @@ def _seed_lead(token: str) -> dict[str, str]:
         """,
         (business["id"], lead["id"], domain, f"https://{domain}", f"p95-{token}"),
     )
-    execute(
-        """
-        INSERT INTO audit_issues(audit_id, issue_type, severity, title, public_text, recommendation)
-        VALUES (%s, 'contact_path', 'high', 'Contact path issue', 'Visible from public browser session.', 'Review public contact path.')
-        """,
-        (audit["id"],),
-    )
+    for index in range(30):
+        severity = "critical" if index % 3 == 0 else "high"
+        execute(
+            """
+            INSERT INTO audit_issues(audit_id, issue_type, severity, title, public_text, recommendation)
+            VALUES (%s, %s, %s, %s, 'Visible from public browser session.', 'Review public contact path.')
+            """,
+            (audit["id"], f"p95_contact_path_{index}", severity, f"P95 contact issue {index}"),
+        )
     return {"domain": domain, "lead_id": str(lead["id"]), "business_id": str(business["id"])}
 
 
@@ -82,6 +84,53 @@ def test_contact_enrichment_candidates_are_redacted_and_no_send():
         assert result["live_outreach_allowed"] is False
     finally:
         _cleanup(token)
+
+
+def test_contact_enrichment_candidates_prioritize_high_issue_no_email_leads():
+    token = uuid.uuid4().hex[:8]
+    high = f"{token}-high"
+    low = f"{token}-low"
+    try:
+        high_seed = _seed_lead(high)
+        low_domain = f"p95-{low}.clinic"
+        business = execute(
+            """
+            INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, status)
+            VALUES (%s, 'UK', 'Cardiff', 'en', 'dentists', 'scout_agent', %s, %s, 'scouted')
+            RETURNING id
+            """,
+            (f"P95 Low Issue {low}", f"https://{low_domain}", low_domain),
+        )
+        lead = execute(
+            """
+            INSERT INTO leads(business_id, source, status, score, language, country, city, niche)
+            VALUES (%s, 'scout_agent', 'scouted', 99, 'en', 'UK', 'Cardiff', 'dentists')
+            RETURNING id
+            """,
+            (business["id"],),
+        )
+        execute(
+            """
+            INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+            VALUES (%s, %s, %s, %s, 'completed', 100, 'No major visible issues.', %s, now())
+            RETURNING id
+            """,
+            (business["id"], lead["id"], low_domain, f"https://{low_domain}", f"p95-{low}"),
+        )
+
+        result = contact_enrichment_candidates(100)
+        ids = [item["lead_id"] for item in result["candidates"]]
+        assert high_seed["lead_id"] in ids
+        if str(lead["id"]) in ids:
+            assert ids.index(high_seed["lead_id"]) < ids.index(str(lead["id"]))
+        match = next(item for item in result["candidates"] if item["lead_id"] == high_seed["lead_id"])
+        assert match["critical_high_count"] == 30
+        assert match["issue_count"] == 30
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup(high)
+        _cleanup(low)
 
 
 def test_contact_enrichment_candidates_skip_recent_no_safe_public_attempts():
@@ -288,7 +337,7 @@ def test_public_contact_page_agent_enriches_by_default_with_time_budget(monkeypa
             "fetch_public_contact_page",
             lambda url: (200, f"<html><a href='mailto:office@{seeded['domain']}'>Office</a></html>", url),
         )
-        agent = run_agent("contact_page_enrichment_agent", {"limit": 5, "max_seconds": 10})
+        agent = run_agent("contact_page_enrichment_agent", {"limit": 100, "max_seconds": 10})
         result = agent["result_json"]
         assert agent["status"] == "completed"
         assert result["dry_run"] is False
