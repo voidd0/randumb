@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 import app.lead_discovery as discovery_module
 from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
-from app.lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle, stockpile_expansion_target_plan
+from app.lead_discovery import apollo_organization_discovery, lead_discovery_target_plan, overpass_lead_discovery, regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle, stockpile_expansion_target_plan
 from app.main import app
 
 
@@ -22,7 +22,7 @@ def admin_headers() -> dict[str, str]:
 def _cleanup(name: str) -> None:
     execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name = %s)", (name,))
     execute("DELETE FROM scout_sources WHERE name = %s", (name,))
-    execute("DELETE FROM agent_runs WHERE agent = 'overpass_lead_discovery_agent' AND created_at >= now() - interval '2 hours'")
+    execute("DELETE FROM agent_runs WHERE agent IN ('overpass_lead_discovery_agent', 'apollo_organization_discovery_agent') AND created_at >= now() - interval '2 hours'")
 
 
 def test_overpass_lead_discovery_dry_run_is_no_send():
@@ -128,6 +128,62 @@ def test_overpass_lead_discovery_records_empty_source_without_preflight_candidat
         assert result["live_outreach_allowed"] is False
     finally:
         _cleanup(name)
+
+
+def test_apollo_organization_discovery_is_gated_and_redacted(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    city = f"ApolloCity{token}"
+    source_name = f"apollo-org-US-{city}-dentists"
+    dry = apollo_organization_discovery("US", city, "dentists", "en", 5, dry_run=True)
+    assert dry["status"] == "dry_run"
+    assert dry["credits_may_be_used_when_live"] is True
+    assert dry["send_mail"] is False
+    monkeypatch.setenv("APOLLO_API_KEY", "test-key")
+    monkeypatch.delenv("APOLLO_DISCOVERY_ENABLED", raising=False)
+    blocked = apollo_organization_discovery("US", city, "dentists", "en", 5, dry_run=False)
+    assert blocked["status"] == "blocked_disabled"
+    monkeypatch.setenv("APOLLO_DISCOVERY_ENABLED", "true")
+    monkeypatch.setattr(
+        discovery_module,
+        "_fetch_apollo_organizations",
+        lambda params, api_key: {
+            "organizations": [
+                {"name": f"Apollo Dental {token}", "primary_domain": f"apollo-{token}.clinic"},
+                {"name": f"Apollo Dental Duplicate {token}", "domain": f"apollo-{token}.clinic"},
+            ]
+        },
+    )
+    try:
+        live = apollo_organization_discovery("US", city, "dentists", "en", 5, dry_run=False)
+        row = fetch_one("SELECT status, config_json FROM scout_sources WHERE name = %s", (source_name,))
+        assert live["status"] == "source_created"
+        assert live["found_count"] == 1
+        assert live["with_email_count"] == 0
+        assert live["send_mail"] is False
+        assert live["live_outreach_allowed"] is False
+        assert row["status"] == "preflight_ready"
+        assert row["config_json"]["personal_email_reveal"] is False
+        assert row["config_json"]["phone_reveal"] is False
+        assert "test-key" not in str(live)
+        agent = run_agent("apollo_organization_discovery_agent", {"country": "US", "city": city, "niche": "dentists", "dry_run": True})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["send_mail"] is False
+    finally:
+        _cleanup(source_name)
+
+
+def test_apollo_organization_discovery_returns_structured_provider_error(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    monkeypatch.setenv("APOLLO_API_KEY", "test-key")
+    monkeypatch.setenv("APOLLO_DISCOVERY_ENABLED", "true")
+    monkeypatch.setattr(discovery_module, "_fetch_apollo_organizations", lambda params, api_key: (_ for _ in ()).throw(RuntimeError("apollo_down")))
+    result = apollo_organization_discovery("US", f"ApolloErr{token}", "dentists", "en", 5, dry_run=False)
+    assert result["status"] == "blocked_provider_error"
+    assert result["error_type"] == "RuntimeError"
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+    assert "test-key" not in str(result)
+    assert "apollo_down" not in str(result)
 
 
 def test_overpass_lead_discovery_endpoint_and_agent_are_safe():

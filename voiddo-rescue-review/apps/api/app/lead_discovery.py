@@ -3,9 +3,10 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import time
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from .db import fetch_all
@@ -17,6 +18,17 @@ OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
 ]
+
+APOLLO_ORGANIZATION_SEARCH_URL = "https://api.apollo.io/api/v1/mixed_companies/search"
+APOLLO_DISCOVERY_KEYWORDS = {
+    "dentists": ["dentist", "dental clinic"],
+    "clinics": ["clinic", "health clinic"],
+    "beauty salons": ["beauty salon", "hair salon"],
+    "law firms": ["law firm", "lawyer"],
+    "local tourism": ["hotel", "guest house", "tourism"],
+    "private courses": ["training", "school", "courses"],
+    "contractors": ["contractor", "plumber", "electrician", "roofing"],
+}
 
 NICHE_TAGS: dict[str, list[tuple[str, str]]] = {
     "dentists": [("amenity", "dentist"), ("healthcare", "dentist")],
@@ -359,6 +371,47 @@ def _fetch_overpass(query: str) -> dict[str, Any]:
     raise RuntimeError(f"overpass_unavailable:{type(last_error).__name__ if last_error else 'unknown'}")
 
 
+def _fetch_apollo_organizations(params: dict[str, Any], api_key: str) -> dict[str, Any]:
+    query = urlencode(params, doseq=True)
+    request = Request(
+        f"{APOLLO_ORGANIZATION_SEARCH_URL}?{query}",
+        data=b"{}",
+        headers={
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "accept": "application/json",
+            "x-api-key": api_key,
+            "User-Agent": "VoiddoRescue/1.0 gated-apollo-organization-discovery",
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=35) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _apollo_organization_to_row(item: dict[str, Any], country: str, city: str, language: str, niche: str) -> dict[str, str] | None:
+    name = item.get("name") or item.get("organization_name") or ""
+    domain = item.get("primary_domain") or item.get("domain") or item.get("website_url") or item.get("website") or ""
+    if isinstance(domain, dict):
+        domain = domain.get("url") or domain.get("domain") or ""
+    website = website_url_for(str(domain))
+    normalized = website_url_for(website)
+    if normalized in {"https://", "http://"} or "." not in normalized:
+        return None
+    return {
+        "business_name": name or normalized,
+        "website_url": normalized,
+        "email": "",
+        "phone": str(item.get("phone") or item.get("primary_phone") or ""),
+        "country": country.upper(),
+        "city": city,
+        "language": language,
+        "niche": niche,
+        "source_url": "apollo_organization_search",
+        "confidence": "82",
+    }
+
+
 def _element_to_row(element: dict[str, Any], country: str, city: str, language: str, niche: str) -> dict[str, str] | None:
     tags = element.get("tags") or {}
     name = tags.get("name") or tags.get("operator") or ""
@@ -473,6 +526,152 @@ def overpass_lead_discovery(
         "created_scout_runs": 0,
         "created_scanner_jobs": 0,
         "empty_target_recorded": not bool(rows),
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def apollo_organization_discovery(
+    country: str = "US",
+    city: str = "Boise",
+    niche: str = "dentists",
+    language: str = "en",
+    limit: int = 25,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 25), 50))
+    keywords = APOLLO_DISCOVERY_KEYWORDS.get(niche, [niche])[:4]
+    params = {
+        "organization_locations[]": [city, country.upper()],
+        "q_organization_keyword_tags[]": keywords,
+        "organization_num_employees_ranges[]": ["1,10", "11,50"],
+        "page": 1,
+        "per_page": safe_limit,
+    }
+    if dry_run:
+        return {
+            "status": "dry_run",
+            "source_type": "apollo_organization_search",
+            "country": country.upper(),
+            "city": city,
+            "niche": niche,
+            "language": language,
+            "limit": safe_limit,
+            "keyword_count": len(keywords),
+            "endpoint": APOLLO_ORGANIZATION_SEARCH_URL,
+            "credits_may_be_used_when_live": True,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    api_key = os.environ.get("APOLLO_API_KEY", "").strip()
+    if not api_key:
+        return {
+            "status": "blocked_missing_api_key",
+            "source_type": "apollo_organization_search",
+            "country": country.upper(),
+            "city": city,
+            "niche": niche,
+            "created_source": False,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    if os.environ.get("APOLLO_DISCOVERY_ENABLED", "").strip().lower() not in {"1", "true", "yes"}:
+        return {
+            "status": "blocked_disabled",
+            "source_type": "apollo_organization_search",
+            "country": country.upper(),
+            "city": city,
+            "niche": niche,
+            "created_source": False,
+            "credits_may_be_used_when_enabled": True,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    try:
+        payload = _fetch_apollo_organizations(params, api_key)
+    except Exception as exc:
+        return {
+            "status": "blocked_provider_error",
+            "source_type": "apollo_organization_search",
+            "country": country.upper(),
+            "city": city,
+            "niche": niche,
+            "created_source": False,
+            "error_type": type(exc).__name__,
+            "http_status": getattr(exc, "code", None),
+            "credits_may_have_been_used": True,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    organizations = payload.get("organizations") or payload.get("companies") or payload.get("accounts") or []
+    rows = []
+    seen_sites: set[str] = set()
+    for item in organizations:
+        row = _apollo_organization_to_row(item, country, city, language, niche)
+        if not row:
+            continue
+        site_key = row["website_url"].lower().rstrip("/")
+        if site_key in seen_sites:
+            continue
+        seen_sites.add(site_key)
+        rows.append(row)
+        if len(rows) >= safe_limit:
+            break
+    source_status = "preflight_ready" if rows else "no_rows_public_source"
+    source = create_scout_source(
+        {
+            "name": f"apollo-org-{country.upper()}-{city}-{niche}",
+            "source_type": "business_directory_import_scout",
+            "country": country.upper(),
+            "language": language,
+            "niche": niche,
+            "status": source_status,
+            "config_json": {
+                "csv": _rows_to_csv(rows),
+                "source": "apollo_organization_search",
+                "discovery_result": "rows_found" if rows else "no_public_rows_found",
+                "personal_email_reveal": False,
+                "phone_reveal": False,
+            },
+        }
+    )
+    readiness = run_scout_source_readiness(str(source["id"]))
+    return {
+        "status": "source_created" if rows else "empty_source_recorded",
+        "source_id": str(source["id"]),
+        "source_name": source["name"],
+        "source_status": source_status,
+        "country": country.upper(),
+        "city": city,
+        "niche": niche,
+        "language": language,
+        "found_count": len(rows),
+        "with_email_count": 0,
+        "with_website_count": len(rows),
+        "readiness": {
+            "status": readiness["status"],
+            "score": readiness["score"],
+            "allowed_for_scout_run": readiness["allowed_for_scout_run"],
+            "issue_count": len(readiness.get("issues") or []),
+        },
+        "created_scout_runs": 0,
+        "created_scanner_jobs": 0,
+        "credits_may_have_been_used": True,
         "send_mail": False,
         "smtp_called": False,
         "live_outreach_allowed": False,
