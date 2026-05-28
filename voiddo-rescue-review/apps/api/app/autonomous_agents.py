@@ -596,6 +596,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
                 "apply": True,
             },
         ),
+        ("post_scan_campaign_cycle_agent", {"limit": 120, "dry_run": False}),
         ("outreach_preview_queue_agent", {"limit": 100}),
         ("outreach_preview_dedupe_agent", {"limit": 500, "apply": True}),
         ("campaign_preflight_orphan_hygiene_agent", {"limit": 100, "apply": True}),

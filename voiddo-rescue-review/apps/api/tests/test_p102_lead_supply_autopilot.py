@@ -249,7 +249,9 @@ def test_runtime_daily_loop_uses_bounded_supply_buildout_not_heavy_stockpile():
     assert "regional_lead_discovery_agent" not in agents
     assert "apollo_organization_discovery_agent" not in agents
     assert agents.index("quality_aware_regional_target_plan_agent") < agents.index("lead_supply_buildout_agent")
-    assert agents.index("lead_supply_buildout_agent") < agents.index("outreach_preview_queue_agent")
+    assert agents.index("lead_supply_buildout_agent") < agents.index("post_scan_campaign_cycle_agent")
+    assert agents.index("post_scan_campaign_cycle_agent") < agents.index("outreach_preview_queue_agent")
     assert payloads["lead_supply_buildout_agent"]["max_cycles"] == 1
     assert payloads["lead_supply_buildout_agent"]["max_seconds"] <= 90
     assert payloads["lead_supply_buildout_agent"]["enrichment_limit"] == 0
+    assert payloads["post_scan_campaign_cycle_agent"]["dry_run"] is False
