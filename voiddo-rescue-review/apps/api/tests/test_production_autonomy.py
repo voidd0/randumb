@@ -168,6 +168,25 @@ def test_scout_rejects_large_retailer_domains_from_public_sources():
         _cleanup_token(token)
 
 
+def test_scout_rejects_health_and_retail_chains_seen_in_pipeline():
+    token = uuid.uuid4().hex[:8]
+    csv_text = (
+        "business_name,website_url,email,country,niche\n"
+        f"Bupa Clinic,https://bupa-{token}.co.uk,a@bupa-{token}.co.uk,UK,clinics\n"
+        f"Rona Store,https://rona-{token}.ca,a@rona-{token}.ca,CA,contractors\n"
+        f"Home Hardware,https://homehardware-{token}.ca,a@homehardware-{token}.ca,CA,contractors\n"
+        f"Ideal Image,https://idealimage-{token}.com,a@idealimage-{token}.com,US,beauty salons\n"
+    )
+    try:
+        source = create_scout_source({"name": f"chain-guard-{token}", "source_type": "manual_csv_scout", "config_json": {"csv": csv_text}})
+        run = create_scout_run(str(source["id"]))
+        result = process_scout_run(str(run["id"]))
+        assert result["accepted"] == 0
+        assert result["rejected"] == 4
+    finally:
+        _cleanup_token(token)
+
+
 def test_scout_normalizes_country_from_public_domain_suffix():
     assert infer_country_from_domain("https://example.com.au/path") == "AU"
     assert infer_country_from_domain("lawfirm.co.nz") == "NZ"

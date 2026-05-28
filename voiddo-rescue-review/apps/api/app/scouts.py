@@ -52,6 +52,10 @@ EXCLUDED_LARGE_BRAND_TOKENS = {
     "nhs.uk",
     "radissonhotels",
     "renown",
+    "bupa",
+    "homehardware",
+    "idealimage",
+    "rona",
     "ryancompanies",
     "schooldistrict",
     "super8",
@@ -75,6 +79,10 @@ EXCLUDED_LARGE_BRAND_DOMAINS = {
     "ikea.com",
     "acehardware.com",
     "tractorsupply.com",
+    "bupa.co.uk",
+    "homehardware.ca",
+    "idealimage.com",
+    "rona.ca",
 }
 SUPPORTED_SCOUT_TYPES = {
     "manual_csv_scout",

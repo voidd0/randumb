@@ -5,7 +5,7 @@ import json
 import re
 import time
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -45,6 +45,12 @@ ROLE_LOCALS = {
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 EMAIL_FIND_RE = re.compile(r"(?i)\b[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}\b")
 MAILTO_RE = re.compile(r"(?i)mailto:([a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,})")
+CONTACT_HREF_RE = re.compile(r"(?is)<a\b[^>]*\bhref=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>")
+CONTACT_LINK_HINT_RE = re.compile(r"(?i)\b(contact|about|enquir|inquir|booking|appointment|consultation|visit|reach|location|office)\b")
+OBFUSCATED_EMAIL_RE = re.compile(
+    r"(?ix)\b([a-z0-9._%+\-]{2,64})\s*(?:\[\s*at\s*\]|\(\s*at\s*\)|@)\s*"
+    r"([a-z0-9.\-]{2,160})\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\.)\s*([a-z]{2,24})\b"
+)
 PUBLIC_CONTACT_PATHS = (
     "/contact",
     "/contact/",
@@ -97,6 +103,43 @@ def _contact_urls(domain: str, website_url: str | None = None, max_pages: int = 
     return safe_urls
 
 
+def _safe_same_domain_url(raw_url: str, base_url: str, domain: str) -> str | None:
+    href = (raw_url or "").strip()
+    if not href or href.startswith(("#", "mailto:", "tel:", "javascript:")):
+        return None
+    absolute = urljoin(base_url, href)
+    parsed = urlparse(absolute)
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    normalized_domain = normalize_domain(domain)
+    candidate_domain = normalize_domain(absolute)
+    if not normalized_domain or candidate_domain != normalized_domain:
+        return None
+    lowered = absolute.lower()
+    if any(marker in lowered for marker in ("/admin", "/login", "/wp-admin", "/user", "/account", "/checkout", "/cart")):
+        return None
+    return absolute.split("#", 1)[0].rstrip("/")
+
+
+def _extract_contact_links(html: str, base_url: str, domain: str, max_links: int = 4) -> list[str]:
+    if not html:
+        return []
+    links: list[str] = []
+    seen: set[str] = set()
+    for match in CONTACT_HREF_RE.finditer(html[:MAX_PUBLIC_CONTACT_BYTES]):
+        href, label = match.group(1), re.sub(r"(?is)<[^>]+>", " ", match.group(2) or "")
+        if not CONTACT_LINK_HINT_RE.search(f"{href} {label}"):
+            continue
+        url = _safe_same_domain_url(href, base_url, domain)
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        links.append(url)
+        if len(links) >= max(1, min(max_links, 8)):
+            break
+    return links
+
+
 def fetch_public_contact_page(url: str) -> tuple[int, str, str]:
     with httpx.Client(timeout=12.0, follow_redirects=True, headers=PUBLIC_CONTACT_HEADERS) as client:
         response = client.get(url)
@@ -112,6 +155,10 @@ def _extract_emails_from_html(html: str) -> set[str]:
     scrubbed = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", html)
     emails = {match.group(1).strip().lower() for match in MAILTO_RE.finditer(scrubbed)}
     emails.update(match.group(0).strip().lower() for match in EMAIL_FIND_RE.finditer(scrubbed))
+    text = re.sub(r"(?is)<[^>]+>", " ", scrubbed)
+    for match in OBFUSCATED_EMAIL_RE.finditer(text):
+        local, host, tld = match.groups()
+        emails.add(f"{local.lower()}@{host.lower()}.{tld.lower()}")
     return {email for email in emails if EMAIL_RE.match(email)}
 
 
@@ -428,9 +475,13 @@ def run_public_contact_page_enrichment(
         scanned += 1
         domain = item["domain"]
         urls = _contact_urls(domain, None, safe_max_pages)
+        seen_urls = set(urls)
         found_emails: set[str] = set()
         page_results: list[dict[str, Any]] = []
-        for url in urls:
+        page_index = 0
+        while page_index < len(urls) and page_index < safe_max_pages:
+            url = urls[page_index]
+            page_index += 1
             if time.monotonic() - started >= safe_max_seconds:
                 time_budget_exhausted = True
                 page_results.append({"path_hash": _hash(url), "status": "time_budget_exhausted"})
@@ -442,12 +493,23 @@ def run_public_contact_page_enrichment(
                 continue
             page_emails = _extract_emails_from_html(html)
             found_emails.update(page_emails)
+            added_links = 0
+            if html:
+                for discovered_url in _extract_contact_links(html, final_url, domain, safe_max_pages):
+                    if discovered_url not in seen_urls:
+                        if len(urls) >= safe_max_pages:
+                            removed_url = urls.pop()
+                            seen_urls.discard(removed_url)
+                        urls.insert(page_index, discovered_url)
+                        seen_urls.add(discovered_url)
+                        added_links += 1
             page_results.append(
                 {
                     "path_hash": _hash(url),
                     "final_path_hash": _hash(final_url),
                     "status_code": status_code,
                     "email_count": len(page_emails),
+                    "safe_contact_links_added": added_links,
                 }
             )
             if page_emails:

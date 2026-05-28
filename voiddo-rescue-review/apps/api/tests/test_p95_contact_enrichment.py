@@ -266,6 +266,50 @@ def test_public_contact_page_enrichment_updates_lead_without_raw_email(monkeypat
         _cleanup(token)
 
 
+def test_public_contact_page_enrichment_follows_safe_contact_anchor(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        seeded = _seed_lead(token)
+
+        def _fetch(url: str):
+            if url.rstrip("/").endswith("/reach-us"):
+                return 200, f"<html><a href='mailto:office@{seeded['domain']}'>Office</a></html>", url
+            return 200, "<html><a href='/reach-us'>Reach our office</a></html>", url
+
+        monkeypatch.setattr(enrichment_module, "fetch_public_contact_page", _fetch)
+        result = run_public_contact_page_enrichment(100, dry_run=False, max_pages_per_domain=4)
+        assert result["enriched_count"] >= 1
+        row = fetch_one("SELECT email FROM leads WHERE id = %s", (seeded["lead_id"],))
+        assert row["email"] == f"office@{seeded['domain']}"
+        assert "office@" not in str(result)
+        assert any(
+            page.get("safe_contact_links_added", 0) >= 1
+            for item in result["results"]
+            for page in item.get("pages", [])
+        )
+    finally:
+        _cleanup(token)
+
+
+def test_public_contact_page_enrichment_extracts_simple_obfuscated_email(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        seeded = _seed_lead(token)
+
+        monkeypatch.setattr(
+            enrichment_module,
+            "fetch_public_contact_page",
+            lambda url: (200, f"<html>Contact: hello [at] {seeded['domain'].replace('.', ' [dot] ')}</html>", url),
+        )
+        result = run_public_contact_page_enrichment(100, dry_run=False, max_pages_per_domain=4)
+        assert result["enriched_count"] >= 1
+        row = fetch_one("SELECT email FROM leads WHERE id = %s", (seeded["lead_id"],))
+        assert row["email"] == f"hello@{seeded['domain']}"
+        assert "hello@" not in str(result)
+    finally:
+        _cleanup(token)
+
+
 def test_public_contact_page_enrichment_respects_suppression(monkeypatch):
     token = uuid.uuid4().hex[:8]
     try:
