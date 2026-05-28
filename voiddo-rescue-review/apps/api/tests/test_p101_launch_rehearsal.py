@@ -5,6 +5,7 @@ import os
 from fastapi.testclient import TestClient
 
 from app.db import fetch_one
+from app.canary_operator_packet import build_canary_operator_packet
 from app.launch_rehearsal import run_launch_rehearsal
 from app.main import app
 from app.p0 import execute_owner_command
@@ -55,4 +56,17 @@ def test_owner_command_run_launch_rehearsal_is_medium_risk_no_send():
     assert result["action"] == "launch_rehearsal"
     assert result["rehearsal"]["send_mail"] is False
     assert result["rehearsal"]["result"]["sent_count"] == 0
+    assert after["count"] == before["count"]
+
+
+def test_canary_operator_packet_is_redacted_and_no_send():
+    before = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE status = 'queued'")
+    packet = build_canary_operator_packet(5, store=True, run_checkout_simulation=False)
+    after = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE status = 'queued'")
+    assert packet["send_mail"] is False
+    assert packet["live_outreach_allowed"] is False
+    assert packet["secrets_included"] is False
+    assert packet["live_outreach_sent_count"] == 0
+    assert packet["rehearsal_sent_count"] == 0
+    assert "@" not in str(packet)
     assert after["count"] == before["count"]

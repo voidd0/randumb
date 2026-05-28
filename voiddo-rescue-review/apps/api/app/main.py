@@ -103,6 +103,7 @@ from .lead_stockpile_health import latest_lead_stockpile_health_runs, lead_stock
 from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates, stage_live_outreach_batch
 from .canary_batch_quality import canary_batch_quality
 from .canary_checkout_simulation import run_canary_checkout_simulation
+from .canary_operator_packet import build_canary_operator_packet
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
@@ -569,6 +570,19 @@ def outreach_live_queue_quality_get(limit: int = 20):
 @app.post("/admin/outreach/live-queue/checkout-simulation", dependencies=[Depends(require_admin)])
 def outreach_live_queue_checkout_simulation_post():
     return {"ok": True, "simulation": run_canary_checkout_simulation(cleanup_after=True)}
+
+
+@app.post("/admin/outreach/live-queue/operator-packet", dependencies=[Depends(require_admin)])
+async def outreach_live_queue_operator_packet_post(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "packet": build_canary_operator_packet(
+            int(payload.get("limit", 20)),
+            store=True,
+            run_checkout_simulation=bool(payload.get("run_checkout_simulation", False)),
+        ),
+    }
 
 
 @app.post("/admin/outreach/live-queue/stage", dependencies=[Depends(require_admin)])

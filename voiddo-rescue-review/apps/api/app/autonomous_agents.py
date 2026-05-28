@@ -50,6 +50,7 @@ from .quality_plugins import latest_quality_summary
 from .campaign_actions import run_campaign_operator_cycle
 from .canary_batch_quality import canary_batch_quality
 from .canary_checkout_simulation import run_canary_checkout_simulation
+from .canary_operator_packet import build_canary_operator_packet
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .post_scan_campaign_cycle import post_scan_campaign_cycle
@@ -415,6 +416,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "live_outreach_stage_dry_run_agent": lambda: stage_live_outreach_batch(int(payload.get("limit", 20)), dry_run=True, requested_by="agent"),
         "canary_batch_quality_agent": lambda: canary_batch_quality(int(payload.get("limit", 20))),
         "canary_checkout_simulation_agent": lambda: run_canary_checkout_simulation(cleanup_after=bool(payload.get("cleanup_after", True))),
+        "canary_operator_packet_agent": lambda: build_canary_operator_packet(int(payload.get("limit", 20)), store=True, run_checkout_simulation=bool(payload.get("run_checkout_simulation", False))),
         "outreach_post_send_observer_agent": lambda: outreach_post_send_observer(int(payload.get("window_hours", 24)), apply_pause=bool(payload.get("apply_pause", True))),
         "outreach_post_send_observer_history_agent": lambda: latest_outreach_post_send_observer_runs(int(payload.get("limit", 10))),
         "launch_repair_plan_agent": lambda: launch_repair_plan(int(payload.get("limit", 25))),
@@ -587,6 +589,7 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
             "launch_activation_readiness_agent",
             "launch_activation_runbook_agent",
             "launch_rehearsal_agent",
+            "canary_operator_packet_agent",
             "live_outreach_queue_candidates_agent",
             "outreach_post_send_observer_agent",
             "launch_repair_plan_agent",
