@@ -23,7 +23,7 @@ def admin_headers() -> dict[str, str]:
 
 
 def _cleanup(token: str) -> None:
-    execute("DELETE FROM campaign_preflight_runs WHERE result_json::text LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM campaign_preflight_runs WHERE result_json::text LIKE %s OR campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s)", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM outbound_mailer_decisions WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM public_language_gate_runs WHERE scope = 'campaign_preview_quality' AND issues_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM agent_runs WHERE agent = 'campaign_preflight_agent' AND result_json::text LIKE %s", (f"%{token}%",))

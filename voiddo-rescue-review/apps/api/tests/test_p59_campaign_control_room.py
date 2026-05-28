@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.autonomous_agents import run_agent
 from app.campaign_control_room import campaign_control_room_snapshot, campaign_preview_rows, prepare_campaign_control_room, qualified_campaign_lead_candidates
+from app.campaign_preflight import campaign_preflight
 from app.campaign_preview_reviews import auto_review_campaign_previews, latest_campaign_preview_reviews, review_campaign_preview
 from app.campaign_review_remediation import held_preview_remediation_candidates, remediate_held_preview_reviews
 from app.db import execute, fetch_one
@@ -27,6 +28,7 @@ def _cleanup(token: str) -> None:
     execute("DELETE FROM campaign_review_remediation_runs WHERE result_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM scanner_jobs WHERE url LIKE %s OR result_json::text LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM codex_tasks WHERE input_json::text LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM campaign_preflight_runs WHERE result_json::text LIKE %s OR campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s)", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM campaign_preview_reviews WHERE campaign_lead_id IN (SELECT id FROM campaign_leads WHERE preview_json::text LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM campaign_readiness_snapshots WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s)", (f"%{token}%",))
     execute("DELETE FROM campaign_leads WHERE campaign_id IN (SELECT id FROM campaigns WHERE name LIKE %s) OR preview_json::text LIKE %s", (f"%{token}%", f"%{token}%"))
@@ -157,6 +159,37 @@ def test_campaign_control_room_preview_rows_are_redacted_no_send():
         latest_reviews = latest_campaign_preview_reviews(20)
         assert latest_reviews["send_mail"] is False
         assert any(item["campaign_lead_id"] == rows[0]["campaign_lead_id"] for item in latest_reviews["reviews"])
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_preview_rows_show_latest_no_send_preflight_decision():
+    token = uuid.uuid4().hex[:8]
+    try:
+        _qualified_lead(token)
+        campaign = create_campaign(
+            {
+                "name": f"QA59 preflight status {token}",
+                "country": f"QA59{token[:3].upper()}",
+                "language": "en",
+                "niche": "dentists",
+                "offer_key": "contact_form_repair",
+            }
+        )
+        prepare_campaign_gated(str(campaign["id"]), 70, 20)
+        execute(
+            """
+            INSERT INTO campaign_readiness_snapshots(campaign_id, status, lead_count, qualified_count, min_audit_strength, economics_decision, mail_safety_decision, visual_safety_decision, blockers_json, summary_json)
+            VALUES (%s, 'blocked', 1, 1, 95, 'pass', 'PASS', 'PASS', '[]'::jsonb, '{}'::jsonb)
+            """,
+            (campaign["id"],),
+        )
+        run = campaign_preflight(str(campaign["id"]))
+        assert run["decision"] == "PASS_NO_SEND_PREFLIGHT"
+        row = [item for item in campaign_preview_rows(100)["rows"] if item["domain"] == f"p59-{token}.clinic"][0]
+        assert row["latest_preflight_status"] == "PASS_NO_SEND_PREFLIGHT"
+        assert row["latest_readiness_status"] == "blocked"
+        assert row["send_mail"] is False
     finally:
         _cleanup(token)
 

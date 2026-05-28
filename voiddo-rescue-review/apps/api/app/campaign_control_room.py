@@ -215,7 +215,9 @@ def campaign_preview_rows(limit: int = 25) -> dict[str, Any]:
                b.name AS business_name, b.domain,
                a.public_slug, a.score AS audit_score,
                latest_strength.final_score AS audit_strength_score,
-               latest_preflight.status AS latest_preflight_status,
+               latest_readiness.status AS latest_readiness_status,
+               latest_preflight.decision AS latest_preflight_decision,
+               latest_preflight.status AS latest_preflight_run_status,
                latest_review.action AS latest_review_action,
                latest_review.reason AS latest_review_reason,
                latest_review.created_at AS latest_review_at
@@ -229,6 +231,9 @@ def campaign_preview_rows(limit: int = 25) -> dict[str, Any]:
         ) latest_strength ON true
         LEFT JOIN LATERAL (
           SELECT status FROM campaign_readiness_snapshots WHERE campaign_id = c.id ORDER BY created_at DESC LIMIT 1
+        ) latest_readiness ON true
+        LEFT JOIN LATERAL (
+          SELECT decision, status FROM campaign_preflight_runs WHERE campaign_id = c.id ORDER BY created_at DESC LIMIT 1
         ) latest_preflight ON true
         LEFT JOIN LATERAL (
           SELECT action, reason, created_at
@@ -264,7 +269,9 @@ def campaign_preview_rows(limit: int = 25) -> dict[str, Any]:
             "audit_score": int(row["audit_score"] or 0),
             "lead_score": int(row["score"] or 0),
             "audit_strength_score": int(row["audit_strength_score"] or 0),
-            "latest_preflight_status": row["latest_preflight_status"] or "missing",
+            "latest_preflight_status": row["latest_preflight_decision"] or row["latest_readiness_status"] or "missing",
+            "latest_preflight_run_status": row["latest_preflight_run_status"] or "missing",
+            "latest_readiness_status": row["latest_readiness_status"] or "missing",
             "latest_review_action": row["latest_review_action"] or "unreviewed",
             "latest_review_reason": row["latest_review_reason"] or "",
             "latest_review_at": row["latest_review_at"],
