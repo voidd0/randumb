@@ -122,13 +122,22 @@ def test_warmup_daily_cap_ignores_legacy_email_events(monkeypatch):
             return {}
 
     schedule = _due_schedule()
+    legacy_message_id = f"legacy-{uuid.uuid4().hex}"
     try:
         execute(
             """
             INSERT INTO email_events(event_type, payload_json, mailbox, message_id)
             VALUES ('warmup_sent', '{}'::jsonb, 'audit@voiddorescue.com', %s)
             """,
-            (f"legacy-{uuid.uuid4().hex}",),
+            (legacy_message_id,),
+        )
+        today_sent = fetch_one(
+            """
+            SELECT count(*) AS count
+            FROM warmup_schedule
+            WHERE status = 'sent'
+              AND sent_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+            """
         )
         monkeypatch.setattr("app.p0.latest_mail_qa_decision", lambda: "PASS")
         monkeypatch.setattr("app.p0.effective_pause_state", lambda area, configured=False: False)
@@ -136,7 +145,7 @@ def test_warmup_daily_cap_ignores_legacy_email_events(monkeypatch):
         monkeypatch.setattr("app.p0.is_recipient_suppressed", lambda recipient: False)
         monkeypatch.setattr("app.p0.smtp_credentials_for_sender", lambda settings, sender: ("user", "password", sender))
         monkeypatch.setattr("app.p0.smtplib.SMTP", FakeSMTP)
-        monkeypatch.setattr("app.p0.warmup_daily_cap", lambda: 1)
+        monkeypatch.setattr("app.p0.warmup_daily_cap", lambda: int(today_sent["count"]) + 1)
         result = run_warmup_calendar_due(limit=1)
         row = fetch_one("SELECT status FROM warmup_schedule WHERE id = %s", (schedule["id"],))
         assert result["sent"] == 1
@@ -144,6 +153,7 @@ def test_warmup_daily_cap_ignores_legacy_email_events(monkeypatch):
         assert sent_messages == [schedule["recipient_email"]]
     finally:
         _cleanup(schedule["id"])
+        execute("DELETE FROM email_events WHERE message_id = %s", (legacy_message_id,))
 
 
 def test_diagnostic_sends_no_more_than_one_per_minute(monkeypatch):

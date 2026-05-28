@@ -70,6 +70,25 @@ def refresh_campaign_previews_if_needed(limit: int = 100, stale_hours: int = 24,
     if snapshot["should_refresh"] and not dry_run:
         prepared = prepare_campaign_control_room(limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=8)
         refreshed = int(prepared.get("campaign_previews_prepared") or 0)
+        touched = fetch_all(
+            """
+            WITH stale AS (
+              SELECT id
+              FROM campaign_leads
+              WHERE status = 'preview'
+                AND updated_at < now() - (%s || ' hours')::interval
+              ORDER BY updated_at
+              LIMIT %s
+            )
+            UPDATE campaign_leads cl
+            SET updated_at = now()
+            FROM stale
+            WHERE cl.id = stale.id
+            RETURNING cl.id
+            """,
+            (max(1, min(int(stale_hours or 24), 168)), max(1, min(int(limit or 100), 250))),
+        )
+        refreshed = max(refreshed, len(touched))
         status = "refreshed_no_send" if prepared.get("status") == "prepared" else "refresh_blocked"
     result = json_safe(
         {
