@@ -46,7 +46,7 @@ from .campaign_actions import run_campaign_operator_cycle
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .post_scan_campaign_cycle import post_scan_campaign_cycle
-from .campaign_preflight import campaign_preflight_batch
+from .campaign_preflight import campaign_preflight_batch, campaign_preflight_orphan_hygiene
 from .campaign_remediation import campaign_remediation_plan, execute_campaign_remediation
 from .campaign_remediation_feedback import campaign_remediation_feedback
 from .campaign_preview_refresh import campaign_preview_refresh_snapshot, refresh_campaign_previews_if_needed
@@ -314,6 +314,10 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         ),
         "campaign_shell_hygiene_snapshot_agent": lambda: campaign_shell_hygiene_snapshot(int(payload.get("limit", 500))),
         "campaign_preflight_agent": lambda: campaign_preflight_batch(int(payload.get("limit", 20)), payload.get("campaign_id")),
+        "campaign_preflight_orphan_hygiene_agent": lambda: campaign_preflight_orphan_hygiene(
+            int(payload.get("limit", 100)),
+            apply=bool(payload.get("apply", True)),
+        ),
         "campaign_remediation_agent": lambda: campaign_remediation_plan(
             int(payload.get("limit", 25)),
             create_tasks=bool(payload.get("create_tasks", True)),
@@ -500,6 +504,7 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
         "campaign_review_remediation_snapshot_agent",
         "campaign_review_remediation_agent",
         "campaign_preflight_agent",
+        "campaign_preflight_orphan_hygiene_agent",
         "campaign_remediation_agent",
         "campaign_remediation_executor_agent",
         "campaign_remediation_feedback_agent",

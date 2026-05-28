@@ -187,3 +187,37 @@ def latest_campaign_preflight_runs(limit: int = 10) -> dict[str, Any]:
         ],
         **SAFE_FLAGS,
     }
+
+
+def campaign_preflight_orphan_hygiene(limit: int = 100, apply: bool = False) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 100), 500))
+    rows = fetch_all(
+        """
+        SELECT id, decision, blocker_count, created_at
+        FROM campaign_preflight_runs
+        WHERE campaign_id IS NULL
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    ids = [str(row["id"]) for row in rows]
+    deleted_count = 0
+    if apply and ids:
+        execute("DELETE FROM campaign_preflight_runs WHERE id = ANY(%s::uuid[])", (ids,))
+        deleted_count = len(ids)
+    return {
+        "status": "clean" if not rows else ("cleaned" if apply else "orphans_found"),
+        "orphan_count": len(rows),
+        "deleted_count": deleted_count,
+        "sample": [
+            {
+                "id": str(row["id"]),
+                "decision": row["decision"],
+                "blocker_count": int(row["blocker_count"] or 0),
+                "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+            }
+            for row in rows[:10]
+        ],
+        **SAFE_FLAGS,
+    }

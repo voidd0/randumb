@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
 
 from app.autonomous_agents import run_agent
-from app.campaign_preflight import campaign_preflight_batch, latest_campaign_preflight_runs
+from app.campaign_preflight import campaign_preflight_batch, campaign_preflight_orphan_hygiene, latest_campaign_preflight_runs
 from app.campaign_preview_reviews import review_campaign_preview
 from app.db import execute, fetch_one
 from app.lead_scoring import score_lead
@@ -289,3 +289,26 @@ def test_campaign_preflight_endpoint_and_agent_are_admin_gated(monkeypatch):
         assert agent["result_json"]["live_outreach_allowed"] is False
     finally:
         _cleanup(token)
+
+
+def test_campaign_preflight_orphan_hygiene_cleans_deleted_campaign_telemetry():
+    token = uuid.uuid4().hex[:8]
+    try:
+        row = execute(
+            """
+            INSERT INTO campaign_preflight_runs(campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json)
+            VALUES (NULL, 'completed', 'FAIL_BLOCK_LAUNCH', 1, 0, 1, %s)
+            RETURNING id
+            """,
+            (Jsonb({"token": token, "reason": "deleted_synthetic_campaign"}),),
+        )
+        preview = campaign_preflight_orphan_hygiene(50, apply=False)
+        assert preview["orphan_count"] >= 1
+        assert preview["deleted_count"] == 0
+        result = run_agent("campaign_preflight_orphan_hygiene_agent", {"limit": 50, "apply": True})
+        assert result["status"] == "completed"
+        assert result["result_json"]["deleted_count"] >= 1
+        assert result["result_json"]["send_mail"] is False
+        assert fetch_one("SELECT id FROM campaign_preflight_runs WHERE id = %s", (row["id"],)) is None
+    finally:
+        execute("DELETE FROM campaign_preflight_runs WHERE result_json::text LIKE %s", (f"%{token}%",))
