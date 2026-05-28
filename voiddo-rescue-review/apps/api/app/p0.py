@@ -48,6 +48,16 @@ RUNTIME_PAUSE_KEYS = {
 def _unsubscribe_secret() -> str:
     settings = get_settings()
     return settings.unsubscribe_secret or settings.admin_auth_token or "voiddo-rescue-local-unsubscribe-secret"
+
+
+def signed_unsubscribe_url_for_lead(lead_id: str) -> str:
+    settings = get_settings()
+    return f"{settings.go_base_url}/unsubscribe/{unsubscribe_token_for_lead(str(lead_id), _unsubscribe_secret())}"
+
+
+def one_click_unsubscribe_url_from_body(body: str) -> str | None:
+    match = re.search(r"https?://[^\s<>()\"']+/unsubscribe/u_[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]+", body or "")
+    return match.group(0) if match else None
 WARMUP_SENDER_ROTATION = [
     "audit@voiddorescue.com",
     "support@voiddorescue.com",
@@ -2450,13 +2460,15 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
     settings = get_settings()
     email = (payload.get("email") or "").strip().lower()
     body = payload.get("body") or ""
+    unsubscribe_url = one_click_unsubscribe_url_from_body(body)
     checks = {
         "outreach_dry_run": settings.outreach_dry_run,
         "outreach_paused": effective_pause_state("outreach", settings.outreach_paused),
         "first_live_send_flag": settings.first_live_send_flag,
         "mail_qa_decision": latest_decision("mail_qa_runs"),
         "visual_qa_decision": latest_decision("visual_qa_runs"),
-        "has_unsubscribe": "unsubscribe" in body.lower(),
+        "has_unsubscribe": bool(unsubscribe_url),
+        "unsubscribe_one_click_ready": bool(unsubscribe_url),
         "suppressed": False,
     }
     if email:
@@ -2539,7 +2551,7 @@ def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
                 "main_issue_short": row["summary"],
                 "final_score": int(row["final_score"] or 0),
                 "source": "approved_campaign_preview",
-                "unsubscribe_url": f"{get_settings().go_base_url}/unsubscribe/{unsubscribe_token_for_lead(str(row['lead_id']), _unsubscribe_secret())}",
+                "unsubscribe_url": signed_unsubscribe_url_for_lead(str(row["lead_id"])),
                 "dry_run": True,
                 "send_mail": False,
                 "live_outreach_allowed": False,

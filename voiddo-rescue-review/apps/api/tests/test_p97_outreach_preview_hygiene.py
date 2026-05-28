@@ -5,7 +5,7 @@ import uuid
 from psycopg.types.json import Jsonb
 
 from app.db import execute, fetch_one
-from app.p0 import prepare_outreach_preview, queue_outreach_preview, suppress_unsubscribe_token
+from app.p0 import one_click_unsubscribe_url_from_body, prepare_outreach_preview, queue_outreach_preview, suppress_unsubscribe_token
 
 
 def _cleanup(token: str) -> None:
@@ -101,6 +101,8 @@ def test_outreach_preview_uses_only_approved_campaign_rows_without_raw_email():
         assert all("email" not in item for item in result["preview_json"])
         item = next(row for row in result["preview_json"] if row["domain"] == f"qa97-{approved_token}.clinic")
         assert "/unsubscribe/preview" not in item["unsubscribe_url"]
+        assert "/unsubscribe/u_" in item["unsubscribe_url"]
+        assert one_click_unsubscribe_url_from_body(f"Unsubscribe: {item['unsubscribe_url']}") == item["unsubscribe_url"]
         token = item["unsubscribe_url"].rsplit("/", 1)[-1]
         suppressed = suppress_unsubscribe_token(token)
         assert suppressed["suppressed"] is True

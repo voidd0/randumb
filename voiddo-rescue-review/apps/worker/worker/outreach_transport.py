@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from email.message import EmailMessage
 import os
+import re
 import smtplib
 import ssl
 
@@ -22,6 +23,11 @@ def _count(cur, sql: str, params: tuple = ()) -> int:
     cur.execute(sql, params)
     row = cur.fetchone()
     return int(row["count"] or 0) if row else 0
+
+
+def unsubscribe_url_from_body(body: str) -> str | None:
+    match = re.search(r"https?://[^\s<>()\"']+/unsubscribe/u_[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]+", body or "")
+    return match.group(0) if match else None
 
 
 def _warmup_maturity(cur) -> dict:
@@ -85,13 +91,15 @@ def _latest_campaign_preflight(cur, campaign_id: str | None) -> dict:
 
 
 def transport_gate(email: str, body: str, campaign_id: str | None = None) -> tuple[bool, str, dict]:
+    unsubscribe_url = unsubscribe_url_from_body(body)
     checks = {
         "outreach_dry_run": os.environ.get("OUTREACH_DRY_RUN", "true").lower() == "true",
         "outreach_paused": os.environ.get("OUTREACH_PAUSED", "true").lower() == "true",
         "first_live_send_flag": os.environ.get("FIRST_LIVE_SEND_FLAG", "false").lower() == "true",
         "mail_qa_decision": _latest_decision("mail_qa_runs"),
         "visual_qa_decision": _latest_decision("visual_qa_runs"),
-        "has_unsubscribe": "unsubscribe" in body.lower(),
+        "has_unsubscribe": bool(unsubscribe_url),
+        "unsubscribe_one_click_ready": bool(unsubscribe_url),
         "suppressed": False,
         "campaign_preflight": {"allowed": False, "reason": "not_checked"},
         "warmup_maturity": {"allowed": False, "reason": "not_checked"},
@@ -159,6 +167,10 @@ def send_message_if_allowed(message_id: str) -> dict:
     msg["From"] = os.environ.get("SMTP_FROM_DEFAULT", "audit@voiddorescue.com")
     msg["To"] = email
     msg["Subject"] = message["subject"]
+    unsubscribe_url = unsubscribe_url_from_body(message["body"])
+    if unsubscribe_url:
+        msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
+        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     msg.set_content(message["body"])
     with smtplib.SMTP(os.environ.get("SMTP_HOST", "mail.voiddo.com"), int(os.environ.get("SMTP_PORT", "587")), timeout=30) as smtp:
         smtp.ehlo()

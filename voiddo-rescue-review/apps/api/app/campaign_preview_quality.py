@@ -9,7 +9,7 @@ from .db import execute, fetch_all, fetch_one
 from .email_templates import qa_email_template, render_email_template
 from .language_gate import check_no_ai_public_language
 from .mailer_control import evaluate_outbound_message
-from .p0 import json_safe
+from .p0 import json_safe, signed_unsubscribe_url_for_lead
 
 
 OUTREACH_GATE_EXPECTED_BLOCKERS = {
@@ -109,7 +109,7 @@ def campaign_preview_quality_pack(campaign_id: str, limit: int = 20) -> dict[str
             blockers.append("checkout_not_ready")
         product_key = row.get("offer_key") or "contact_form_repair"
         audit_url = f"{settings.audit_base_url}/r/{row['public_slug']}" if row.get("public_slug") else settings.audit_base_url
-        unsubscribe_url = f"{settings.go_base_url}/unsubscribe/preview-{row['campaign_lead_id']}"
+        unsubscribe_url = signed_unsubscribe_url_for_lead(str(row["lead_id"]))
         language = row.get("lead_language") or row.get("campaign_language") or "en"
         template_data = {
             "business_name": row.get("business_name") or row.get("domain") or "your business",

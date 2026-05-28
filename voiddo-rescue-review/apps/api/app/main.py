@@ -332,6 +332,14 @@ def unsubscribe(token: str):
     return {"ok": True, **result}
 
 
+@app.post("/unsubscribe/{token}")
+def unsubscribe_one_click(token: str):
+    result = suppress_unsubscribe_token(token)
+    if not result["ok"]:
+        raise HTTPException(status_code=404, detail=result["status"])
+    return {"ok": True, **result, "one_click": True}
+
+
 @app.post("/inbox/classify")
 async def inbox_classify(request: Request):
     payload = await request.json()
