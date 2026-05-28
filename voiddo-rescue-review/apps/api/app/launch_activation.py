@@ -1,0 +1,241 @@
+from __future__ import annotations
+
+import hashlib
+from typing import Any
+
+from psycopg.types.json import Jsonb
+
+from .config import get_settings
+from .db import execute, fetch_all, fetch_one
+from .launch_readiness_scoreboard import launch_readiness_scoreboard
+from .p0 import json_safe, latest_preview_transport_gate_status, live_outreach_quota_status
+
+
+SAFE_FLAGS = {
+    "send_mail": False,
+    "smtp_called": False,
+    "live_outreach_allowed": False,
+    "raw_recipient_addresses_included": False,
+    "secrets_included": False,
+}
+
+
+def _count(sql: str, params: tuple = ()) -> int:
+    row = fetch_one(sql, params)
+    return int(row["count"] or 0) if row else 0
+
+
+def _latest_preflight_counts(limit: int = 25) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT DISTINCT ON (c.id) c.id AS campaign_id, p.decision, p.blocker_count, p.ready_count, p.created_at
+        FROM campaigns c
+        JOIN campaign_leads cl ON cl.campaign_id = c.id AND cl.status = 'preview'
+        LEFT JOIN campaign_preflight_runs p ON p.campaign_id = c.id
+        WHERE c.status IN ('preview_ready', 'draft')
+        ORDER BY c.id, p.created_at DESC NULLS LAST
+        LIMIT %s
+        """,
+        (max(1, min(int(limit or 25), 100)),),
+    )
+    passed = [row for row in rows if row.get("decision") == "PASS_NO_SEND_PREFLIGHT"]
+    missing = [row for row in rows if not row.get("decision")]
+    return {
+        "checked_campaign_count": len(rows),
+        "passed_campaign_count": len(passed),
+        "failed_campaign_count": len(rows) - len(passed) - len(missing),
+        "missing_campaign_count": len(missing),
+        "latest_pass_created_at": max((row["created_at"] for row in passed), default=None),
+    }
+
+
+def launch_activation_readiness(limit: int = 25) -> dict[str, Any]:
+    settings = get_settings()
+    scoreboard = launch_readiness_scoreboard(limit)
+    transport = latest_preview_transport_gate_status()
+    quota = live_outreach_quota_status()
+    preflight = _latest_preflight_counts(limit)
+    preview_count = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'preview'")
+    approved_preview_count = _count(
+        """
+        SELECT count(*) AS count
+        FROM campaign_leads cl
+        JOIN campaign_preview_reviews r ON r.campaign_lead_id = cl.id
+        WHERE cl.status = 'preview'
+          AND r.action = 'approved'
+        """
+    )
+    live_sent = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'sent'")
+    warmup_sent = _count("SELECT count(*) AS count FROM warmup_schedule WHERE status = 'sent'")
+    blockers: list[str] = []
+    if scoreboard.get("state") != "PREVIEW_PIPELINE_READY_NO_OUTREACH" or int(scoreboard.get("score") or 0) < 100:
+        blockers.append("launch_scoreboard_not_preview_ready")
+    if int(scoreboard.get("blocker_count") or 0) > 0:
+        blockers.append("launch_scoreboard_has_blockers")
+    if preview_count <= 0:
+        blockers.append("preview_outreach_messages_missing")
+    if approved_preview_count <= 0:
+        blockers.append("approved_campaign_previews_missing")
+    if preflight["passed_campaign_count"] <= 0 or preflight["failed_campaign_count"] > 0 or preflight["missing_campaign_count"] > 0:
+        blockers.append("campaign_preflight_not_clean")
+    transport_checks = transport.get("checks") or {}
+    if not transport_checks.get("unsubscribe_one_click_ready"):
+        blockers.append("signed_unsubscribe_not_ready")
+    if not transport_checks.get("html_body_ready"):
+        blockers.append("branded_html_body_not_ready")
+    if not quota["allowed"]:
+        blockers.extend(quota["blockers"])
+    if settings.outreach_dry_run is not True or settings.outreach_paused is not True or settings.first_live_send_flag is not False:
+        blockers.append("runtime_live_flags_not_locked_before_activation")
+
+    decision = "READY_FOR_OPERATOR_ENV_ACTIVATION" if not blockers else "BLOCKED"
+    return json_safe(
+        {
+            "status": "completed",
+            "decision": decision,
+            "blockers": sorted(set(blockers)),
+            "scoreboard": {
+                "state": scoreboard.get("state"),
+                "score": int(scoreboard.get("score") or 0),
+                "blocker_count": int(scoreboard.get("blocker_count") or 0),
+                "live_outreach_allowed": bool(scoreboard.get("live_outreach_allowed", False)),
+            },
+            "preflight": preflight,
+            "preview_message_count": preview_count,
+            "approved_preview_count": approved_preview_count,
+            "live_outreach_sent_count": live_sent,
+            "warmup_sent_count": warmup_sent,
+            "transport_reason": transport.get("reason"),
+            "transport_checks": {
+                "outreach_dry_run": transport_checks.get("outreach_dry_run"),
+                "outreach_paused": transport_checks.get("outreach_paused"),
+                "first_live_send_flag": transport_checks.get("first_live_send_flag"),
+                "unsubscribe_one_click_ready": transport_checks.get("unsubscribe_one_click_ready"),
+                "html_body_ready": transport_checks.get("html_body_ready"),
+                "live_quota": transport_checks.get("live_quota"),
+            },
+            "quota": quota,
+            "activation_env_required": {
+                "OUTREACH_DRY_RUN": "false",
+                "OUTREACH_PAUSED": "false",
+                "FIRST_LIVE_SEND_FLAG": "true",
+                "DAILY_SEND_LIMIT": str(settings.daily_send_limit),
+                "HOURLY_DOMAIN_SEND_LIMIT": str(settings.hourly_domain_send_limit),
+            },
+            "rollback_env": {
+                "OUTREACH_DRY_RUN": "true",
+                "OUTREACH_PAUSED": "true",
+                "FIRST_LIVE_SEND_FLAG": "false",
+            },
+            "apply_default": "blocked_until_ALLOW_LIVE_OUTREACH_ACTIVATION_true_and_confirmation_text_matches",
+            **SAFE_FLAGS,
+        }
+    )
+
+
+def _record_activation_run(
+    readiness: dict[str, Any],
+    *,
+    status: str,
+    decision: str,
+    requested_by: str,
+    confirm_text: str = "",
+    dry_run: bool = True,
+    applied: bool = False,
+) -> dict[str, Any]:
+    scoreboard = readiness.get("scoreboard") or {}
+    row = execute(
+        """
+        INSERT INTO launch_activation_runs(
+          status, decision, requested_by, confirm_text_hash, dry_run, applied,
+          scoreboard_state, scoreboard_score, blocker_count,
+          preview_message_count, approved_preview_count,
+          live_outreach_sent_count, warmup_sent_count,
+          result_json, send_mail, smtp_called, live_outreach_allowed,
+          raw_recipient_addresses_included, secrets_included
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, false, false, false, false, false)
+        RETURNING id, status, decision, requested_by, dry_run, applied, created_at
+        """,
+        (
+            status,
+            decision,
+            requested_by,
+            hashlib.sha256(confirm_text.encode("utf-8")).hexdigest()[:24] if confirm_text else "",
+            dry_run,
+            applied,
+            str(scoreboard.get("state") or ""),
+            int(scoreboard.get("score") or 0),
+            len(readiness.get("blockers") or []),
+            int(readiness.get("preview_message_count") or 0),
+            int(readiness.get("approved_preview_count") or 0),
+            int(readiness.get("live_outreach_sent_count") or 0),
+            int(readiness.get("warmup_sent_count") or 0),
+            Jsonb(readiness),
+        ),
+    )
+    result = dict(row)
+    result.update(SAFE_FLAGS)
+    return json_safe(result)
+
+
+def prepare_launch_activation(limit: int = 25, requested_by: str = "operator") -> dict[str, Any]:
+    readiness = launch_activation_readiness(limit)
+    run = _record_activation_run(
+        readiness,
+        status="prepared" if readiness["decision"] == "READY_FOR_OPERATOR_ENV_ACTIVATION" else "blocked",
+        decision=readiness["decision"],
+        requested_by=requested_by,
+        dry_run=True,
+    )
+    return json_safe({"readiness": readiness, "run": run, "applied": False, **SAFE_FLAGS})
+
+
+def apply_launch_activation(confirm_text: str, requested_by: str = "operator", limit: int = 25, dry_run: bool = True) -> dict[str, Any]:
+    readiness = launch_activation_readiness(limit)
+    settings = get_settings()
+    blockers = list(readiness.get("blockers") or [])
+    if confirm_text != "START LIVE OUTREACH":
+        blockers.append("confirmation_text_mismatch")
+    if not settings.allow_live_outreach_activation:
+        blockers.append("allow_live_outreach_activation_env_false")
+    if dry_run:
+        blockers.append("dry_run_activation_no_runtime_change")
+    decision = "READY_RECORDED_NO_ENV_CHANGE" if not blockers else "BLOCKED"
+    activation = {
+        **readiness,
+        "decision": decision,
+        "blockers": sorted(set(blockers)),
+        "applied": False,
+        "runtime_change_performed": False,
+        "note": "This API records the verified activation decision. Host env changes remain guarded by the runtime deployment operator.",
+        **SAFE_FLAGS,
+    }
+    run = _record_activation_run(
+        activation,
+        status="ready_recorded" if decision == "READY_RECORDED_NO_ENV_CHANGE" else "blocked",
+        decision=decision,
+        requested_by=requested_by,
+        confirm_text=confirm_text,
+        dry_run=dry_run,
+        applied=False,
+    )
+    return json_safe({"activation": activation, "run": run, **SAFE_FLAGS})
+
+
+def latest_launch_activation_runs(limit: int = 10) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT id, status, decision, requested_by, dry_run, applied,
+               scoreboard_state, scoreboard_score, blocker_count,
+               preview_message_count, approved_preview_count,
+               live_outreach_sent_count, warmup_sent_count,
+               send_mail, smtp_called, live_outreach_allowed,
+               raw_recipient_addresses_included, secrets_included, created_at
+        FROM launch_activation_runs
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (max(1, min(int(limit or 10), 50)),),
+    )
+    return json_safe({"count": len(rows), "runs": [dict(row) for row in rows], **SAFE_FLAGS})

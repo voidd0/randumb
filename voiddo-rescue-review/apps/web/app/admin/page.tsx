@@ -69,6 +69,7 @@ export default async function AdminPage() {
   const campaignControlRoomData = await fetchJson("/admin/campaign-control-room?limit=25&threshold=70", authorization ? { Authorization: authorization } : {});
   const campaignActionsData = await fetchJson("/admin/campaign-actions?limit=8", authorization ? { Authorization: authorization } : {});
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
+  const launchActivationData = await fetchJson("/admin/launch-activation?limit=25", authorization ? { Authorization: authorization } : {});
   const studioMailData = await fetchJson("/admin/studio-mail/messages?limit=8", authorization ? { Authorization: authorization } : {});
   const studioMailRunsData = await fetchJson("/admin/studio-mail/runs?limit=5", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
@@ -116,6 +117,9 @@ export default async function AdminPage() {
   const campaignSegments = Array.isArray(campaignControlRoom.top_segments) ? campaignControlRoom.top_segments : [];
   const campaignPreviewRows = Array.isArray(campaignControlRoom.first_batch_preview_rows) ? campaignControlRoom.first_batch_preview_rows : [];
   const launchReadiness = launchReadinessData?.scoreboard || {};
+  const launchActivation = launchActivationData?.activation || {};
+  const launchActivationHistory = launchActivationData?.history || {};
+  const latestLaunchActivationRun = Array.isArray(launchActivationHistory.runs) ? launchActivationHistory.runs[0] || {} : {};
   const launchEvidence = launchReadiness.evidence || {};
   const launchMail = launchEvidence.mail || {};
   const launchVisual = launchEvidence.visual || {};
@@ -300,6 +304,32 @@ export default async function AdminPage() {
                 <span className="tag">launch flags</span>
                 <strong>{launchTransportChecks.outreach_dry_run || launchTransportChecks.outreach_paused || !launchTransportChecks.first_live_send_flag ? "locked" : "armed"}</strong>
                 <span>dry-run {launchTransportChecks.outreach_dry_run ? "on" : "off"} · pause {launchTransportChecks.outreach_paused ? "on" : "off"}</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">activation</span>
+                <strong>{launchActivation.decision ?? "checking"}</strong>
+                <span>{(launchActivation.blockers || []).length ?? 0} blockers · latest {latestLaunchActivationRun.decision ?? "none"}</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">first day</span>
+                <strong>{launchActivation.quota?.daily_sent ?? launchTransportChecks.live_quota?.daily_sent ?? 0}/{launchActivation.quota?.daily_limit ?? launchTransportChecks.live_quota?.daily_limit ?? 20}</strong>
+                <span>live sends remain locked</span>
+              </div>
+            </div>
+            <div className="segments-list">
+              <div className="segment-row">
+                <span className="readiness-chip">{launchActivation.decision ?? "not checked"}</span>
+                <strong>Activation runbook</strong>
+                <span>preview {launchActivation.preview_message_count ?? 0}</span>
+                <span>approved {launchActivation.approved_preview_count ?? 0}</span>
+                <span>sent {launchActivation.live_outreach_sent_count ?? 0}</span>
+              </div>
+              <div className="segment-row">
+                <span className="readiness-chip">rollback</span>
+                <strong>Live switch rollback</strong>
+                <span>dry-run true</span>
+                <span>outreach paused</span>
+                <span>first flag false</span>
               </div>
             </div>
             <div className="segments-list">

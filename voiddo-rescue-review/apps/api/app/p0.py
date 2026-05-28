@@ -2507,6 +2507,50 @@ def latest_decision(table: str) -> str:
     return row["decision"] if row else "MISSING"
 
 
+def live_outreach_quota_status(email: str = "") -> dict[str, Any]:
+    settings = get_settings()
+    normalized = (email or "").strip().lower()
+    domain = normalized.rsplit("@", 1)[-1] if "@" in normalized else ""
+    daily_sent = fetch_one(
+        """
+        SELECT count(*) AS count
+        FROM outreach_messages
+        WHERE status = 'sent'
+          AND sent_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+        """
+    )
+    hourly_domain_sent = {"count": 0}
+    if domain:
+        hourly_domain_sent = fetch_one(
+            """
+            SELECT count(*) AS count
+            FROM outreach_messages om
+            JOIN leads l ON l.id = om.lead_id
+            WHERE om.status = 'sent'
+              AND om.sent_at >= now() - interval '1 hour'
+              AND split_part(lower(l.email), '@', 2) = lower(%s)
+            """,
+            (domain,),
+        )
+    daily_count = int((daily_sent or {}).get("count", 0) or 0)
+    hourly_domain_count = int((hourly_domain_sent or {}).get("count", 0) or 0)
+    blockers: list[str] = []
+    if daily_count >= settings.daily_send_limit:
+        blockers.append("daily_send_limit_reached")
+    if domain and hourly_domain_count >= settings.hourly_domain_send_limit:
+        blockers.append("hourly_domain_send_limit_reached")
+    return {
+        "allowed": not blockers,
+        "daily_sent": daily_count,
+        "daily_limit": settings.daily_send_limit,
+        "hourly_domain_sent": hourly_domain_count,
+        "hourly_domain_limit": settings.hourly_domain_send_limit,
+        "recipient_domain_hash": recipient_hash(domain) if domain else "",
+        "blockers": blockers,
+        "raw_recipient_addresses_included": False,
+    }
+
+
 def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
     settings = get_settings()
@@ -2514,6 +2558,7 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
     body = payload.get("body") or ""
     html_body = payload.get("html_body") or ""
     unsubscribe_url = one_click_unsubscribe_url_from_body(body)
+    quota = live_outreach_quota_status(email)
     checks = {
         "outreach_dry_run": settings.outreach_dry_run,
         "outreach_paused": effective_pause_state("outreach", settings.outreach_paused),
@@ -2524,6 +2569,7 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
         "unsubscribe_one_click_ready": bool(unsubscribe_url),
         "html_body_ready": bool(str(html_body).strip().lower().startswith("<!doctype html>")),
         "suppressed": False,
+        "live_quota": quota,
     }
     if email:
         row = fetch_one("SELECT 1 FROM suppression_list WHERE lower(email) = lower(%s)", (email,))
@@ -2542,6 +2588,8 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
         return {"allowed": False, "reason": "missing_unsubscribe", "checks": checks}
     if not checks["html_body_ready"]:
         return {"allowed": False, "reason": "missing_html_body", "checks": checks}
+    if not quota["allowed"]:
+        return {"allowed": False, "reason": ",".join(quota["blockers"]), "checks": checks}
     return {"allowed": True, "reason": "all_gates_passed", "checks": checks}
 
 

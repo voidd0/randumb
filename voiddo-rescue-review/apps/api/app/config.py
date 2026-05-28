@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     customer_mail_real_send_enabled: bool = False
     paddle_provisioning_paused: bool = True
     first_live_send_flag: bool = False
+    allow_live_outreach_activation: bool = False
 
     smtp_host: str = "mail.voiddo.com"
     smtp_port: int = 587

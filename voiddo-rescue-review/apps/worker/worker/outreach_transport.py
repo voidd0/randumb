@@ -90,6 +90,48 @@ def _latest_campaign_preflight(cur, campaign_id: str | None) -> dict:
     }
 
 
+def _live_quota(cur, email: str) -> dict:
+    domain = (email or "").strip().lower().rsplit("@", 1)[-1] if "@" in (email or "") else ""
+    daily_limit = max(1, int(os.environ.get("DAILY_SEND_LIMIT", "20") or "20"))
+    hourly_domain_limit = max(1, int(os.environ.get("HOURLY_DOMAIN_SEND_LIMIT", "5") or "5"))
+    daily_sent = _count(
+        cur,
+        """
+        SELECT count(*) AS count
+        FROM outreach_messages
+        WHERE status = 'sent'
+          AND sent_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+        """,
+    )
+    hourly_domain_sent = 0
+    if domain:
+        hourly_domain_sent = _count(
+            cur,
+            """
+            SELECT count(*) AS count
+            FROM outreach_messages om
+            JOIN leads l ON l.id = om.lead_id
+            WHERE om.status = 'sent'
+              AND om.sent_at >= now() - interval '1 hour'
+              AND split_part(lower(l.email), '@', 2) = lower(%s)
+            """,
+            (domain,),
+        )
+    blockers = []
+    if daily_sent >= daily_limit:
+        blockers.append("daily_send_limit_reached")
+    if domain and hourly_domain_sent >= hourly_domain_limit:
+        blockers.append("hourly_domain_send_limit_reached")
+    return {
+        "allowed": not blockers,
+        "daily_sent": daily_sent,
+        "daily_limit": daily_limit,
+        "hourly_domain_sent": hourly_domain_sent,
+        "hourly_domain_limit": hourly_domain_limit,
+        "blockers": blockers,
+    }
+
+
 def transport_gate(email: str, body: str, campaign_id: str | None = None, html_body: str = "") -> tuple[bool, str, dict]:
     unsubscribe_url = unsubscribe_url_from_body(body)
     checks = {
@@ -104,6 +146,7 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None, html_b
         "suppressed": False,
         "campaign_preflight": {"allowed": False, "reason": "not_checked"},
         "warmup_maturity": {"allowed": False, "reason": "not_checked"},
+        "live_quota": {"allowed": False, "reason": "not_checked"},
     }
     with connect() as conn:
         with conn.cursor() as cur:
@@ -111,6 +154,7 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None, html_b
             checks["suppressed"] = bool(cur.fetchone())
             checks["campaign_preflight"] = _latest_campaign_preflight(cur, campaign_id)
             checks["warmup_maturity"] = _warmup_maturity(cur)
+            checks["live_quota"] = _live_quota(cur, email)
     if checks["outreach_dry_run"]:
         return False, "outreach_dry_run_enabled", checks
     if checks["outreach_paused"] or not checks["first_live_send_flag"]:
@@ -129,6 +173,8 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None, html_b
         return False, "missing_unsubscribe", checks
     if not checks["html_body_ready"]:
         return False, "missing_html_body", checks
+    if not checks["live_quota"]["allowed"]:
+        return False, ",".join(checks["live_quota"]["blockers"]), checks
     return True, "all_gates_passed", checks
 
 

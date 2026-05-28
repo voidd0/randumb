@@ -94,6 +94,7 @@ from .monitoring import ensure_monitoring_target, process_due_monitoring_targets
 from .owner_command_control import owner_command_control_summary
 from .language_gate import check_no_ai_public_language
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
+from .launch_activation import apply_launch_activation, latest_launch_activation_runs, launch_activation_readiness, prepare_launch_activation
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
@@ -1716,6 +1717,37 @@ async def source_campaign_operator_advance(request: Request):
 @app.get("/admin/launch-readiness-scoreboard", dependencies=[Depends(require_admin)])
 def launch_readiness_scoreboard_get(limit: int = 25):
     return {"ok": True, "scoreboard": launch_readiness_scoreboard(limit)}
+
+
+@app.get("/admin/launch-activation", dependencies=[Depends(require_admin)])
+def launch_activation_get(limit: int = 25):
+    return {"ok": True, "activation": launch_activation_readiness(limit), "history": latest_launch_activation_runs(10)}
+
+
+@app.post("/admin/launch-activation/prepare", dependencies=[Depends(require_admin)])
+async def launch_activation_prepare(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "activation": prepare_launch_activation(
+            int(payload.get("limit", 25)),
+            payload.get("requested_by", "operator"),
+        ),
+    }
+
+
+@app.post("/admin/launch-activation/apply", dependencies=[Depends(require_admin)])
+async def launch_activation_apply(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "activation": apply_launch_activation(
+            payload.get("confirm_text", ""),
+            payload.get("requested_by", "operator"),
+            int(payload.get("limit", 25)),
+            bool(payload.get("dry_run", True)),
+        ),
+    }
 
 
 @app.get("/admin/launch-repair-plan", dependencies=[Depends(require_admin)])
