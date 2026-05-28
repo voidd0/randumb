@@ -62,6 +62,15 @@ def test_overpass_query_uses_regional_area_aliases_for_au_nz():
     assert "out center tags 10" in gold_coast_query
 
 
+def test_overpass_query_uses_broader_safe_trade_tags_for_contractors():
+    query = discovery_module._overpass_query("CA", "Hamilton", "contractors", 15)
+    assert 'node["craft"="plumber"]' in query
+    assert 'node["craft"="electrician"]' in query
+    assert 'node["craft"="roofer"]' in query
+    assert 'node["shop"="doityourself"]' in query
+    assert "out center tags 15" in query
+
+
 def test_overpass_lead_discovery_creates_redacted_source_from_public_rows(monkeypatch):
     token = uuid.uuid4().hex[:8]
     city = f"TestCity{token}"
