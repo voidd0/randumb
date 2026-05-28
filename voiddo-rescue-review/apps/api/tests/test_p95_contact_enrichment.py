@@ -310,6 +310,50 @@ def test_public_contact_page_enrichment_extracts_simple_obfuscated_email(monkeyp
         _cleanup(token)
 
 
+def test_public_contact_page_enrichment_extracts_plain_and_encoded_obfuscated_email(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        seeded = _seed_lead(token)
+        html_domain = seeded["domain"].replace(".", " dot ")
+
+        monkeypatch.setattr(
+            enrichment_module,
+            "fetch_public_contact_page",
+            lambda url: (
+                200,
+                f"<html>Contact: hello at {html_domain}<a href='mailto:ignored%40other.test'>Other</a></html>",
+                url,
+            ),
+        )
+        result = run_public_contact_page_enrichment(100, dry_run=False, max_pages_per_domain=4)
+        assert result["enriched_count"] >= 1
+        row = fetch_one("SELECT email FROM leads WHERE id = %s", (seeded["lead_id"],))
+        assert row["email"] == f"hello@{seeded['domain']}"
+        assert "hello@" not in str(result)
+        assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_public_contact_page_enrichment_extracts_html_entity_mailto(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        seeded = _seed_lead(token)
+
+        monkeypatch.setattr(
+            enrichment_module,
+            "fetch_public_contact_page",
+            lambda url: (200, f"<html><a href='mailto:office&#64;{seeded['domain']}'>Office</a></html>", url),
+        )
+        result = run_public_contact_page_enrichment(100, dry_run=False, max_pages_per_domain=4)
+        assert result["enriched_count"] >= 1
+        row = fetch_one("SELECT email FROM leads WHERE id = %s", (seeded["lead_id"],))
+        assert row["email"] == f"office@{seeded['domain']}"
+        assert "office@" not in str(result)
+    finally:
+        _cleanup(token)
+
+
 def test_public_contact_page_enrichment_respects_suppression(monkeypatch):
     token = uuid.uuid4().hex[:8]
     try:

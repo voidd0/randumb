@@ -35,6 +35,8 @@ def _artifact_reason(row: dict[str, Any]) -> str:
         return "test_lead_source"
     if campaign_name.startswith(("p7-", "p8-", "p9-", "p74-")):
         return "test_campaign_name"
+    if campaign_name in {"x", "test", "demo"} and not campaign_country:
+        return "test_campaign_missing_geo"
     if "legacy_stale_preview" in preview_text:
         return "legacy_stale_preview"
     return ""
@@ -49,6 +51,8 @@ def _campaign_artifact_reason(row: dict[str, Any]) -> str:
         return "test_campaign_name"
     if "synthetic" in name:
         return "synthetic_campaign_name"
+    if name in {"x", "test", "demo"} and not country:
+        return "test_campaign_missing_geo"
     return ""
 
 

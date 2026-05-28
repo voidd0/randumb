@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import html as html_lib
 import json
 import re
 import time
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -44,12 +45,17 @@ ROLE_LOCALS = {
 }
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 EMAIL_FIND_RE = re.compile(r"(?i)\b[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}\b")
-MAILTO_RE = re.compile(r"(?i)mailto:([a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,})")
+MAILTO_RE = re.compile(r"(?i)mailto:([^\"'>?\s]+)")
 CONTACT_HREF_RE = re.compile(r"(?is)<a\b[^>]*\bhref=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>")
 CONTACT_LINK_HINT_RE = re.compile(r"(?i)\b(contact|about|enquir|inquir|booking|appointment|consultation|visit|reach|location|office)\b")
 OBFUSCATED_EMAIL_RE = re.compile(
     r"(?ix)\b([a-z0-9._%+\-]{2,64})\s*(?:\[\s*at\s*\]|\(\s*at\s*\)|@)\s*"
     r"([a-z0-9.\-]{2,160})\s*(?:\[\s*dot\s*\]|\(\s*dot\s*\)|\.)\s*([a-z]{2,24})\b"
+)
+PLAIN_OBFUSCATED_EMAIL_RE = re.compile(
+    r"(?ix)\b([a-z0-9._%+\-]{2,64})\s+(?:at)\s+"
+    r"([a-z0-9][a-z0-9\-]*(?:\s+(?:dot)\s+[a-z0-9][a-z0-9\-]*)*)\s+"
+    r"(?:dot)\s+([a-z]{2,24})\b"
 )
 PUBLIC_CONTACT_PATHS = (
     "/contact",
@@ -152,13 +158,19 @@ def fetch_public_contact_page(url: str) -> tuple[int, str, str]:
 def _extract_emails_from_html(html: str) -> set[str]:
     if not html:
         return set()
-    scrubbed = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", html)
-    emails = {match.group(1).strip().lower() for match in MAILTO_RE.finditer(scrubbed)}
+    scrubbed = html
+    scrubbed = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", scrubbed)
+    scrubbed = html_lib.unescape(scrubbed)
+    emails = {unquote(match.group(1)).strip().lower() for match in MAILTO_RE.finditer(scrubbed)}
     emails.update(match.group(0).strip().lower() for match in EMAIL_FIND_RE.finditer(scrubbed))
     text = re.sub(r"(?is)<[^>]+>", " ", scrubbed)
     for match in OBFUSCATED_EMAIL_RE.finditer(text):
         local, host, tld = match.groups()
         emails.add(f"{local.lower()}@{host.lower()}.{tld.lower()}")
+    for match in PLAIN_OBFUSCATED_EMAIL_RE.finditer(text):
+        local, host_words, tld = match.groups()
+        host = re.sub(r"\s+dot\s+", ".", host_words.lower())
+        emails.add(f"{local.lower()}@{host}.{tld.lower()}")
     return {email for email in emails if EMAIL_RE.match(email)}
 
 

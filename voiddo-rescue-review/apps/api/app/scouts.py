@@ -318,7 +318,9 @@ def is_excluded_sensitive_target(business_name: str, domain: str, website: str =
     normalized_niche = (niche or "").strip().lower()
     if normalized_niche in EXCLUDED_NICHES:
         return True
-    return _is_excluded_large_brand(business_name, domain, website)
+    return _is_excluded_large_brand(business_name, domain, website) or _is_sensitive_health_or_public_target(
+        business_name, domain, website
+    )
 
 
 def _is_sensitive_health_or_public_target(business_name: str, domain: str, website: str = "") -> bool:
@@ -327,9 +329,12 @@ def _is_sensitive_health_or_public_target(business_name: str, domain: str, websi
         token in combined
         for token in [
             "communityhealth",
+            "dukehealth",
             "healthsystem",
             "hopkinsmedicine",
             "hospital",
+            "urgentcare",
+            "urgentcarecenter",
             "medicalcenter",
             "medicalcentre",
             "nhs",

@@ -134,6 +134,51 @@ def test_campaign_shell_hygiene_archives_synthetic_campaigns_without_touching_re
         _cleanup(token)
 
 
+def test_campaign_hygiene_archives_generic_test_campaign_missing_geo():
+    token = uuid.uuid4().hex[:8]
+    try:
+        business = execute(
+            """
+            INSERT INTO businesses(name, domain, email, source, niche, country, status)
+            VALUES (%s, %s, %s, 'scout_agent', 'dentists', 'US', 'scouted')
+            RETURNING id
+            """,
+            (f"Generic test campaign {token}", f"generic-{token}.clinic", f"owner-{token}@generic-{token}.clinic"),
+        )
+        lead = execute(
+            """
+            INSERT INTO leads(business_id, email, source, status, score, niche, country, language)
+            VALUES (%s, %s, 'scout_agent', 'scouted', 90, 'dentists', 'US', 'en')
+            RETURNING id
+            """,
+            (business["id"], f"owner-{token}@generic-{token}.clinic"),
+        )
+        campaign = execute(
+            """
+            INSERT INTO campaigns(name, status, offer_key, dry_run)
+            VALUES ('x', 'preview_ready', 'contact_form_repair', true)
+            RETURNING id
+            """
+        )
+        preview = execute(
+            """
+            INSERT INTO campaign_leads(campaign_id, lead_id, status, score, preview_json)
+            VALUES (%s, %s, 'preview', 90, %s)
+            RETURNING id
+            """,
+            (campaign["id"], lead["id"], Jsonb({"token": token})),
+        )
+
+        preview_result = archive_campaign_preview_artifacts(50, apply=True)
+        shell_result = archive_campaign_shell_artifacts(50, apply=True)
+        assert preview_result["archived_count"] >= 1
+        assert shell_result["archived_count"] >= 1
+        assert fetch_one("SELECT status FROM campaign_leads WHERE id = %s", (preview["id"],))["status"] == "archived_test_artifact"
+        assert fetch_one("SELECT status FROM campaigns WHERE id = %s", (campaign["id"],))["status"] == "archived_test_artifact"
+    finally:
+        _cleanup(token)
+
+
 def test_campaign_shell_hygiene_endpoint_and_agent_are_admin_gated_no_send():
     token = uuid.uuid4().hex[:8]
     try:

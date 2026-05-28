@@ -45,6 +45,7 @@ def test_scout_run_rejects_hospital_and_large_enterprise_targets_without_send():
     csv_text = (
         "business_name,website_url,email,country,city,language,niche,source_url,confidence\n"
         f"Renown Medical Center {token},https://renown-{token}.org,hello@renown-{token}.org,US,Reno,en,clinics,https://source.test/{token},90\n"
+        f"Duke Urgent Care {token},https://dukehealth-{token}.org,hello@dukehealth-{token}.org,US,Reno,en,clinics,https://source.test/{token}/duke,90\n"
         f"Social Profile {token},https://facebook.com/local-{token},hello@local-{token}.com,US,Reno,en,law firms,https://source.test/{token}/social,90\n"
         f"NHS Medical Centre {token},https://medicalcentre-{token}.wales.nhs.uk,hello@medicalcentre-{token}.wales.nhs.uk,UK,Cardiff,en,clinics,https://source.test/{token}/nhs,90\n"
         f"Local Dental {token},https://local-{token}.clinic,hello@local-{token}.clinic,US,Reno,en,dentists,https://source.test/{token}/2,90\n"
@@ -54,7 +55,7 @@ def test_scout_run_rejects_hospital_and_large_enterprise_targets_without_send():
         run = create_scout_run(str(source["id"]))
         result = process_scout_run(str(run["id"]))
         assert result["accepted"] == 1
-        assert result["rejected"] == 3
+        assert result["rejected"] == 4
         sensitive = fetch_one("SELECT status, rejection_reason FROM scout_leads WHERE domain = %s", (f"renown-{token}.org",))
         assert sensitive["status"] == "rejected"
         assert sensitive["rejection_reason"] == "excluded_sensitive_target"
@@ -64,6 +65,9 @@ def test_scout_run_rejects_hospital_and_large_enterprise_targets_without_send():
         nhs = fetch_one("SELECT status, rejection_reason FROM scout_leads WHERE domain = %s", (f"medicalcentre-{token}.wales.nhs.uk",))
         assert nhs["status"] == "rejected"
         assert nhs["rejection_reason"] == "excluded_sensitive_target"
+        urgent = fetch_one("SELECT status, rejection_reason FROM scout_leads WHERE domain = %s", (f"dukehealth-{token}.org",))
+        assert urgent["status"] == "rejected"
+        assert urgent["rejection_reason"] == "excluded_sensitive_target"
         assert result.get("send_mail") is None or result.get("send_mail") is False
     finally:
         _cleanup(token)
@@ -169,6 +173,29 @@ def test_sensitive_hygiene_archives_queued_scanner_jobs_for_already_excluded_lea
         job = execute(
             "INSERT INTO scanner_jobs(url, business_name, dry_run, status, result_json) VALUES (%s, %s, false, 'queued', %s) RETURNING id",
             (f"https://{domain}", f"Excluded {token}", Jsonb({"token": token, "lead_id": str(lead["id"])})),
+        )
+        result = archive_sensitive_scout_targets(50, apply=True)
+        assert result["archived_scanner_jobs_count"] >= 1
+        assert fetch_one("SELECT status FROM scanner_jobs WHERE id = %s", (job["id"],))["status"] == "archived_sensitive_target"
+    finally:
+        _cleanup(token)
+
+
+def test_sensitive_hygiene_archives_running_scanner_jobs_for_already_excluded_leads():
+    token = uuid.uuid4().hex[:8]
+    domain = f"dukehealth-{token}.org"
+    try:
+        business = execute(
+            "INSERT INTO businesses(name, domain, source, status) VALUES (%s, %s, 'scout_agent', 'excluded_sensitive_target') RETURNING id",
+            (f"Duke Urgent Care {token}", domain),
+        )
+        lead = execute(
+            "INSERT INTO leads(business_id, email, source, status, score, language, country, niche) VALUES (%s, %s, 'scout_agent', 'excluded_sensitive_target', 0, 'en', 'US', 'clinics') RETURNING id",
+            (business["id"], f"hello@{domain}"),
+        )
+        job = execute(
+            "INSERT INTO scanner_jobs(url, business_name, dry_run, status, started_at, result_json) VALUES (%s, %s, false, 'running', now(), %s) RETURNING id",
+            (f"https://{domain}", f"Duke Urgent Care {token}", Jsonb({"token": token, "lead_id": str(lead["id"])})),
         )
         result = archive_sensitive_scout_targets(50, apply=True)
         assert result["archived_scanner_jobs_count"] >= 1

@@ -38,7 +38,7 @@ def _archive_scanner_jobs_for_sensitive_refs(reason: str, lead_id: str | None = 
         WITH candidates AS (
           SELECT id
           FROM scanner_jobs
-          WHERE status IN ('queued', 'completed', 'failed')
+          WHERE status IN ('queued', 'running', 'completed', 'failed')
             AND (
               (%s::text IS NOT NULL AND result_json->>'lead_id' = %s::text)
               OR (%s::text IS NOT NULL AND result_json->>'scout_lead_id' = %s::text)
@@ -164,7 +164,7 @@ def archive_sensitive_scout_targets(limit: int = 200, apply: bool = False) -> di
               FROM scanner_jobs sj
               LEFT JOIN leads l ON l.id::text = sj.result_json->>'lead_id'
               LEFT JOIN scout_leads sl ON sl.id::text = sj.result_json->>'scout_lead_id'
-              WHERE sj.status IN ('queued', 'completed', 'failed')
+              WHERE sj.status IN ('queued', 'running', 'completed', 'failed')
                 AND (
                   l.status = 'excluded_sensitive_target'
                   OR sl.rejection_reason = 'excluded_sensitive_target'
