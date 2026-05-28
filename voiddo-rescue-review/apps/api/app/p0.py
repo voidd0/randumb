@@ -2517,6 +2517,40 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
     return {"allowed": True, "reason": "all_gates_passed", "checks": checks}
 
 
+def latest_preview_transport_gate_status() -> dict[str, Any]:
+    row = fetch_one(
+        """
+        SELECT om.body, om.html_body, l.email, om.id AS outreach_message_id
+        FROM outreach_messages om
+        JOIN leads l ON l.id = om.lead_id
+        WHERE om.status = 'preview'
+        ORDER BY om.created_at DESC
+        LIMIT 1
+        """
+    )
+    if row:
+        result = transport_gate_status(
+            {
+                "email": row["email"],
+                "body": row["body"],
+                "html_body": row["html_body"],
+            }
+        )
+        result["source"] = "latest_preview_outreach_message"
+        result["outreach_message_id"] = str(row["outreach_message_id"])
+        return result
+    sample_unsubscribe = "https://go.rescue.voiddo.com/unsubscribe/u_00000000-0000-0000-0000-000000000000.sampletoken"
+    result = transport_gate_status(
+        {
+            "email": "redacted@example.test",
+            "body": f"Public non-invasive website check.\nUnsubscribe: {sample_unsubscribe}",
+            "html_body": f"<!doctype html><html><body><a href=\"{sample_unsubscribe}\">Unsubscribe</a></body></html>",
+        }
+    )
+    result["source"] = "sample_fallback_no_preview_outreach_message"
+    return result
+
+
 def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
     rows = fetch_all(
         """

@@ -8,7 +8,7 @@ from .campaign_control_room import campaign_control_room_snapshot
 from .config import get_settings
 from .db import fetch_one
 from .mailer_control_room import latest_mailer_policy_score_history, mailer_policy_score
-from .p0 import json_safe, latest_decision, mail_signal_summary, transport_gate_status, warmup_calendar_health, warmup_domain_maturity_status
+from .p0 import json_safe, latest_decision, latest_preview_transport_gate_status, mail_signal_summary, warmup_calendar_health, warmup_domain_maturity_status
 from .quality_plugins import latest_quality_summary
 from .revenue_loop import revenue_loop_snapshot
 from .source_campaign_operator import source_campaign_operator_snapshot
@@ -79,12 +79,7 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
     visual = _visual_quality_evidence()
     policy_score = mailer_policy_score()
     policy_history = latest_mailer_policy_score_history(3)
-    transport = transport_gate_status(
-        {
-            "email": "redacted@example.test",
-            "body": "Public non-invasive website check.\nUnsubscribe: https://go.rescue.voiddo.com/unsubscribe/test",
-        }
-    )
+    transport = latest_preview_transport_gate_status()
     settings_evidence = {
         "global_kill_switch": settings.global_kill_switch,
         "scanning_paused": settings.scanning_paused,

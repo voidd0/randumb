@@ -118,6 +118,8 @@ export default async function AdminPage() {
   const launchMail = launchEvidence.mail || {};
   const launchVisual = launchEvidence.visual || {};
   const launchTransport = launchEvidence.transport_gate || {};
+  const launchTransportChecks = launchTransport.checks || {};
+  const launchWarmupMaturity = launchEvidence.warmup_maturity || {};
   const launchCampaigns = launchEvidence.campaigns || {};
   const selfClosedLoop = selfClosedLoopData || {};
   const selfCycles = Array.isArray(selfClosedLoop.cycles) ? selfClosedLoop.cycles : [];
@@ -272,6 +274,26 @@ export default async function AdminPage() {
                 <span className="tag">send</span>
                 <strong>{launchReadiness.live_outreach_allowed ? "armed" : "blocked"}</strong>
                 <span>{launchTransport.reason ?? "no live-send approval"}</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">warmup</span>
+                <strong>{launchWarmupMaturity.allowed ? "verified" : "waiting"}</strong>
+                <span>{launchWarmupMaturity.warmup_sent_count ?? 0}/{launchWarmupMaturity.min_clean_sends_required ?? 5} clean sends</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">unsubscribe</span>
+                <strong>{launchTransportChecks.unsubscribe_one_click_ready ? "ready" : "blocked"}</strong>
+                <span>one-click signed link</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">html</span>
+                <strong>{launchTransportChecks.html_body_ready ? "ready" : "blocked"}</strong>
+                <span>branded multipart body</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">launch flags</span>
+                <strong>{launchTransportChecks.outreach_dry_run || launchTransportChecks.outreach_paused || !launchTransportChecks.first_live_send_flag ? "locked" : "armed"}</strong>
+                <span>dry-run {launchTransportChecks.outreach_dry_run ? "on" : "off"} · pause {launchTransportChecks.outreach_paused ? "on" : "off"}</span>
               </div>
             </div>
             <div className="segments-list">

@@ -90,7 +90,7 @@ def test_launch_readiness_scoreboard_can_reach_preview_state_but_not_live_withou
         lambda: {"score": 97, "decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW", "blockers": []},
     )
     monkeypatch.setattr(scoreboard_module, "latest_mailer_policy_score_history", lambda limit=3: {"latest_decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW"})
-    monkeypatch.setattr(scoreboard_module, "transport_gate_status", lambda payload=None: {"allowed": False, "reason": "outreach_dry_run_enabled"})
+    monkeypatch.setattr(scoreboard_module, "latest_preview_transport_gate_status", lambda: {"allowed": False, "reason": "outreach_dry_run_enabled", "checks": {"has_unsubscribe": True, "unsubscribe_one_click_ready": True, "html_body_ready": True}, "source": "latest_preview_outreach_message"})
     monkeypatch.setattr(
         scoreboard_module,
         "revenue_loop_snapshot",
@@ -119,6 +119,8 @@ def test_launch_readiness_scoreboard_can_reach_preview_state_but_not_live_withou
     assert result["state"] != "LIVE_OUTREACH_READY"
     assert result["live_outreach_allowed"] is False
     assert result["send_mail"] is False
+    assert result["evidence"]["transport_gate"]["source"] == "latest_preview_outreach_message"
+    assert result["evidence"]["transport_gate"]["checks"]["unsubscribe_one_click_ready"] is True
 
 
 def test_launch_readiness_scoreboard_blocks_unverified_warmup_maturity(monkeypatch):
@@ -163,7 +165,7 @@ def test_launch_readiness_scoreboard_blocks_unverified_warmup_maturity(monkeypat
     )
     monkeypatch.setattr(scoreboard_module, "mailer_policy_score", lambda: {"score": 100, "decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW", "blockers": []})
     monkeypatch.setattr(scoreboard_module, "latest_mailer_policy_score_history", lambda limit=3: {"latest_decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW"})
-    monkeypatch.setattr(scoreboard_module, "transport_gate_status", lambda payload=None: {"allowed": False, "reason": "outreach_dry_run_enabled"})
+    monkeypatch.setattr(scoreboard_module, "latest_preview_transport_gate_status", lambda: {"allowed": False, "reason": "outreach_dry_run_enabled", "checks": {"has_unsubscribe": True, "unsubscribe_one_click_ready": True, "html_body_ready": True}})
     monkeypatch.setattr(scoreboard_module, "revenue_loop_snapshot", lambda limit=25: {"launch_readiness_state": "CHECKOUT_READY_NOT_WARMED", "scanner": {"audit_count": 1}, "customers": {"customer_count": 1, "payment_count": 1, "fix_request_count": 1}})
     monkeypatch.setattr(scoreboard_module, "source_campaign_operator_snapshot", lambda limit=25: {"candidate_count": 1, "queued_or_running_runs": [], "scanner_jobs": {"completed": 1}})
     monkeypatch.setattr(scoreboard_module, "campaign_control_room_snapshot", lambda limit=25, threshold=70: {"candidate_count": 1, "ready_candidate_count": 1, "segment_count": 1})
