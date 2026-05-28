@@ -9,6 +9,7 @@ from psycopg.types.json import Jsonb
 from app.db import connect_dict
 from app.db import fetch_one
 from app.main import app
+from app.inbox_integrity_gate import run_inbox_integrity_gate
 from app.p0 import (
     create_scanner_job,
     handle_paddle_event,
@@ -141,6 +142,10 @@ def test_inbound_persistence_redacts_sender_in_events():
     assert sender not in str(event["payload_json"])
     assert system_event and "sender_hash" in system_event["payload_json"]
     assert sender not in str(system_event["payload_json"])
+    gate = run_inbox_integrity_gate(1, store=True)
+    assert gate["send_mail"] is False
+    assert gate["live_outreach_allowed"] is False
+    assert "raw_email_in_recent_email_event_payload" not in gate["blockers"]
 
 
 def test_owner_command_safe_auto_and_high_risk_blocked():

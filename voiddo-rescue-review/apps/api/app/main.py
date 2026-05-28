@@ -88,6 +88,7 @@ from .mailer_ops_actions import cleanup_synthetic_mailer_ops_runs, mailer_ops_ac
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .reply_safety_rehearsal import run_reply_safety_rehearsal
+from .inbox_integrity_gate import run_inbox_integrity_gate
 from .customer_journey import customer_journey_snapshot
 from .customer_mail_simulation import run_customer_mail_simulation
 from .customer_revenue_watchdog import latest_paid_customer_watchdog_runs, run_paid_customer_watchdog
@@ -1288,6 +1289,12 @@ async def reply_action_plan_create(request: Request):
 @app.post("/admin/replies/safety-rehearsal", dependencies=[Depends(require_admin)])
 def reply_action_rehearsal_create():
     return {"ok": True, "rehearsal": run_reply_safety_rehearsal()}
+
+
+@app.post("/admin/inbox/integrity-gate", dependencies=[Depends(require_admin)])
+async def inbox_integrity_gate_create(request: Request):
+    payload = await request.json()
+    return {"ok": True, "gate": run_inbox_integrity_gate(int(payload.get("window_hours", 24)))}
 
 
 @app.get("/admin/quality/plugins", dependencies=[Depends(require_admin)])

@@ -28,6 +28,7 @@ from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
 from .reply_safety_rehearsal import run_reply_safety_rehearsal
+from .inbox_integrity_gate import run_inbox_integrity_gate
 from .customer_journey import customer_journey_snapshot
 from .customer_mail_simulation import run_customer_mail_simulation
 from .customer_revenue_watchdog import latest_paid_customer_watchdog_runs, run_paid_customer_watchdog
@@ -423,6 +424,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "launch_operating_lane_advance_agent": lambda: advance_launch_operating_lane(int(payload.get("limit", 25)), execute_safe_auto=False),
         "inbox_agent": lambda: {"dry_run": True, "status": "worker_polls_when_enabled"},
         "reply_safety_rehearsal_agent": lambda: run_reply_safety_rehearsal(),
+        "inbox_integrity_gate_agent": lambda: run_inbox_integrity_gate(int(payload.get("window_hours", 24))),
         "owner_command_agent": lambda: owner_command_control_summary(int(payload.get("limit", 20))),
         "checkout_agent": lambda: {"dry_run": True, "status": "paddle_webhook_handlers_ready"},
         "reporting_agent": lambda: runtime_state_snapshot(),
@@ -629,9 +631,11 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
         "scout_sensitive_hygiene_snapshot_agent",
             "revenue_loop_snapshot_agent",
             "revenue_loop_prepare_agent",
-            "paid_customer_watchdog_agent",
-            "outbound_mailer_gate_agent",
+        "paid_customer_watchdog_agent",
+        "outbound_mailer_gate_agent",
         "reply_action_agent",
+        "reply_safety_rehearsal_agent",
+        "inbox_integrity_gate_agent",
         "mail_clean_window_transition_agent",
         "mailer_status_agent",
         "mail_signal_learning_agent",

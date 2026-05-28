@@ -194,6 +194,14 @@ def test_reply_safety_rehearsal_blocks_unsafe_and_sends_nothing():
     assert agent["result_json"]["decision"] == "PASS_REPLY_SAFETY_REHEARSAL"
 
 
+def test_inbox_integrity_gate_agent_sends_nothing():
+    agent = run_agent("inbox_integrity_gate_agent", {"window_hours": 1})
+    assert agent["status"] in {"completed", "blocked"}
+    assert agent["result_json"]["send_mail"] is False
+    assert agent["result_json"]["live_outreach_allowed"] is False
+    assert agent["result_json"]["secrets_included"] is False
+
+
 def test_scout_provenance_scores_source_quality():
     token = uuid.uuid4().hex[:8]
     csv_text = (
