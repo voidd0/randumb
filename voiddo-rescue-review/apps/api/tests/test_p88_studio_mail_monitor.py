@@ -158,8 +158,8 @@ def test_studio_mail_alias_uses_x_original_to_for_catchall_messages():
     message["x_original_to"] = "support@voiddo.com"
     classified = classify_studio_mail(message)
     assert classified["alias"] == "support@voiddo.com"
-    assert classified["classification"] == "personal_or_support"
-    assert classified["human_review_required"] is True
+    assert classified["classification"] == "studio_support_triage"
+    assert classified["human_review_required"] is False
 
 
 def test_studio_mail_classifies_unsubscribe_and_suppresses_without_reply():
@@ -195,15 +195,15 @@ def test_studio_mail_bounce_records_mail_signal_without_raw_address():
         _cleanup(token)
 
 
-def test_studio_mail_personal_support_is_human_review_and_redacted_in_listing():
+def test_studio_mail_support_is_autonomous_triage_and_redacted_in_listing():
     token = uuid.uuid4().hex[:8]
     sender = f"person-{token}@example.test"
     try:
         classified = classify_studio_mail(_message(token, sender, "hello", "A private support question", "support@voiddo.com"))
-        assert classified["classification"] == "personal_or_support"
-        assert classified["human_review_required"] is True
+        assert classified["classification"] == "studio_support_triage"
+        assert classified["human_review_required"] is False
         result = ingest_studio_mail_messages([_message(token, sender, "hello", "A private support question", "support@voiddo.com")])
-        assert result["human_review_count"] == 1
+        assert result["human_review_count"] == 0
         assert result["results"][0]["triage_task"]["task_type"] == "customer_fix_request"
         task = fetch_one("SELECT type, status, input_json FROM codex_tasks WHERE id = %s", (result["results"][0]["triage_task"]["codex_task_id"],))
         assert task["type"] == "customer_fix_request"
@@ -212,6 +212,41 @@ def test_studio_mail_personal_support_is_human_review_and_redacted_in_listing():
         listed = latest_studio_mail_messages(5)
         assert "person-" not in str(listed)
         assert "private support" not in str(listed).lower()
+    finally:
+        _cleanup(token)
+
+
+def test_studio_mail_listing_normalizes_legacy_personal_category():
+    token = uuid.uuid4().hex[:8]
+    try:
+        execute(
+            """
+            INSERT INTO studio_mail_messages(mailbox, uid, message_id, sender_hash, alias, classification, priority, human_review_required)
+            VALUES ('studio:voiddo', %s, %s, %s, 'support@voiddo.com', 'personal_or_support', 'high', true)
+            """,
+            (f"uid-{token}", f"<msg-{token}@example.test>", "hash"),
+        )
+        listed = latest_studio_mail_messages(5)
+        latest = listed["messages"][0]
+        assert latest["classification"] == "studio_support_triage"
+        assert latest["human_review_required"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_studio_mail_owner_only_escalation_is_narrow_and_redacted():
+    token = uuid.uuid4().hex[:8]
+    sender = f"platform-{token}@example.test"
+    try:
+        result = ingest_studio_mail_messages([
+            _message(token, sender, "Verification code", f"2FA verification code required {token}", "support@voiddo.com")
+        ])
+        assert result["human_review_count"] == 1
+        assert result["results"][0]["classification"] == "owner_only_escalation"
+        assert result["results"][0]["triage_task"]["task_type"] == "deployment_issue"
+        listed = latest_studio_mail_messages(5)
+        assert sender not in str(listed)
+        assert "verification code required" not in str(listed).lower()
     finally:
         _cleanup(token)
 

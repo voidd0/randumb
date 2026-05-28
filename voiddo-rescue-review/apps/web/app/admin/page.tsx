@@ -9,7 +9,7 @@ const labels: Record<string, string> = {
   subscriptions: "subscriptions",
   customers: "customers",
   fix_requests: "fix requests",
-  human_review_required: "human review",
+  human_review_required: "owner-only",
 };
 
 export default async function AdminPage() {
@@ -642,14 +642,14 @@ export default async function AdminPage() {
             <div className="row"><span className="tag">poll</span><span>latest em inbox poll</span><span className="score">{latestStudioMailRun.status ?? "unknown"}</span></div>
             <div className="row"><span className="tag">scanned</span><span>messages inspected in last poll</span><span className="score">{latestStudioMailRun.scanned_count ?? 0}</span></div>
             <div className="row"><span className="tag">commands</span><span>owner commands routed to global gate</span><span className="score">{latestStudioMailRun.owner_command_count ?? 0}</span></div>
-            <div className="row"><span className="tag">review</span><span>studio mail items needing review</span><span className="score">{latestStudioMailRun.human_review_count ?? 0}</span></div>
+            <div className="row"><span className="tag">owner</span><span>studio mail items needing owner-only action</span><span className="score">{latestStudioMailRun.human_review_count ?? 0}</span></div>
             <div className="row"><span className="tag">privacy</span><span>raw private addresses in admin payload</span><span className="score">{studioMail.raw_private_addresses_included || studioMailRuns.raw_private_addresses_included ? "blocked" : "omitted"}</span></div>
             <div className="row"><span className="tag">send</span><span>studio monitor send capability</span><span className="score">{studioMail.send_mail || studioMailRuns.send_mail ? "armed" : "read-only"}</span></div>
             {studioMailMessages.length ? studioMailMessages.slice(0, 5).map((item: any) => (
               <div className="row" key={item.id}>
                 <span className="tag">{item.priority ?? "normal"}</span>
                 <span>{String(item.classification || "classified").replaceAll("_", " ")}</span>
-                <span className="score">{item.human_review_required ? "review" : "auto"}</span>
+                <span className="score">{item.human_review_required ? "owner-only" : "auto"}</span>
               </div>
             )) : <div className="row"><span className="tag">clear</span><span>no recent stored studio-mail items</span><span className="score">0</span></div>}
           </div>
@@ -672,7 +672,7 @@ export default async function AdminPage() {
             <h2>Mailer Ledger</h2>
             <div className="row"><span className="tag">policy</span><span>all mail input and output</span><span className="score">gated</span></div>
             <div className="row"><span className="tag">owner</span><span>stored owner commands</span><span className="score">{ledgerOwner.total ?? 0}</span></div>
-            <div className="row"><span className="tag">inbox</span><span>human-review threads</span><span className="score">{ledgerInbound.human_review_required ?? 0}</span></div>
+            <div className="row"><span className="tag">inbox</span><span>owner-only escalation threads</span><span className="score">{ledgerInbound.human_review_required ?? 0}</span></div>
             <div className="row"><span className="tag">send</span><span>live outreach from ledger</span><span className="score">{ledgerGates.live_outreach_allowed ? "armed" : "blocked"}</span></div>
             <div className="row"><span className="tag">reply</span><span>auto-replies</span><span className="score">{ledgerGates.auto_replies_allowed ? "armed" : "paused"}</span></div>
             <div className="row"><span className="tag">throttle</span><span>active throttle states</span><span className="score">{ledgerThrottle.states ?? 0}</span></div>

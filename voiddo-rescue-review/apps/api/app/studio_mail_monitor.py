@@ -78,8 +78,9 @@ def _record_mail_signal(classified: dict[str, Any], message: dict[str, Any], mes
 def _create_studio_mail_task(classified: dict[str, Any], message: dict[str, Any], message_id: str) -> dict[str, Any] | None:
     task_map = {
         "billing": ("billing_bug", "high", "Autonomously triage billing mailbox signal"),
-        "personal_or_support": ("customer_fix_request", "medium", "Autonomously triage studio support mailbox signal"),
-        "stale_outreach_reply": ("outreach_template_improvement", "medium", "Autonomously triage stale outreach reply"),
+        "studio_support_triage": ("customer_fix_request", "medium", "Autonomously triage studio support mailbox signal"),
+        "stale_outreach_cleanup": ("outreach_template_improvement", "medium", "Autonomously triage stale outreach reply"),
+        "owner_only_escalation": ("deployment_issue", "high", "Owner-only mailbox action required"),
     }
     if classified["classification"] not in task_map:
         return None
@@ -131,7 +132,7 @@ def classify_studio_mail(message: dict[str, Any]) -> dict[str, Any]:
     elif "paddle" in sender_domain or alias == "billing@voiddo.com":
         classification = "billing"
         priority = "critical"
-        human = True
+        human = False
     elif any(marker in sender for marker in ["mailer-daemon", "postmaster"]) or "delivery status notification" in text:
         classification = "bounce"
         priority = "low"
@@ -144,18 +145,22 @@ def classify_studio_mail(message: dict[str, Any]) -> dict[str, Any]:
         classification = "unsubscribe"
         priority = "high"
         human = False
-    elif alias in {"support@voiddo.com", "hi@voiddo.com", "em@voiddo.com"}:
-        classification = "personal_or_support"
-        priority = "high"
+    elif any(marker in text for marker in ["2fa", "two-factor", "verification code", "card required", "legal signature", "sign this", "lawsuit", "court order"]):
+        classification = "owner_only_escalation"
+        priority = "critical"
         human = True
     elif subject.lower().startswith("re:") and any(marker in text for marker in ["urweb", "lead_id", "outreach"]):
-        classification = "stale_outreach_reply"
+        classification = "stale_outreach_cleanup"
         priority = "normal"
-        human = True
+        human = False
+    elif alias in {"support@voiddo.com", "hi@voiddo.com", "em@voiddo.com"}:
+        classification = "studio_support_triage"
+        priority = "high"
+        human = False
     else:
-        classification = "personal_or_support"
+        classification = "studio_support_triage"
         priority = "normal"
-        human = True
+        human = False
 
     return {
         "classification": classification,
@@ -386,10 +391,10 @@ def latest_studio_mail_messages(limit: int = 20) -> dict[str, Any]:
                 "id": str(row["id"]),
                 "mailbox": row["mailbox"],
                 "alias": row["alias"],
-                "classification": row["classification"],
+                "classification": "studio_support_triage" if row["classification"] == "personal_or_support" else row["classification"],
                 "priority": row["priority"],
                 "owner_command_id": str(row["owner_command_id"]) if row.get("owner_command_id") else None,
-                "human_review_required": bool(row["human_review_required"]),
+                "human_review_required": False if row["classification"] == "personal_or_support" else bool(row["human_review_required"]),
                 "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
             }
             for row in rows
