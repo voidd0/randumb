@@ -10,9 +10,12 @@ def _cleanup(marker: str) -> None:
     execute("DELETE FROM mailer_action_queue WHERE payload_json::text LIKE %s", (f"%{marker}%",))
 
 
-def test_customer_mail_stays_prepared_with_flag_false():
+def test_customer_mail_stays_prepared_with_flag_false(monkeypatch):
+    import app.mailer_action_queue as queue
+
     marker = "p24-flag-false"
     try:
+        monkeypatch.setattr(queue, "get_settings", lambda: SimpleNamespace(outreach_paused=True, first_live_send_flag=False, auto_replies_paused=True, customer_mail_sending_enabled=False))
         _cleanup(marker)
         enqueue_mailer_action({"action_type": "customer_onboarding", "recipient_email": "p24@example.test", "marker": marker})
         result = process_mailer_action_queue(100)

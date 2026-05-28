@@ -2620,6 +2620,8 @@ def live_outreach_quota_status(email: str = "") -> dict[str, Any]:
     settings = get_settings()
     normalized = (email or "").strip().lower()
     domain = normalized.rsplit("@", 1)[-1] if "@" in normalized else ""
+    daily_limit = int(getattr(settings, "daily_send_limit", 20) or 20)
+    hourly_domain_limit = int(getattr(settings, "hourly_domain_send_limit", 5) or 5)
     daily_sent = fetch_one(
         """
         SELECT count(*) AS count
@@ -2644,16 +2646,16 @@ def live_outreach_quota_status(email: str = "") -> dict[str, Any]:
     daily_count = int((daily_sent or {}).get("count", 0) or 0)
     hourly_domain_count = int((hourly_domain_sent or {}).get("count", 0) or 0)
     blockers: list[str] = []
-    if daily_count >= settings.daily_send_limit:
+    if daily_count >= daily_limit:
         blockers.append("daily_send_limit_reached")
-    if domain and hourly_domain_count >= settings.hourly_domain_send_limit:
+    if domain and hourly_domain_count >= hourly_domain_limit:
         blockers.append("hourly_domain_send_limit_reached")
     return {
         "allowed": not blockers,
         "daily_sent": daily_count,
-        "daily_limit": settings.daily_send_limit,
+        "daily_limit": daily_limit,
         "hourly_domain_sent": hourly_domain_count,
-        "hourly_domain_limit": settings.hourly_domain_send_limit,
+        "hourly_domain_limit": hourly_domain_limit,
         "recipient_domain_hash": recipient_hash(domain) if domain else "",
         "blockers": blockers,
         "raw_recipient_addresses_included": False,

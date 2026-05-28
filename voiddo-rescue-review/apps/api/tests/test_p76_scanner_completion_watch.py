@@ -80,7 +80,7 @@ def _seed_priority_completion_candidate(token: str) -> tuple[str, str]:
     business = execute(
         """
         INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
-        VALUES (%s, %s, 'Watcher City', 'en', 'dentists', 'p76_test', %s, %s, %s, 'scouted')
+        VALUES (%s, %s, 'Watcher City', 'en', 'dentists', 'p76_suite', %s, %s, %s, 'scouted')
         RETURNING id
         """,
         (f"P76 Clinic {token}", country, f"https://{domain}", domain, f"owner-{token}@{domain}"),
@@ -88,7 +88,7 @@ def _seed_priority_completion_candidate(token: str) -> tuple[str, str]:
     lead = execute(
         """
         INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
-        VALUES (%s, %s, 'p76_test', 'scouted', 0, 'en', %s, 'Watcher City', 'dentists')
+        VALUES (%s, %s, 'p76_suite', 'scouted', 0, 'en', %s, 'Watcher City', 'dentists')
         RETURNING id
         """,
         (business["id"], f"owner-{token}@{domain}", country),

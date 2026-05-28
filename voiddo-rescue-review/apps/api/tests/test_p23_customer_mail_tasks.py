@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from app.db import execute, fetch_one
 from app.mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, process_mailer_action_queue
 from app.p0 import handle_paddle_event
@@ -77,9 +79,21 @@ def test_one_time_fix_purchase_enqueues_fix_action():
         _cleanup(marker)
 
 
-def test_customer_mail_action_prepared_but_not_sent_when_signals_block():
+def test_customer_mail_action_prepared_but_not_sent_when_signals_block(monkeypatch):
+    import app.mailer_action_queue as queue
+
     marker = "p23-prepare"
     try:
+        monkeypatch.setattr(
+            queue,
+            "get_settings",
+            lambda: SimpleNamespace(
+                outreach_paused=True,
+                first_live_send_flag=False,
+                auto_replies_paused=True,
+                customer_mail_sending_enabled=False,
+            ),
+        )
         enqueue_mailer_action({"action_type": "customer_onboarding", "recipient_email": "customer-p23@example.test", "marker": marker})
         result = process_mailer_action_queue(10)
         action = next(item for item in result["actions"] if item["action_type"] == "customer_onboarding")
