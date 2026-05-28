@@ -29,6 +29,7 @@ from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
 from .customer_mail_simulation import run_customer_mail_simulation
+from .customer_revenue_watchdog import latest_paid_customer_watchdog_runs, run_paid_customer_watchdog
 from .monitoring import process_due_monitoring_targets, run_monitoring_check
 from .owner_command_control import owner_command_control_summary
 from .p0 import (
@@ -409,6 +410,8 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "autonomous_mailer_agent": lambda: run_autonomous_mailer_cycle(),
         "autonomous_mailer_executor_agent": lambda: run_mailer_closed_loop(int(payload.get("limit", 10))),
         "customer_mail_simulation_agent": lambda: run_customer_mail_simulation(True),
+        "paid_customer_watchdog_agent": lambda: run_paid_customer_watchdog(int(payload.get("limit", 25)), repair=bool(payload.get("repair", True))),
+        "paid_customer_watchdog_history_agent": lambda: latest_paid_customer_watchdog_runs(int(payload.get("limit", 10))),
         "mailer_digest_agent": lambda: write_owner_status_report(send_if_safe=False),
         "mailer_digest_retention_agent": lambda: cleanup_mailer_digest_history(90),
         "mailer_digest_trend_guard_agent": lambda: mailer_digest_trend_guard(),
@@ -585,9 +588,10 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
         "scout_campaign_quality_retention_agent",
         "scout_campaign_quality_regression_guard_agent",
         "scout_sensitive_hygiene_snapshot_agent",
-        "revenue_loop_snapshot_agent",
-        "revenue_loop_prepare_agent",
-        "outbound_mailer_gate_agent",
+            "revenue_loop_snapshot_agent",
+            "revenue_loop_prepare_agent",
+            "paid_customer_watchdog_agent",
+            "outbound_mailer_gate_agent",
         "reply_action_agent",
         "mail_clean_window_transition_agent",
         "mailer_status_agent",

@@ -77,6 +77,7 @@ export default async function AdminPage() {
   const studioMailData = await fetchJson("/admin/studio-mail/messages?limit=8", authorization ? { Authorization: authorization } : {});
   const studioMailRunsData = await fetchJson("/admin/studio-mail/runs?limit=5", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
+  const paidCustomerWatchdogData = await fetchJson("/admin/customers/revenue-watchdog?limit=5", authorization ? { Authorization: authorization } : {});
   const selfClosedLoopData = await fetchJson("/admin/self/closed-loop?limit=5", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
@@ -132,6 +133,8 @@ export default async function AdminPage() {
   const latestLiveQueueRun = Array.isArray(liveQueueHistory.runs) ? liveQueueHistory.runs[0] || {} : {};
   const postSendObserver = postSendObserverData?.history || {};
   const latestPostSendObserverRun = Array.isArray(postSendObserver.runs) ? postSendObserver.runs[0] || {} : {};
+  const paidCustomerWatchdog = paidCustomerWatchdogData?.history || {};
+  const latestPaidCustomerWatchdogRun = Array.isArray(paidCustomerWatchdog.runs) ? paidCustomerWatchdog.runs[0] || {} : {};
   const launchEvidence = launchReadiness.evidence || {};
   const launchMail = launchEvidence.mail || {};
   const launchVisual = launchEvidence.visual || {};
@@ -341,6 +344,11 @@ export default async function AdminPage() {
                 <span className="tag">rehearsal</span>
                 <strong>{latestLaunchRehearsalRun.decision ?? "not run"}</strong>
                 <span>{latestLaunchRehearsalRun.passed_step_count ?? 0}/{latestLaunchRehearsalRun.step_count ?? 0} steps</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">paid customers</span>
+                <strong>{latestPaidCustomerWatchdogRun.decision ?? "not run"}</strong>
+                <span>{latestPaidCustomerWatchdogRun.checked_customer_count ?? 0} checked · {latestPaidCustomerWatchdogRun.repaired_customer_count ?? 0} repaired</span>
               </div>
             </div>
             <div className="segments-list">

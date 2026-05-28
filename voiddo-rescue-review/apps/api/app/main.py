@@ -89,6 +89,7 @@ from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
 from .customer_journey import customer_journey_snapshot
 from .customer_mail_simulation import run_customer_mail_simulation
+from .customer_revenue_watchdog import latest_paid_customer_watchdog_runs, run_paid_customer_watchdog
 from .customer_access import customer_dashboard_by_token, ensure_customer_access_token
 from .monitoring import ensure_monitoring_target, process_due_monitoring_targets, run_monitoring_check
 from .owner_command_control import owner_command_control_summary
@@ -1189,6 +1190,23 @@ def customer_dashboard_token_get(token: str):
 async def monitoring_target_create(customer_id: str, request: Request):
     payload = await request.json()
     return {"ok": True, "target": ensure_monitoring_target(customer_id, payload.get("site_url", ""))}
+
+
+@app.get("/admin/customers/revenue-watchdog", dependencies=[Depends(require_admin)])
+def customer_revenue_watchdog_get(limit: int = 10):
+    return {"ok": True, "history": latest_paid_customer_watchdog_runs(limit)}
+
+
+@app.post("/admin/customers/revenue-watchdog/run", dependencies=[Depends(require_admin)])
+async def customer_revenue_watchdog_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "watchdog": run_paid_customer_watchdog(
+            int(payload.get("limit", 25)),
+            repair=bool(payload.get("repair", True)),
+        ),
+    }
 
 
 @app.post("/admin/monitoring/run-due", dependencies=[Depends(require_admin)])

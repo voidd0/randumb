@@ -538,6 +538,34 @@ def upsert_customer(email: str, paddle_customer_id: str | None) -> str:
     return str(row["id"])
 
 
+def _audit_context_from_payload(data: dict[str, Any]) -> dict[str, Any]:
+    custom = data.get("custom_data") or {}
+    audit_slug = str(custom.get("audit_slug") or custom.get("audit") or "").strip()
+    if not audit_slug:
+        return {}
+    row = fetch_one(
+        """
+        SELECT id AS audit_id, business_id, lead_id, domain, url
+        FROM audits
+        WHERE public_slug = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (audit_slug,),
+    )
+    return dict(row) if row else {}
+
+
+def _link_customer_to_audit_context(customer_id: str, data: dict[str, Any]) -> dict[str, Any]:
+    context = _audit_context_from_payload(data)
+    if context.get("business_id"):
+        execute(
+            "UPDATE customers SET business_id = COALESCE(business_id, %s), updated_at = now() WHERE id = %s",
+            (context["business_id"], customer_id),
+        )
+    return context
+
+
 def _customer_mail_hash(email: str) -> str:
     normalized = (email or "").strip().lower()
     if not normalized:
@@ -609,6 +637,7 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
     if event_type == "transaction.paid":
         email = data.get("customer", {}).get("email") or data.get("customer_email") or "unknown@voiddorescue.local"
         customer_id = upsert_customer(email, data.get("customer_id"))
+        audit_context = _link_customer_to_audit_context(customer_id, data)
         product_key = product_key_from_payload(data, settings)
         amount, currency = _amount_from_payload(data)
         execute(
@@ -625,16 +654,17 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
         if product_key in ONETIME_FIX_PRODUCTS:
             fix_row = execute(
                 """
-                INSERT INTO fix_requests(customer_id, product_key, status, priority, title, description, evidence_json)
-                VALUES (%s, %s, 'new', 'P1', %s, %s, %s)
+                INSERT INTO fix_requests(customer_id, audit_id, product_key, status, priority, title, description, evidence_json)
+                VALUES (%s, %s, %s, 'new', 'P1', %s, %s, %s)
                 RETURNING id
                 """,
                 (
                     customer_id,
+                    audit_context.get("audit_id"),
                     product_key,
                     f"{PRODUCTS.get(product_key, {}).get('name', product_key)} purchased",
                     "Created from Paddle transaction.paid webhook.",
-                    Jsonb({"paddle_transaction_id": data.get("id"), "provisioning_paused": provisioning_paused}),
+                    Jsonb({"paddle_transaction_id": data.get("id"), "provisioning_paused": provisioning_paused, "audit_context_linked": bool(audit_context)}),
                 ),
             )
             actions.append("fix_request_created")
@@ -660,7 +690,7 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
                 INSERT INTO onboarding_tasks(customer_id, product_key, task_type, title, payload_json)
                 VALUES (%s, %s, 'payment_onboarding', 'Customer onboarding started', %s)
                 """,
-                (customer_id, product_key, Jsonb({"paddle_transaction_id": data.get("id")})),
+                (customer_id, product_key, Jsonb({"paddle_transaction_id": data.get("id"), "audit_context_linked": bool(audit_context)})),
             )
             actions.append("onboarding_task_created")
             enqueue_customer_mail_action(
@@ -688,6 +718,7 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
     if event_type in {"subscription.created", "subscription.activated", "subscription.updated", "subscription.canceled"}:
         email = data.get("customer", {}).get("email") or data.get("customer_email") or "unknown@voiddorescue.local"
         customer_id = upsert_customer(email, data.get("customer_id"))
+        audit_context = _link_customer_to_audit_context(customer_id, data)
         product_key = product_key_from_payload(data, settings)
         status = data.get("status") or event_type.rsplit(".", 1)[-1]
         execute(
@@ -719,7 +750,7 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
                 INSERT INTO onboarding_tasks(customer_id, product_key, task_type, title, payload_json)
                 VALUES (%s, %s, 'subscription_onboarding', 'Subscription onboarding started', %s)
                 """,
-                (customer_id, product_key, Jsonb({"paddle_subscription_id": data.get("id")})),
+                (customer_id, product_key, Jsonb({"paddle_subscription_id": data.get("id"), "audit_context_linked": bool(audit_context)})),
             )
             actions.append("onboarding_task_created")
             enqueue_customer_mail_action(
