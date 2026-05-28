@@ -159,7 +159,28 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         source_id = payload.get("source_id")
         if source_id:
             return run_scout_source_readiness(source_id)
-        row = fetch_one("SELECT id FROM scout_sources WHERE status = 'active' ORDER BY updated_at DESC, created_at DESC LIMIT 1")
+        candidates = ready_scout_source_queue_candidates(1)
+        if candidates.get("candidates"):
+            candidate_source = candidates["candidates"][0].get("source") or {}
+            candidate_source_id = candidate_source.get("id")
+            if candidate_source_id:
+                return run_scout_source_readiness(str(candidate_source_id))
+        row = fetch_one(
+            """
+            WITH latest AS (
+              SELECT DISTINCT ON (source_id) source_id, status, score, created_at
+              FROM scout_source_readiness_checks
+              ORDER BY source_id, created_at DESC, id DESC
+            )
+            SELECT s.id
+            FROM scout_sources s
+            LEFT JOIN latest ON latest.source_id = s.id
+            WHERE s.status = 'active'
+              AND COALESCE(latest.status, '') != 'REVIEW_SOURCE_BEFORE_RUN'
+            ORDER BY COALESCE(latest.score, 0) DESC, s.updated_at DESC, s.created_at DESC
+            LIMIT 1
+            """
+        )
         if not row:
             return {"status": "idle", "reason": "no_active_scout_sources", "send_mail": False, "live_outreach_allowed": False}
         return run_scout_source_readiness(str(row["id"]))
