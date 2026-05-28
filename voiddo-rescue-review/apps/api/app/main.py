@@ -96,6 +96,7 @@ from .language_gate import check_no_ai_public_language
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_activation import apply_launch_activation, latest_launch_activation_runs, launch_activation_readiness, prepare_launch_activation
 from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates, stage_live_outreach_batch
+from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
 from .launch_repair_planner import execute_launch_repair_plan, launch_repair_plan
@@ -557,6 +558,23 @@ async def outreach_live_queue_stage(request: Request):
             int(payload.get("limit", 20)),
             bool(payload.get("dry_run", True)),
             payload.get("requested_by", "operator"),
+        ),
+    }
+
+
+@app.get("/admin/outreach/post-send-observer", dependencies=[Depends(require_admin)])
+def outreach_post_send_observer_get(limit: int = 10):
+    return {"ok": True, "history": latest_outreach_post_send_observer_runs(limit)}
+
+
+@app.post("/admin/outreach/post-send-observer/run", dependencies=[Depends(require_admin)])
+async def outreach_post_send_observer_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "observer": outreach_post_send_observer(
+            int(payload.get("window_hours", 24)),
+            apply_pause=bool(payload.get("apply_pause", True)),
         ),
     }
 

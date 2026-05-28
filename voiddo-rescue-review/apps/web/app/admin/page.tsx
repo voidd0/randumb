@@ -71,6 +71,7 @@ export default async function AdminPage() {
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
   const launchActivationData = await fetchJson("/admin/launch-activation?limit=25", authorization ? { Authorization: authorization } : {});
   const liveQueueData = await fetchJson("/admin/outreach/live-queue?limit=20", authorization ? { Authorization: authorization } : {});
+  const postSendObserverData = await fetchJson("/admin/outreach/post-send-observer?limit=5", authorization ? { Authorization: authorization } : {});
   const studioMailData = await fetchJson("/admin/studio-mail/messages?limit=8", authorization ? { Authorization: authorization } : {});
   const studioMailRunsData = await fetchJson("/admin/studio-mail/runs?limit=5", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
@@ -124,6 +125,8 @@ export default async function AdminPage() {
   const liveQueue = liveQueueData?.candidates || {};
   const liveQueueHistory = liveQueueData?.history || {};
   const latestLiveQueueRun = Array.isArray(liveQueueHistory.runs) ? liveQueueHistory.runs[0] || {} : {};
+  const postSendObserver = postSendObserverData?.history || {};
+  const latestPostSendObserverRun = Array.isArray(postSendObserver.runs) ? postSendObserver.runs[0] || {} : {};
   const launchEvidence = launchReadiness.evidence || {};
   const launchMail = launchEvidence.mail || {};
   const launchVisual = launchEvidence.visual || {};
@@ -323,6 +326,11 @@ export default async function AdminPage() {
                 <span className="tag">canary queue</span>
                 <strong>{liveQueue.candidate_count ?? 0}</strong>
                 <span>latest stage {latestLiveQueueRun.decision ?? "none"}</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">post-send watch</span>
+                <strong>{latestPostSendObserverRun.decision ?? "idle"}</strong>
+                <span>bounces {latestPostSendObserverRun.bounce_or_dsn_count ?? 0} · replies {latestPostSendObserverRun.reply_count ?? 0}</span>
               </div>
             </div>
             <div className="segments-list">

@@ -879,6 +879,9 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "ПОКАЖИ ОТВЕТЫ": "SHOW REPLIES",
         "ПОКАЖИ ПЛАТЕЖИ": "SHOW PAYMENTS",
         "ПОКАЖИ РУЧНУЮ ПРОВЕРКУ": "SHOW HUMAN REVIEW",
+        "ПОКАЖИ ЖИВУЮ ОЧЕРЕДЬ": "SHOW LIVE QUEUE",
+        "ПОДГОТОВЬ ЖИВОЙ КАНАРЕЙКУ": "PREPARE LIVE CANARY",
+        "ПОДГОТОВЬ ЖИВОЙ КАНАРИ": "PREPARE LIVE CANARY",
         "ЗАПУСТИ MAIL QA": "RUN MAIL QA",
         "ЗАПУСТИ ВИЗУАЛ QA": "RUN VISUAL QA",
         "ПОДГОТОВЬ ПРОГРЕВ": "PREPARE WARMUP",
@@ -901,9 +904,9 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
     safe = {
         "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",
         "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
-        "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS",
+        "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE",
     }
-    medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "START WARMUP", "RESUME WARMUP"}
+    medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP"}
     high = {"SEND OUTREACH", "START WARMUP", "UNPAUSE OUTREACH", "RUN SHELL", "EXECUTE"}
     if command in safe:
         risk = "SAFE_AUTO"
@@ -1718,6 +1721,15 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
         result = {"ok": True, "action": "warmup_calendar", "calendar": warmup_calendar_health()}
     elif command == "SHOW MAIL SIGNALS":
         result = {"ok": True, "action": "mail_signals", "signals": mail_signal_summary()}
+    elif command == "SHOW LIVE QUEUE":
+        from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates
+
+        result = {
+            "ok": True,
+            "action": "live_queue_status",
+            "queue": live_outreach_queue_candidates(20),
+            "history": latest_outreach_send_runs(10),
+        }
     elif command == "RUN MAIL QA":
         result = {"ok": True, "action": "mail_qa", "run": run_mail_qa()}
     elif command == "RUN DELIVERABILITY TEST":
@@ -1733,6 +1745,14 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
         result = resume_warmup_gate()
     elif command == "PREPARE LEADS":
         result = {"ok": True, "action": "lead_prepare_dry_run", "args": parsed.get("args_json", {}), "live_send": False}
+    elif command == "PREPARE LIVE CANARY":
+        from .outreach_live_queue import stage_live_outreach_batch
+
+        result = {
+            "ok": True,
+            "action": "live_canary_prepared_dry_run",
+            "queue": stage_live_outreach_batch(20, dry_run=True, requested_by="owner_command"),
+        }
     else:
         result = {"ok": False, "action": "review_required", "reason": "unknown_command"}
     execute(
