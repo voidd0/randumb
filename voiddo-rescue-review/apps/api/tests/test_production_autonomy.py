@@ -118,6 +118,21 @@ def test_scout_rejects_excluded_large_enterprise_brand():
         _cleanup_token(token)
 
 
+def test_scout_rejects_large_dental_chain_brand():
+    token = uuid.uuid4().hex[:8]
+    csv_text = f"business_name,website_url,email,country,niche\nAspen Dental,https://aspendental-{token}.example.test,a@aspendental-{token}.example.test,US,dentists\n"
+    try:
+        source = create_scout_source({"name": f"large-dental-{token}", "source_type": "manual_csv_scout", "config_json": {"csv": csv_text}})
+        run = create_scout_run(str(source["id"]))
+        result = process_scout_run(str(run["id"]))
+        assert result["accepted"] == 0
+        assert result["rejected"] == 1
+        row = fetch_one("SELECT rejection_reason FROM scout_leads WHERE domain = %s", (f"aspendental-{token}.example.test",))
+        assert row["rejection_reason"] == "excluded_large_enterprise"
+    finally:
+        _cleanup_token(token)
+
+
 def test_lead_scoring_explains_reasoning():
     token = uuid.uuid4().hex[:8]
     try:

@@ -7,7 +7,7 @@ from psycopg.types.json import Jsonb
 
 from .db import execute, fetch_all
 from .p0 import json_safe
-from .scouts import is_excluded_sensitive_target
+from .scouts import _is_excluded_large_brand, is_excluded_sensitive_target
 
 
 SAFE_FLAGS = {
@@ -23,6 +23,12 @@ def _reason_for(row: dict[str, Any]) -> str:
     niche = str(row.get("niche") or "").strip().lower()
     if niche in {"government", "banks", "bank", "hospitals", "hospital", "gambling", "adult", "crypto", "political"}:
         return "excluded_niche"
+    if _is_excluded_large_brand(
+        str(row.get("business_name") or ""),
+        str(row.get("domain") or ""),
+        str(row.get("website_url") or ""),
+    ):
+        return "excluded_large_enterprise"
     return "excluded_sensitive_target"
 
 

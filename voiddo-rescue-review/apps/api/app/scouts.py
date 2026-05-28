@@ -17,6 +17,7 @@ from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 
 EXCLUDED_NICHES = {"government", "banks", "bank", "hospitals", "hospital", "gambling", "adult", "crypto", "political"}
 EXCLUDED_LARGE_BRAND_TOKENS = {
+    "aspendental",
     "bestwestern",
     "casino",
     "choicehotels",
