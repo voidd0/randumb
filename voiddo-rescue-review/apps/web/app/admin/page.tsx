@@ -44,6 +44,15 @@ export default async function AdminPage() {
     await postJson("/admin/campaign-control-room/auto-review", { limit, apply });
   }
 
+  async function runLeadStockpileHealth(formData: FormData) {
+    "use server";
+    const target_preview_count = Number(formData.get("target_preview_count") || 50);
+    const canary_count = Number(formData.get("canary_count") || 20);
+    const limit = Number(formData.get("limit") || 100);
+    const apply = String(formData.get("apply") || "true") === "true";
+    await postJson("/admin/lead-stockpile-health/run", { target_preview_count, canary_count, limit, apply });
+  }
+
   const requestHeaders = await headers();
   const authorization = requestHeaders.get("authorization") || "";
   const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
@@ -68,6 +77,7 @@ export default async function AdminPage() {
   const scoutSourceReadinessGuardData = await fetchJson("/admin/scouts/source-readiness-regression-guard/latest", authorization ? { Authorization: authorization } : {});
   const campaignControlRoomData = await fetchJson("/admin/campaign-control-room?limit=25&threshold=70", authorization ? { Authorization: authorization } : {});
   const campaignActionsData = await fetchJson("/admin/campaign-actions?limit=8", authorization ? { Authorization: authorization } : {});
+  const leadStockpileData = await fetchJson("/admin/lead-stockpile-health?target_preview_count=50&canary_count=20&limit=100", authorization ? { Authorization: authorization } : {});
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
   const launchActivationData = await fetchJson("/admin/launch-activation?limit=25", authorization ? { Authorization: authorization } : {});
   const launchRunbookData = await fetchJson("/admin/launch-activation/runbook?limit=25", authorization ? { Authorization: authorization } : {});
@@ -121,6 +131,9 @@ export default async function AdminPage() {
   const campaignActionCampaigns = Array.isArray(campaignActions.campaigns) ? campaignActions.campaigns : [];
   const campaignSegments = Array.isArray(campaignControlRoom.top_segments) ? campaignControlRoom.top_segments : [];
   const campaignPreviewRows = Array.isArray(campaignControlRoom.first_batch_preview_rows) ? campaignControlRoom.first_batch_preview_rows : [];
+  const leadStockpile = leadStockpileData?.health || {};
+  const leadStockpileHistory = leadStockpileData?.history || {};
+  const latestLeadStockpileRun = Array.isArray(leadStockpileHistory.runs) ? leadStockpileHistory.runs[0] || {} : {};
   const launchReadiness = launchReadinessData?.scoreboard || {};
   const launchActivation = launchActivationData?.activation || {};
   const launchRunbook = launchRunbookData?.runbook || {};
@@ -286,6 +299,16 @@ export default async function AdminPage() {
                 <span>ready preview candidates</span>
               </div>
               <div className="segment-card">
+                <span className="tag">stockpile</span>
+                <strong>{leadStockpile.approved_preview_count ?? 0}/{leadStockpile.target_preview_count ?? 50}</strong>
+                <span>{leadStockpile.decision ?? "checking"}</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">canary stock</span>
+                <strong>{leadStockpile.live_queue_candidate_count ?? liveQueue.candidate_count ?? 0}/{leadStockpile.canary_count ?? 20}</strong>
+                <span>approved queue candidates</span>
+              </div>
+              <div className="segment-card">
                 <span className="tag">mail</span>
                 <strong>{launchMail.mail_qa_decision ?? campaignControlRoom.mail_qa_decision ?? "unknown"}</strong>
                 <span>strict auth and signal gate</span>
@@ -373,6 +396,13 @@ export default async function AdminPage() {
                 <span>limit {launchRunbook.canary_limit ?? 20}</span>
                 <span>{launchRunbook.operator_guard ?? "guarded"}</span>
               </div>
+              <div className="segment-row">
+                <span className="readiness-chip">{leadStockpile.decision ?? "stockpile"}</span>
+                <strong>Lead stockpile health</strong>
+                <span>approved {leadStockpile.approved_preview_count ?? 0}</span>
+                <span>held {leadStockpile.held_preview_count ?? 0}</span>
+                <span>latest {latestLeadStockpileRun.decision ?? "none"}</span>
+              </div>
             </div>
             <div className="segments-list">
               {campaignSegments.slice(0, 6).map((segment: any) => (
@@ -458,6 +488,13 @@ export default async function AdminPage() {
                 <input type="hidden" name="limit" value="20" />
                 <input type="hidden" name="apply" value="true" />
                 <button className="button secondary" type="submit">Auto-review previews</button>
+              </form>
+              <form action={runLeadStockpileHealth}>
+                <input type="hidden" name="target_preview_count" value="50" />
+                <input type="hidden" name="canary_count" value="20" />
+                <input type="hidden" name="limit" value="100" />
+                <input type="hidden" name="apply" value="true" />
+                <button className="button secondary" type="submit">Refresh stockpile</button>
               </form>
             </div>
             <div className="segment-grid">

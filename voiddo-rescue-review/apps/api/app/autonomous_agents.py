@@ -74,6 +74,7 @@ from .scout_sensitive_hygiene import archive_sensitive_scout_targets, scout_sens
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_activation import launch_activation_readiness, launch_activation_runbook, prepare_launch_activation
 from .launch_rehearsal import latest_launch_rehearsal_runs, run_launch_rehearsal
+from .lead_stockpile_health import lead_stockpile_health_snapshot, run_lead_stockpile_health
 from .outreach_live_queue import live_outreach_queue_candidates, stage_live_outreach_batch
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
@@ -375,6 +376,17 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             process_scout=bool(payload.get("process_scout", True)),
             prepare_campaigns=bool(payload.get("prepare_campaigns", True)),
         ),
+        "lead_stockpile_health_agent": lambda: lead_stockpile_health_snapshot(
+            int(payload.get("target_preview_count", 50)),
+            int(payload.get("canary_count", 20)),
+            int(payload.get("limit", 100)),
+        ),
+        "lead_stockpile_health_advance_agent": lambda: run_lead_stockpile_health(
+            int(payload.get("target_preview_count", 50)),
+            int(payload.get("canary_count", 20)),
+            int(payload.get("limit", 100)),
+            apply=bool(payload.get("apply", True)),
+        ),
         "launch_readiness_scoreboard_agent": lambda: launch_readiness_scoreboard(int(payload.get("limit", 25))),
         "launch_activation_readiness_agent": lambda: launch_activation_readiness(int(payload.get("limit", 25))),
         "launch_activation_prepare_agent": lambda: prepare_launch_activation(int(payload.get("limit", 25)), "agent"),
@@ -547,6 +559,8 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
         "buyer_journey_scoreboard_agent",
         "source_campaign_operator_agent",
         "source_campaign_operator_advance_agent",
+        "lead_stockpile_health_agent",
+        "lead_stockpile_health_advance_agent",
             "launch_readiness_scoreboard_agent",
             "launch_activation_readiness_agent",
             "launch_activation_runbook_agent",
@@ -583,6 +597,8 @@ def _run_daily_loop_unlocked() -> dict[str, Any]:
         "performance_guided_target_plan_agent",
         "performance_guided_lead_discovery_agent",
         "source_campaign_operator_followup_advance_agent",
+        "lead_stockpile_health_agent",
+        "lead_stockpile_health_advance_agent",
         "overpass_lead_discovery_agent",
         "scout_campaign_quality_summary_agent",
         "scout_campaign_quality_retention_agent",

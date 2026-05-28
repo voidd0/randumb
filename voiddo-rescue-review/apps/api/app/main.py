@@ -97,6 +97,7 @@ from .language_gate import check_no_ai_public_language
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .launch_activation import apply_launch_activation, latest_launch_activation_runs, launch_activation_readiness, launch_activation_runbook, prepare_launch_activation, rollback_live_outreach
 from .launch_rehearsal import latest_launch_rehearsal_runs, run_launch_rehearsal
+from .lead_stockpile_health import latest_lead_stockpile_health_runs, lead_stockpile_health_snapshot, run_lead_stockpile_health
 from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates, stage_live_outreach_batch
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
@@ -1766,6 +1767,29 @@ async def source_campaign_operator_advance(request: Request):
             bool(payload.get("dry_run", True)),
             bool(payload.get("process_scout", False)),
             bool(payload.get("prepare_campaigns", True)),
+        ),
+    }
+
+
+@app.get("/admin/lead-stockpile-health", dependencies=[Depends(require_admin)])
+def lead_stockpile_health_get(target_preview_count: int = 50, canary_count: int = 20, limit: int = 100):
+    return {
+        "ok": True,
+        "health": lead_stockpile_health_snapshot(target_preview_count, canary_count, limit),
+        "history": latest_lead_stockpile_health_runs(5),
+    }
+
+
+@app.post("/admin/lead-stockpile-health/run", dependencies=[Depends(require_admin)])
+async def lead_stockpile_health_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "health": run_lead_stockpile_health(
+            int(payload.get("target_preview_count", 50)),
+            int(payload.get("canary_count", 20)),
+            int(payload.get("limit", 100)),
+            bool(payload.get("apply", False)),
         ),
     }
 
