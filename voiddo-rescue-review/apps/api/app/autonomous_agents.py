@@ -61,7 +61,7 @@ from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 from .language_gate import check_no_ai_public_language
 from .scout_run_recovery import recover_stale_scout_runs, stale_scout_run_recovery_snapshot
-from .scanner_ops import retry_transient_scanner_failures, scanner_queue_health_snapshot
+from .scanner_ops import recover_stale_running_scanner_jobs, retry_transient_scanner_failures, scanner_queue_health_snapshot, scanner_stale_running_snapshot
 from .scanner_queue_hygiene import archive_scanner_queue_artifacts, scanner_queue_hygiene_snapshot
 from .scanner_priority import prioritize_guided_scanner_jobs, scanner_guided_backlog
 from .scanner_completion_watch import scanner_completion_watch
@@ -190,6 +190,16 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("limit", 5)),
             dry_run=bool(payload.get("dry_run", False)),
             allow_timeout_resilience_retry=bool(payload.get("allow_timeout_resilience_retry", True)),
+        ),
+        "scanner_stale_running_snapshot_agent": lambda: scanner_stale_running_snapshot(
+            int(payload.get("limit", 20)),
+            int(payload.get("older_than_minutes", 15)),
+        ),
+        "scanner_stale_recovery_agent": lambda: recover_stale_running_scanner_jobs(
+            int(payload.get("limit", 10)),
+            int(payload.get("older_than_minutes", 15)),
+            dry_run=bool(payload.get("dry_run", False)),
+            max_requeue_count=int(payload.get("max_requeue_count", 1)),
         ),
         "scanner_queue_hygiene_agent": lambda: archive_scanner_queue_artifacts(
             int(payload.get("limit", 500)),
@@ -434,6 +444,8 @@ def run_daily_loop() -> dict[str, Any]:
             "campaign_preview_hygiene_snapshot_agent",
             "campaign_shell_hygiene_snapshot_agent",
             "scanner_queue_hygiene_snapshot_agent",
+            "scanner_stale_running_snapshot_agent",
+            "scanner_stale_recovery_agent",
             "scout_run_recovery_snapshot_agent",
             "self_audit_agent",
             "self_closed_loop_agent",
@@ -449,6 +461,8 @@ def run_daily_loop() -> dict[str, Any]:
         "deliverability_agent",
         "scanner_agent",
         "scanner_retry_agent",
+        "scanner_stale_running_snapshot_agent",
+        "scanner_stale_recovery_agent",
         "scanner_queue_hygiene_agent",
         "scanner_queue_hygiene_snapshot_agent",
         "scanner_guided_backlog_agent",

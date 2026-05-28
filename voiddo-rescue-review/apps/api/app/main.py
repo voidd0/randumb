@@ -38,7 +38,7 @@ from .p0 import (
 from .outreach import outreach_allowed, render_template
 from .scanner import deterministic_safe_scan
 from .scanner_completion_watch import latest_scanner_completion_watches, scanner_completion_watch
-from .scanner_ops import retry_transient_scanner_failures, scanner_queue_health_snapshot
+from .scanner_ops import latest_scanner_stale_recovery_runs, recover_stale_running_scanner_jobs, retry_transient_scanner_failures, scanner_queue_health_snapshot, scanner_stale_running_snapshot
 from .scanner_queue_hygiene import archive_scanner_queue_artifacts, scanner_queue_hygiene_snapshot
 from .scanner_priority import latest_scanner_priority_runs, prioritize_guided_scanner_jobs, scanner_guided_backlog
 from .source_scanner_queue import latest_source_scanner_queue_runs, queue_source_scanner_jobs, source_scanner_backlog
@@ -206,6 +206,30 @@ async def scanner_retry_transient_run(request: Request):
             int(payload.get("limit", 5)),
             bool(payload.get("dry_run", True)),
             bool(payload.get("allow_timeout_resilience_retry", False)),
+        ),
+    }
+
+
+@app.get("/admin/scanner/stale-running", dependencies=[Depends(require_admin)])
+def scanner_stale_running_get(limit: int = 20, older_than_minutes: int = 15):
+    return {"ok": True, "scanner": scanner_stale_running_snapshot(limit, older_than_minutes)}
+
+
+@app.get("/admin/scanner/stale-recovery-runs", dependencies=[Depends(require_admin)])
+def scanner_stale_recovery_runs_get(limit: int = 10):
+    return {"ok": True, "runs": latest_scanner_stale_recovery_runs(limit)}
+
+
+@app.post("/admin/scanner/recover-stale-running", dependencies=[Depends(require_admin)])
+async def scanner_recover_stale_running_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "scanner": recover_stale_running_scanner_jobs(
+            int(payload.get("limit", 10)),
+            int(payload.get("older_than_minutes", 15)),
+            bool(payload.get("dry_run", True)),
+            int(payload.get("max_requeue_count", 1)),
         ),
     }
 
