@@ -310,7 +310,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("limit", 25)),
         ),
         "studio_mail_monitor_agent": lambda: latest_studio_mail_messages(int(payload.get("limit", 20))),
-        "visual_qa_agent": lambda: {"dry_run": True, "status": "huanshu_required", "routes": ["/", "/r/demo", "/admin", "/customer", "/status"]},
+        "visual_qa_agent": lambda: visual_qa_evidence_snapshot(),
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
         "deliverability_agent": lambda: {"dry_run": True, "signals": mail_signal_summary()},
         "warmup_agent": lambda: run_warmup_calendar_due(limit=2),
@@ -508,6 +508,63 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
 
 
 DAILY_LOOP_ADVISORY_LOCK_KEY = 86420057
+
+
+def visual_qa_evidence_snapshot() -> dict[str, Any]:
+    quality = latest_quality_summary()
+    latest_visual = fetch_one(
+        """
+        SELECT decision, huanshu_status, target_url, score, created_at
+        FROM visual_qa_runs
+        WHERE COALESCE(target_url, '') NOT LIKE %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        ("inline:test%",),
+    )
+    latest_huanshu = fetch_one(
+        """
+        SELECT status, target, score, created_at
+        FROM quality_plugin_runs
+        WHERE tool = 'huanshu'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    required_tools = {"huanshu", "axe-core-playwright", "pa11y", "lighthouse-ci", "pixelmatch"}
+    passed_tools = {
+        row.get("tool")
+        for row in quality.get("runs", [])
+        if row.get("status") in {"PASS", "PASS_WITH_WARNINGS"}
+    }
+    missing_tools = sorted(required_tools - passed_tools)
+    blockers = [str(row.get("tool") or row.get("target") or "quality_blocker") for row in quality.get("blockers", [])]
+    if missing_tools:
+        blockers.extend(f"missing_{tool}" for tool in missing_tools)
+    if not latest_visual:
+        blockers.append("missing_visual_qa_run")
+    elif latest_visual.get("decision") not in {"PASS", "PASS_WITH_WARNINGS"}:
+        blockers.append("latest_visual_qa_not_pass")
+    if not latest_huanshu or latest_huanshu.get("status") != "PASS":
+        blockers.append("latest_huanshu_not_pass")
+    decision = "PASS" if not blockers else "FAIL_BLOCK_LAUNCH"
+    return {
+        "status": "PASS_VISUAL_QA_EVIDENCE" if decision == "PASS" else "FAIL_VISUAL_QA_EVIDENCE",
+        "decision": decision,
+        "canonical": "huanshu",
+        "required_tools": sorted(required_tools),
+        "passed_tools": sorted(tool for tool in passed_tools if tool),
+        "missing_tools": missing_tools,
+        "quality_all_pass": bool(quality.get("all_pass")),
+        "blocker_count": len(blockers),
+        "blockers": blockers[:10],
+        "latest_visual_decision": latest_visual.get("decision") if latest_visual else "MISSING",
+        "latest_visual_target": latest_visual.get("target_url") if latest_visual else "",
+        "latest_huanshu_status": latest_huanshu.get("status") if latest_huanshu else "MISSING",
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+    }
 
 
 def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:

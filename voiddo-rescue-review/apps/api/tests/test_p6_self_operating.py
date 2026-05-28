@@ -4,6 +4,7 @@ import os
 
 from fastapi.testclient import TestClient
 
+import app.autonomous_agents as agents_module
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.autonomous_mailer import decide_inbound_mail, decide_outbound_mail, run_autonomous_mailer_cycle
 from app.db import fetch_one
@@ -72,6 +73,59 @@ def test_quality_plugin_manifest_has_huanshu_plus_four_plugins():
     assert normalize_quality_tool("huanshu-local-adapter") == "huanshu"
     huanshu_run = record_quality_plugin_run("huashu-design", "/r/demo", "PASS", 100, [])
     assert huanshu_run["tool"] == "huanshu"
+
+
+def test_visual_qa_agent_requires_real_huanshu_and_secondary_plugin_evidence(monkeypatch):
+    def fake_quality_summary():
+        return {
+            "all_pass": True,
+            "blockers": [],
+            "runs": [
+                {"tool": "huanshu", "status": "PASS"},
+                {"tool": "axe-core-playwright", "status": "PASS"},
+                {"tool": "pa11y", "status": "PASS"},
+                {"tool": "lighthouse-ci", "status": "PASS_WITH_WARNINGS"},
+                {"tool": "pixelmatch", "status": "PASS"},
+            ],
+        }
+
+    def fake_fetch_one(sql: str, *args):
+        if "FROM visual_qa_runs" in sql:
+            return {"decision": "PASS", "huanshu_status": "PASS", "target_url": "/admin", "score": 100}
+        if "FROM quality_plugin_runs" in sql:
+            return {"status": "PASS", "target": "/admin", "score": 100}
+        return None
+
+    monkeypatch.setattr(agents_module, "latest_quality_summary", fake_quality_summary)
+    monkeypatch.setattr(agents_module, "fetch_one", fake_fetch_one)
+    result = agents_module.visual_qa_evidence_snapshot()
+    assert result["status"] == "PASS_VISUAL_QA_EVIDENCE"
+    assert result["canonical"] == "huanshu"
+    assert result["missing_tools"] == []
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+
+
+def test_visual_qa_agent_blocks_missing_huanshu_evidence(monkeypatch):
+    monkeypatch.setattr(
+        agents_module,
+        "latest_quality_summary",
+        lambda: {
+            "all_pass": True,
+            "blockers": [],
+            "runs": [
+                {"tool": "axe-core-playwright", "status": "PASS"},
+                {"tool": "pa11y", "status": "PASS"},
+                {"tool": "lighthouse-ci", "status": "PASS"},
+                {"tool": "pixelmatch", "status": "PASS"},
+            ],
+        },
+    )
+    monkeypatch.setattr(agents_module, "fetch_one", lambda *args, **kwargs: None)
+    result = agents_module.visual_qa_evidence_snapshot()
+    assert result["decision"] == "FAIL_BLOCK_LAUNCH"
+    assert "missing_huanshu" in result["blockers"]
+    assert result["latest_huanshu_status"] == "MISSING"
 
 
 def test_new_agents_record_self_operating_results():
