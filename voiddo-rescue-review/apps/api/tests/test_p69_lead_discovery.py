@@ -181,6 +181,20 @@ def test_stockpile_expansion_target_plan_uses_approved_preview_segments(monkeypa
     def fake_fetch_all(sql, params=()):
         if "SELECT name FROM scout_sources" in sql:
             return []
+        if "FROM scout_source_performance_scores" in sql:
+            return [
+                {
+                    "country": "IE",
+                    "niche": "local tourism",
+                    "source_count": 4,
+                    "qualified_rate": 0.35,
+                    "average_final_score": 67,
+                    "email_coverage": 0.9,
+                    "issue_signal_rate": 0.8,
+                    "promote_count": 2,
+                    "pause_count": 0,
+                }
+            ]
         return [{"country": "IE", "niche": "local tourism", "approved_count": 8, "average_score": 81.5}]
 
     monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
@@ -189,8 +203,75 @@ def test_stockpile_expansion_target_plan_uses_approved_preview_segments(monkeypa
     assert plan["selected_count"] == 1
     assert plan["targets"][0]["city"] == f"YieldTown{token}"
     assert plan["targets"][0]["guidance"]["approved_count"] == 8
+    assert plan["targets"][0]["guidance"]["source_performance"]["email_coverage"] == 0.9
     assert plan["send_mail"] is False
     assert plan["live_outreach_allowed"] is False
+
+
+def test_stockpile_expansion_target_plan_ranks_by_quality_and_filters_weak_segments(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    monkeypatch.setattr(
+        discovery_module,
+        "STOCKPILE_EXPANSION_TARGETS",
+        [
+            {"country": "IE", "city": f"TourismTown{token}", "language": "en", "niche": "local tourism", "priority": 120},
+            {"country": "IE", "city": f"DentalTown{token}", "language": "en", "niche": "dentists", "priority": 100},
+            {"country": "US", "city": f"WeakTown{token}", "language": "en", "niche": "contractors", "priority": 99},
+        ],
+    )
+
+    def fake_fetch_all(sql, params=()):
+        if "SELECT name FROM scout_sources" in sql:
+            return []
+        if "FROM scout_source_performance_scores" in sql:
+            return [
+                {
+                    "country": "IE",
+                    "niche": "local tourism",
+                    "source_count": 8,
+                    "qualified_rate": 0.12,
+                    "average_final_score": 49,
+                    "email_coverage": 0.55,
+                    "issue_signal_rate": 0.25,
+                    "promote_count": 1,
+                    "pause_count": 1,
+                },
+                {
+                    "country": "IE",
+                    "niche": "dentists",
+                    "source_count": 5,
+                    "qualified_rate": 0.4,
+                    "average_final_score": 70,
+                    "email_coverage": 0.85,
+                    "issue_signal_rate": 0.7,
+                    "promote_count": 3,
+                    "pause_count": 0,
+                },
+                {
+                    "country": "US",
+                    "niche": "contractors",
+                    "source_count": 5,
+                    "qualified_rate": 0.02,
+                    "average_final_score": 34,
+                    "email_coverage": 0.1,
+                    "issue_signal_rate": 0.0,
+                    "promote_count": 0,
+                    "pause_count": 4,
+                },
+            ]
+        return [
+            {"country": "IE", "niche": "local tourism", "approved_count": 7, "average_score": 80},
+            {"country": "IE", "niche": "dentists", "approved_count": 3, "average_score": 85},
+            {"country": "US", "niche": "contractors", "approved_count": 2, "average_score": 72},
+        ]
+
+    monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
+    plan = stockpile_expansion_target_plan(5)
+    assert plan["status"] == "ready"
+    assert [target["niche"] for target in plan["targets"]] == ["dentists", "local tourism"]
+    assert all(target["niche"] != "contractors" for target in plan["targets"])
+    assert plan["targets"][0]["expansion_score"] > plan["targets"][1]["expansion_score"]
+    assert plan["raw_recipient_addresses_included"] is False
 
 
 def test_stockpile_expansion_discovery_cycle_is_no_send(monkeypatch):

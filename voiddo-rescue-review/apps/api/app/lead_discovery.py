@@ -10,6 +10,7 @@ from urllib.request import Request, urlopen
 from .db import fetch_all
 from .scouts import create_scout_source, run_scout_source_readiness, website_url_for
 
+TEST_COUNTRY_PATTERN = r"^(P7|P8|P9|P10|P11|P12|P59|P60|P61|P62|P63|P68|P72|P73|P74)"
 
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",
@@ -200,6 +201,16 @@ STOCKPILE_EXPANSION_TARGETS: list[dict[str, Any]] = [
     {"country": country, "city": city, "language": "en", "niche": niche, "priority": 120 - index}
     for index, (country, city, niche) in enumerate(STOCKPILE_EXPANSION_MARKETS)
 ]
+
+NICHE_EXPANSION_PRIORITY = {
+    "dentists": 18,
+    "law firms": 16,
+    "clinics": 14,
+    "contractors": 12,
+    "private courses/schools": 10,
+    "beauty salons": 9,
+    "local tourism": 7,
+}
 
 
 def lead_discovery_target_plan(include_secondary: bool = False) -> dict[str, Any]:
@@ -466,6 +477,7 @@ def performance_guided_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         JOIN scout_sources ss ON ss.id = latest.source_id
         WHERE latest.recommendation IN ('PROMOTE_SOURCE_FOR_MORE_SCOUTING', 'KEEP_TESTING_WITH_SMALL_BATCHES')
           AND latest.qualified_count > 0
+          AND upper(COALESCE(ss.country, '')) !~ %s
         ORDER BY
           CASE latest.recommendation WHEN 'PROMOTE_SOURCE_FOR_MORE_SCOUTING' THEN 0 ELSE 1 END,
           CASE WHEN latest.email_coverage > 0 THEN 0 ELSE 1 END,
@@ -474,7 +486,8 @@ def performance_guided_target_plan(limit_targets: int = 5) -> dict[str, Any]:
           latest.average_final_score DESC,
           latest.created_at DESC
         LIMIT 25
-        """
+        """,
+        (TEST_COUNTRY_PATTERN,),
     )
     existing_source_names = {str(row["name"]) for row in fetch_all("SELECT name FROM scout_sources WHERE name LIKE %s", ("overpass-%",))}
     selected: list[dict[str, Any]] = []
@@ -606,8 +619,37 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         JOIN latest_reviews lr ON lr.campaign_lead_id = cl.id AND lr.action = 'approved'
         WHERE cl.status = 'preview'
           AND c.status IN ('draft', 'preview_ready')
+          AND upper(COALESCE(c.country, '')) !~ %s
         GROUP BY c.country, c.niche
+        """,
+        (TEST_COUNTRY_PATTERN,),
+    )
+    performance_rows = fetch_all(
         """
+        WITH latest AS (
+          SELECT DISTINCT ON (source_id)
+            source_id, recommendation, qualified_rate, average_final_score,
+            email_coverage, issue_signal_rate, created_at
+          FROM scout_source_performance_scores
+          WHERE source_id IS NOT NULL
+          ORDER BY source_id, created_at DESC
+        )
+        SELECT
+          ss.country,
+          ss.niche,
+          count(*) AS source_count,
+          avg(latest.qualified_rate) AS qualified_rate,
+          avg(latest.average_final_score) AS average_final_score,
+          avg(latest.email_coverage) AS email_coverage,
+          avg(latest.issue_signal_rate) AS issue_signal_rate,
+          count(*) FILTER (WHERE latest.recommendation = 'PROMOTE_SOURCE_FOR_MORE_SCOUTING') AS promote_count,
+          count(*) FILTER (WHERE latest.recommendation = 'PAUSE_SOURCE_UNTIL_REVIEW') AS pause_count
+        FROM latest
+        JOIN scout_sources ss ON ss.id = latest.source_id
+        WHERE upper(COALESCE(ss.country, '')) !~ %s
+        GROUP BY ss.country, ss.niche
+        """,
+        (TEST_COUNTRY_PATTERN,),
     )
     segment_scores = {
         (str(row["country"] or "").upper(), str(row["niche"] or "")): {
@@ -616,7 +658,19 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         }
         for row in proven_segments
     }
-    selected: list[dict[str, Any]] = []
+    performance = {
+        (str(row["country"] or "").upper(), str(row["niche"] or "")): {
+            "source_count": int(row["source_count"] or 0),
+            "qualified_rate": float(row["qualified_rate"] or 0),
+            "average_final_score": float(row["average_final_score"] or 0),
+            "email_coverage": float(row["email_coverage"] or 0),
+            "issue_signal_rate": float(row["issue_signal_rate"] or 0),
+            "promote_count": int(row["promote_count"] or 0),
+            "pause_count": int(row["pause_count"] or 0),
+        }
+        for row in performance_rows
+    }
+    candidates: list[dict[str, Any]] = []
     for target in STOCKPILE_EXPANSION_TARGETS:
         key = (target["country"].upper(), target["niche"])
         source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
@@ -625,25 +679,62 @@ def stockpile_expansion_target_plan(limit_targets: int = 5) -> dict[str, Any]:
         segment = segment_scores.get(key)
         if not segment:
             continue
-        selected.append(
+        perf = performance.get(
+            key,
+            {
+                "source_count": 0,
+                "qualified_rate": 0.0,
+                "average_final_score": 0.0,
+                "email_coverage": 0.0,
+                "issue_signal_rate": 0.0,
+                "promote_count": 0,
+                "pause_count": 0,
+            },
+        )
+        if perf["source_count"] >= 3 and perf["pause_count"] > perf["promote_count"] and perf["qualified_rate"] < 0.08:
+            continue
+        expansion_score = round(
+            (segment["approved_count"] * 8)
+            + (segment["average_score"] * 0.35)
+            + (perf["qualified_rate"] * 90)
+            + (perf["email_coverage"] * 35)
+            + (perf["issue_signal_rate"] * 25)
+            + NICHE_EXPANSION_PRIORITY.get(target["niche"], 5)
+            + (target.get("priority", 0) * 0.05)
+            - (perf["pause_count"] * 1.5),
+            2,
+        )
+        candidates.append(
             {
                 **target,
                 "source_name": source_name,
+                "expansion_score": expansion_score,
                 "guidance": {
                     "strategy": "expand_segments_with_existing_approved_preview_yield",
                     "approved_count": segment["approved_count"],
                     "average_score": segment["average_score"],
+                    "source_performance": perf,
                 },
             }
         )
-        if len(selected) >= safe_limit:
-            break
+    candidates.sort(
+        key=lambda item: (
+            item["expansion_score"],
+            item["guidance"]["source_performance"]["email_coverage"],
+            item["guidance"]["source_performance"]["qualified_rate"],
+            NICHE_EXPANSION_PRIORITY.get(item["niche"], 0),
+            item.get("priority", 0),
+        ),
+        reverse=True,
+    )
+    selected = candidates[:safe_limit]
     return {
         "status": "ready" if selected else "no_stockpile_expansion_targets",
         "selected_count": len(selected),
         "targets": selected,
         "proven_segment_count": len(segment_scores),
-        "strategy": "quality_aware_stockpile_expansion_from_segments_with_approved_previews",
+        "performance_segment_count": len(performance),
+        "strategy": "quality_aware_stockpile_expansion_ranked_by_approved_preview_yield_email_coverage_and_issue_signal",
         "send_mail": False,
         "smtp_called": False,
         "live_outreach_allowed": False,

@@ -344,3 +344,55 @@ def test_performance_guided_target_plan_prefers_email_coverage(monkeypatch):
         assert plan["send_mail"] is False
     finally:
         _cleanup(token)
+
+
+def test_performance_guided_target_plan_ignores_synthetic_country_performance(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        synthetic_source = execute(
+            """
+            INSERT INTO scout_sources(name, source_type, country, language, niche, status, config_json)
+            VALUES (%s, 'manual_csv_scout', 'P9', 'en', 'dentists', 'active', '{}'::jsonb)
+            RETURNING id
+            """,
+            (f"p73-synthetic-{token}",),
+        )
+        real_source = execute(
+            """
+            INSERT INTO scout_sources(name, source_type, country, language, niche, status, config_json)
+            VALUES (%s, 'manual_csv_scout', 'US', 'en', 'dentists', 'active', '{}'::jsonb)
+            RETURNING id
+            """,
+            (f"p73-real-{token}",),
+        )
+        for source, country, qualified_rate in [
+            (synthetic_source, "P9", 1.0),
+            (real_source, "US", 0.25),
+        ]:
+            execute(
+                """
+                INSERT INTO scout_source_performance_scores(
+                  source_id, status, scanned_count, scored_count, qualified_count,
+                  qualified_rate, average_final_score, email_coverage, issue_signal_rate,
+                  recommendation, reasoning_json
+                )
+                VALUES (%s, 'PASS_SOURCE_PERFORMANCE_NO_SEND', 5, 5, 2, %s, 76, 0.7, 0.6,
+                        'PROMOTE_SOURCE_FOR_MORE_SCOUTING', %s)
+                """,
+                (source["id"], qualified_rate, Jsonb({"token": token, "country": country})),
+            )
+        monkeypatch.setattr(
+            discovery_module,
+            "FIRST_TIER_TARGETS",
+            [
+                {"country": "P9", "city": f"Synthetic{token}", "language": "en", "niche": "dentists", "priority": 100},
+                {"country": "US", "city": f"Real{token}", "language": "en", "niche": "dentists", "priority": 90},
+            ],
+        )
+        plan = performance_guided_target_plan(2)
+        assert plan["selected_count"] == 1
+        assert plan["targets"][0]["country"] == "US"
+        assert plan["targets"][0]["guidance"]["qualified_rate"] == 0.25
+        assert plan["send_mail"] is False
+    finally:
+        _cleanup(token)
