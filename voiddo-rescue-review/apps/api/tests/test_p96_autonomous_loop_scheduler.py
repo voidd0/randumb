@@ -102,3 +102,37 @@ def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
     assert [agent for agent, _payload in calls].index("outreach_preview_dedupe_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
     assert [agent for agent, _payload in calls].index("campaign_preflight_orphan_hygiene_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
     assert calls[-1][0] == "mailer_policy_score_agent"
+
+
+def test_run_agent_retries_transient_connection_reset(monkeypatch):
+    calls = {"count": 0}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"run":{"agent":"mail_qa_agent","status":"completed","result_json":{"send_mail":false,"live_outreach_allowed":false}}}'
+
+    def flaky_urlopen(_request, timeout):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise ConnectionResetError("transient")
+        return Response()
+
+    monkeypatch.setattr(loop_script, "urlopen", flaky_urlopen)
+    result = loop_script.run_agent("http://api.local", "token", "mail_qa_agent", {}, 30)
+    assert calls["count"] == 2
+    assert result["status"] == "completed"
+    assert result["result_json"]["send_mail"] is False
+
+
+def test_run_agent_returns_no_send_failure_after_retry_exhaustion(monkeypatch):
+    monkeypatch.setattr(loop_script, "urlopen", lambda _request, timeout: (_ for _ in ()).throw(ConnectionResetError("down")))
+    result = loop_script.run_agent("http://api.local", "token", "mail_qa_agent", {}, 30, attempts=2)
+    assert result["status"] == "failed"
+    assert result["error"] == "ConnectionResetError"
+    assert result["result_json"]["send_mail"] is False

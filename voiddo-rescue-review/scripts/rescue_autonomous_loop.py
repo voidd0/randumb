@@ -115,16 +115,27 @@ def run_loop(api_base: str, token: str, timeout: int) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def run_agent(api_base: str, token: str, agent: str, payload: dict, timeout: int) -> dict:
+def run_agent(api_base: str, token: str, agent: str, payload: dict, timeout: int, attempts: int = 2) -> dict:
     request = Request(
         f"{api_base.rstrip('/')}/admin/agents/{agent}",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json", "X-Admin-Token": token},
         method="POST",
     )
-    with urlopen(request, timeout=timeout) as response:
-        result = json.loads(response.read().decode("utf-8"))
-    return result.get("run", {}) if isinstance(result, dict) else {}
+    last_error: Exception | None = None
+    for _attempt in range(max(1, attempts)):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            return result.get("run", {}) if isinstance(result, dict) else {}
+        except (ConnectionResetError, TimeoutError, URLError) as exc:
+            last_error = exc
+    return {
+        "agent": agent,
+        "status": "failed",
+        "error": type(last_error).__name__ if last_error else "agent_request_failed",
+        "result_json": {"send_mail": False, "live_outreach_allowed": False},
+    }
 
 
 def run_core_loop(api_base: str, token: str, timeout: int) -> dict:
