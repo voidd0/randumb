@@ -88,11 +88,25 @@ def _campaign(token: str, weak: bool = False) -> str:
     campaign = create_campaign({"name": f"p80-campaign-{token}", "country": "QA", "language": "en", "niche": "dentists", "offer_key": "contact_form_repair"})
     preview = prepare_campaign(str(campaign["id"]), 70, 5)
     assert preview["preview_count"] == 1
+    preview_row = fetch_one("SELECT id FROM campaign_leads WHERE campaign_id = %s LIMIT 1", (campaign["id"],))
+    review_campaign_preview(str(preview_row["id"]), "approved", "QA80 approved preview")
     return str(campaign["id"])
 
 
 def _policy_pass() -> dict:
     return {"score": 100, "decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW", "send_mail": False, "smtp_called": False, "live_outreach_allowed": False}
+
+
+def _transport_preview_ready() -> dict:
+    return {
+        "allowed": False,
+        "reason": "outreach_dry_run_enabled",
+        "source": "test_campaign_preview_outreach_message",
+        "checks": {"unsubscribe_one_click_ready": True, "html_body_ready": True, "has_unsubscribe": True},
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+    }
 
 
 def test_campaign_preflight_passes_quality_and_policy_without_send(monkeypatch):
@@ -102,6 +116,7 @@ def test_campaign_preflight_passes_quality_and_policy_without_send(monkeypatch):
     try:
         campaign_id = _campaign(token)
         monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        monkeypatch.setattr(preflight, "campaign_preview_transport_gate_status", lambda campaign_id: _transport_preview_ready())
         result = campaign_preflight_batch(5, campaign_id)
         assert result["campaign_count"] == 1
         assert result["passed_count"] == 1
@@ -139,6 +154,7 @@ def test_campaign_preflight_repairs_safe_mailer_queue_before_policy_block(monkey
     try:
         campaign_id = _campaign(token)
         monkeypatch.setattr(preflight, "mailer_policy_score", _policy_then_pass)
+        monkeypatch.setattr(preflight, "campaign_preview_transport_gate_status", lambda campaign_id: _transport_preview_ready())
         monkeypatch.setattr(preflight, "process_mailer_action_queue", lambda limit=10: calls.update(process=calls["process"] + 1) or {"processed_count": limit, "send_mail": False, "live_outreach_allowed": False})
         monkeypatch.setattr(preflight, "mailer_digest_trend_guard", lambda: calls.update(trend=calls["trend"] + 1) or {"decision": "PASS_NO_SEND", "send_mail": False, "live_outreach_allowed": False})
         monkeypatch.setattr(preflight, "_record_inline_trend_guard", lambda trend: None)
@@ -176,6 +192,7 @@ def test_campaign_preflight_refreshes_stale_trend_guard_without_queue(monkeypatc
     try:
         campaign_id = _campaign(token)
         monkeypatch.setattr(preflight, "mailer_policy_score", _stale_trend_then_pass)
+        monkeypatch.setattr(preflight, "campaign_preview_transport_gate_status", lambda campaign_id: _transport_preview_ready())
         monkeypatch.setattr(preflight, "mailer_digest_trend_guard", lambda: calls.update(trend=calls["trend"] + 1) or {"decision": "PASS_NO_SEND", "send_mail": False, "live_outreach_allowed": False})
         monkeypatch.setattr(preflight, "_record_inline_trend_guard", lambda trend: None)
         result = campaign_preflight_batch(5, campaign_id)
@@ -194,10 +211,29 @@ def test_campaign_preflight_blocks_weak_preview(monkeypatch):
     try:
         campaign_id = _campaign(token, weak=True)
         monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        monkeypatch.setattr(preflight, "campaign_preview_transport_gate_status", lambda campaign_id: _transport_preview_ready())
         result = campaign_preflight_batch(5, campaign_id)
         assert result["failed_count"] == 1
         assert "preview_quality_not_pass" in result["runs"][0]["blockers"]
         assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_preflight_blocks_missing_real_outreach_preview(monkeypatch):
+    import app.campaign_preflight as preflight
+
+    token = uuid.uuid4().hex[:8]
+    try:
+        campaign_id = _campaign(token)
+        monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        result = campaign_preflight_batch(5, campaign_id)
+        run = result["runs"][0]
+        assert result["failed_count"] == 1
+        assert run["transport_reason"] == "outreach_preview_message_missing"
+        assert "transport_unsubscribe_not_ready" in run["blockers"]
+        assert "transport_html_not_ready" in run["blockers"]
+        assert run["send_mail"] is False
     finally:
         _cleanup(token)
 
@@ -211,6 +247,7 @@ def test_campaign_preflight_blocks_held_preview_review(monkeypatch):
         preview = fetch_one("SELECT id FROM campaign_leads WHERE campaign_id = %s LIMIT 1", (campaign_id,))
         review_campaign_preview(str(preview["id"]), "held", "needs stronger proof")
         monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        monkeypatch.setattr(preflight, "campaign_preview_transport_gate_status", lambda campaign_id: _transport_preview_ready())
         result = campaign_preflight_batch(5, campaign_id)
         assert result["failed_count"] == 1
         assert "preview_rows_held_for_review" in result["runs"][0]["blockers"]
@@ -262,6 +299,7 @@ def test_campaign_preflight_excludes_held_rows_when_usable_rows_exist(monkeypatc
         )
         review_campaign_preview(str(preview["id"]), "held", "single weak issue stays excluded")
         monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        monkeypatch.setattr(preflight, "campaign_preview_transport_gate_status", lambda campaign_id: _transport_preview_ready())
         result = campaign_preflight_batch(5, campaign_id)
         run = result["runs"][0]
         assert result["passed_count"] == 1
@@ -279,6 +317,7 @@ def test_campaign_preflight_endpoint_and_agent_are_admin_gated(monkeypatch):
     try:
         campaign_id = _campaign(token)
         monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        monkeypatch.setattr(preflight, "campaign_preview_transport_gate_status", lambda campaign_id: _transport_preview_ready())
         assert client.get("/admin/campaign-preflight/runs").status_code == 401
         assert client.post("/admin/campaign-preflight/run", json={"campaign_id": campaign_id}).status_code == 401
         response = client.post("/admin/campaign-preflight/run", json={"campaign_id": campaign_id}, headers=admin_headers())

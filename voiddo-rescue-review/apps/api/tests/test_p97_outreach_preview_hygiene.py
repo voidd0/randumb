@@ -5,6 +5,7 @@ import uuid
 from psycopg.types.json import Jsonb
 
 from app.db import execute, fetch_one
+from app.autonomous_agents import run_agent
 from app.p0 import one_click_unsubscribe_url_from_body, prepare_outreach_preview, queue_outreach_preview, suppress_unsubscribe_token
 
 
@@ -131,6 +132,14 @@ def test_queue_outreach_preview_remains_dry_run_and_suppresses_raw_recipients():
         assert "/unsubscribe/u_" in row["body"]
         assert row["html_body"].startswith("<!doctype html>")
         assert "Managed website rescue by vøiddo" in row["html_body"]
+        second = queue_outreach_preview(5)
+        assert second["created"] == 0
+        assert second["updated"] >= 1
+        count = fetch_one("SELECT count(*) AS count FROM outreach_messages WHERE body LIKE %s", (f"%qa97-{token}.clinic%",))
+        assert int(count["count"]) == 1
+        agent = run_agent("outreach_preview_queue_agent", {"limit": 5})
+        assert agent["status"] == "completed"
+        assert agent["result_json"]["send_mail"] is False
     finally:
         if preview_batch_id:
             execute("DELETE FROM outreach_preview_batches WHERE id = %s", (preview_batch_id,))

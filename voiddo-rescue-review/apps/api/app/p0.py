@@ -2640,6 +2640,8 @@ def prepare_outreach_preview(limit: int = 20) -> dict[str, Any]:
 def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
     preview_batch = prepare_outreach_preview(limit)
     created = 0
+    updated = 0
+    skipped_existing = 0
     for item in preview_batch["preview_json"]:
         rendered = render_email_template(
             "first_audit_notice",
@@ -2655,6 +2657,31 @@ def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
                 "monthly_price": "$19",
             },
         )
+        existing = fetch_one(
+            """
+            SELECT id
+            FROM outreach_messages
+            WHERE lead_id = %s AND audit_id = %s AND status = 'preview'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (item["lead_id"], item["audit_id"]),
+        )
+        if existing:
+            execute(
+                """
+                UPDATE outreach_messages
+                SET mailbox = 'audit@voiddorescue.com',
+                    subject = %s,
+                    body = %s,
+                    html_body = %s
+                WHERE id = %s
+                """,
+                (rendered["subject"], rendered["text"], rendered["html"], existing["id"]),
+            )
+            updated += 1
+            skipped_existing += 1
+            continue
         execute(
             """
             INSERT INTO outreach_messages(lead_id, audit_id, mailbox, subject, body, html_body, status)
@@ -2665,6 +2692,8 @@ def queue_outreach_preview(limit: int = 20) -> dict[str, Any]:
         created += 1
     return {
         "created": created,
+        "updated": updated,
+        "skipped_existing": skipped_existing,
         "dry_run_only": True,
         "preview_batch_id": str(preview_batch["id"]),
         "send_mail": False,

@@ -53,6 +53,38 @@ def _record_inline_trend_guard(trend: dict[str, Any]) -> None:
     )
 
 
+def campaign_preview_transport_gate_status(campaign_id: str) -> dict[str, Any]:
+    row = fetch_one(
+        """
+        SELECT om.id AS outreach_message_id, om.body, om.html_body, l.email
+        FROM campaign_leads cl
+        JOIN outreach_messages om ON om.lead_id = cl.lead_id AND om.audit_id = cl.audit_id AND om.status = 'preview'
+        JOIN leads l ON l.id = cl.lead_id
+        WHERE cl.campaign_id = %s AND cl.status = 'preview'
+        ORDER BY om.created_at DESC
+        LIMIT 1
+        """,
+        (campaign_id,),
+    )
+    if not row:
+        return {
+            "allowed": False,
+            "reason": "outreach_preview_message_missing",
+            "source": "campaign_preview_outreach_message",
+            "checks": {
+                "has_unsubscribe": False,
+                "unsubscribe_one_click_ready": False,
+                "html_body_ready": False,
+            },
+            **SAFE_FLAGS,
+        }
+    result = transport_gate_status({"email": row["email"], "body": row["body"], "html_body": row["html_body"]})
+    result["source"] = "campaign_preview_outreach_message"
+    result["outreach_message_id"] = str(row["outreach_message_id"])
+    result.update(SAFE_FLAGS)
+    return result
+
+
 def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
     quality = campaign_preview_quality_pack(campaign_id, limit)
     reviews = campaign_preview_review_summary(campaign_id)
@@ -76,19 +108,26 @@ def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
                 "smtp_called": False,
                 "live_outreach_allowed": False,
             }
-    transport = transport_gate_status({"email": "redacted@example.test", "body": "Unsubscribe: https://go.rescue.voiddo.com/unsubscribe/preview"})
+    transport = campaign_preview_transport_gate_status(campaign_id)
 
     blockers: list[str] = []
     if quality["status"] != "PASS_PREVIEW_QUALITY":
         blockers.append("preview_quality_not_pass")
     if int(quality.get("ready_count") or 0) <= 0:
         blockers.append("no_ready_preview_rows")
+    if int(reviews.get("approved_count") or 0) <= 0:
+        blockers.append("no_approved_preview_rows_for_outreach_queue")
     if int(reviews.get("usable_preview_count") or 0) <= 0 and int(reviews.get("checked_count") or 0) > 0:
         blockers.append("preview_reviews_no_usable_rows")
     if int(reviews.get("held_count") or 0) > 0 and int(reviews.get("usable_preview_count") or 0) <= 0:
         blockers.append("preview_rows_held_for_review")
     if int(policy.get("score") or 0) < 90 or policy.get("decision") != "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW":
         blockers.append("mailer_policy_not_ready")
+    transport_checks = transport.get("checks") or {}
+    if not transport_checks.get("unsubscribe_one_click_ready"):
+        blockers.append("transport_unsubscribe_not_ready")
+    if not transport_checks.get("html_body_ready"):
+        blockers.append("transport_html_not_ready")
     if transport.get("allowed"):
         blockers.append("transport_unexpectedly_allows_live_send")
     if transport.get("reason") not in EXPECTED_TRANSPORT_BLOCKS:
@@ -112,6 +151,8 @@ def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
             "mailer_policy_repair": policy_repair,
             "transport_allowed": bool(transport.get("allowed")),
             "transport_reason": transport.get("reason"),
+            "transport_source": transport.get("source"),
+            "transport_checks": transport_checks,
             **SAFE_FLAGS,
         }
     )
