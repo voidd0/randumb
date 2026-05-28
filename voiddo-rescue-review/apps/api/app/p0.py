@@ -432,6 +432,7 @@ def admin_metrics_from_db() -> dict[str, Any]:
         "monitoring_targets": scalar("SELECT count(*) FROM monitoring_targets"),
         "economics_snapshots": scalar("SELECT count(*) FROM economics_snapshots"),
         "self_audit_runs": scalar("SELECT count(*) FROM self_audit_runs"),
+        "self_operating_cycles": scalar("SELECT count(*) FROM self_operating_cycles"),
         "self_fix_tasks_open": scalar("SELECT count(*) FROM self_fix_tasks WHERE status = 'open'"),
         "self_learning_events": scalar("SELECT count(*) FROM self_learning_events"),
         "self_build_queue_open": scalar("SELECT count(*) FROM self_build_queue WHERE status = 'queued'"),

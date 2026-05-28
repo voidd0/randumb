@@ -75,6 +75,7 @@ from .lead_quality_diagnostics import apply_scout_source_feedback, record_lead_q
 from .scouts import cleanup_scout_source_readiness_checks, process_queued_scout_runs, process_scout_run_gated, ready_scout_source_queue_candidates, run_scout_source_readiness, scout_source_readiness_regression_guard, scout_source_readiness_summary
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_quality_gate, record_scout_campaign_quality_history, run_scout_quality_gate, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .self_operating import run_self_audit, self_operating_summary
+from .self_closed_loop import run_self_operating_closed_loop
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
 from .warmup_block_recovery import recover_blocked_warmup_slots, warmup_block_recovery_snapshot
 from .warmup_post_send import observe_warmup_post_send
@@ -364,9 +365,10 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "warmup_calendar_agent": lambda: build_warmup_calendar(),
         "economics_agent": lambda: run_economics_audit(),
         "self_audit_agent": lambda: run_self_audit("agent_cycle"),
-        "self_fix_agent": lambda: self_operating_summary(),
-        "self_learning_agent": lambda: self_operating_summary(),
-        "self_building_agent": lambda: self_operating_summary(),
+        "self_closed_loop_agent": lambda: run_self_operating_closed_loop(payload.get("scope", "agent_cycle"), int(payload.get("limit", 25))),
+        "self_fix_agent": lambda: run_self_operating_closed_loop("self_fix_agent", int(payload.get("limit", 25))),
+        "self_learning_agent": lambda: run_self_operating_closed_loop("self_learning_agent", int(payload.get("limit", 25))),
+        "self_building_agent": lambda: run_self_operating_closed_loop("self_building_agent", int(payload.get("limit", 25))),
         "autonomous_mailer_agent": lambda: run_autonomous_mailer_cycle(),
         "autonomous_mailer_executor_agent": lambda: run_mailer_closed_loop(int(payload.get("limit", 10))),
         "customer_mail_simulation_agent": lambda: run_customer_mail_simulation(True),
@@ -433,6 +435,7 @@ def run_daily_loop() -> dict[str, Any]:
             "scanner_queue_hygiene_snapshot_agent",
             "scout_run_recovery_snapshot_agent",
             "self_audit_agent",
+            "self_closed_loop_agent",
             "self_fix_agent",
             "self_learning_agent",
             "self_building_agent",
@@ -548,6 +551,7 @@ def run_daily_loop() -> dict[str, Any]:
         "warmup_spacing_apply_gate_agent",
         "warmup_post_send_observer_agent",
         "self_audit_agent",
+        "self_closed_loop_agent",
         ]
     payload = {"limit": 1, "dry_run": True} if os.environ.get("PYTEST_CURRENT_TEST") else None
     runs = [run_agent(agent, payload) for agent in selected]

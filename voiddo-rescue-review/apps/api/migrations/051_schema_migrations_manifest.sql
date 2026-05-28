@@ -55,5 +55,10 @@ VALUES
   ('048_audit_refresh_completion_watches.sql'),
   ('049_audit_refresh_failure_runs.sql'),
   ('050_studio_mail_monitor.sql'),
-  ('051_schema_migrations_manifest.sql')
+  ('051_schema_migrations_manifest.sql'),
+  ('052_contact_enrichment_runs.sql'),
+  ('053_campaign_preview_reviews.sql'),
+  ('054_campaign_review_remediation_runs.sql'),
+  ('055_outreach_html_body.sql'),
+  ('056_self_operating_closed_loop.sql')
 ON CONFLICT (filename) DO NOTHING;

@@ -25,6 +25,11 @@ def admin_headers() -> dict[str, str]:
 
 
 def _cleanup_token(token: str):
+    execute("DELETE FROM self_operating_cycles WHERE result_json::text LIKE %s OR scope LIKE %s", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM self_fix_tasks WHERE evidence_json::text LIKE %s OR title LIKE %s", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM self_learning_events WHERE payload_json::text LIKE %s OR lesson LIKE %s", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM self_build_queue WHERE acceptance_json::text LIKE %s OR title LIKE %s", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM agent_runs WHERE agent LIKE 'qa-failing-agent-%%' OR result_json::text LIKE %s OR error LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM campaign_leads WHERE preview_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM campaigns WHERE name LIKE %s", (f"%{token}%",))
     execute("DELETE FROM scanner_jobs WHERE url LIKE %s OR result_json::text LIKE %s", (f"%{token}%", f"%{token}%"))
@@ -335,6 +340,32 @@ def test_reporting_alias_agents_are_no_send():
         assert result["status"] == "completed"
         assert result["result_json"].get("send_mail") is False
         assert result["result_json"].get("live_outreach_allowed") is False
+
+
+def test_self_closed_loop_creates_idempotent_actions_for_unrecovered_agent_failure():
+    token = uuid.uuid4().hex[:8]
+    agent_name = f"qa-failing-agent-{token}"
+    try:
+        execute(
+            "INSERT INTO agent_runs(agent, status, error, started_at, completed_at) VALUES (%s, 'failed', %s, now(), now())",
+            (agent_name, f"failure-{token}"),
+        )
+        first = run_agent("self_closed_loop_agent", {"scope": f"qa-{token}", "limit": 10})
+        payload = first["result_json"]
+        assert payload["send_mail"] is False
+        assert payload["live_outreach_allowed"] is False
+        assert payload["findings_count"] >= 1
+        assert payload["fix_tasks_created"] >= 1
+        assert payload["build_items_created"] >= 1
+        assert payload["learning_events_created"] >= 1
+
+        second = run_agent("self_closed_loop_agent", {"scope": f"qa-{token}", "limit": 10})
+        assert second["result_json"]["fix_tasks_created"] == 0
+        assert second["result_json"]["learning_events_created"] == 0
+        stored = fetch_one("SELECT count(*) AS count FROM self_operating_cycles WHERE scope = %s", (f"qa-{token}",))
+        assert int(stored["count"]) >= 2
+    finally:
+        _cleanup_token(token)
 
 
 def test_daily_loop_runs_dry_without_live_outreach():
