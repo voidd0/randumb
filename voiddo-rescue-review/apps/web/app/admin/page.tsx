@@ -70,6 +70,7 @@ export default async function AdminPage() {
   const campaignActionsData = await fetchJson("/admin/campaign-actions?limit=8", authorization ? { Authorization: authorization } : {});
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
   const monitoringData = await fetchJson("/admin/monitoring/summary", authorization ? { Authorization: authorization } : {});
+  const selfClosedLoopData = await fetchJson("/admin/self/closed-loop?limit=5", authorization ? { Authorization: authorization } : {});
   const metrics = data || {};
   const mailer = mailerData?.control_room || {};
   const recheck = recheckData?.summary || {};
@@ -118,6 +119,10 @@ export default async function AdminPage() {
   const launchVisual = launchEvidence.visual || {};
   const launchTransport = launchEvidence.transport_gate || {};
   const launchCampaigns = launchEvidence.campaigns || {};
+  const selfClosedLoop = selfClosedLoopData || {};
+  const selfCycles = Array.isArray(selfClosedLoop.cycles) ? selfClosedLoop.cycles : [];
+  const latestSelfCycle = selfCycles[0] || {};
+  const latestSelfCycleResult = latestSelfCycle.result_json || {};
   const latestRealOpsAction = opsActions.latest_real || {};
   const opsRetentionAgent = opsActions.latest_retention_agent || {};
   const opsRetentionReport = opsActions.retention_agent_report || {};
@@ -153,6 +158,7 @@ export default async function AdminPage() {
   const selfOps = [
     ["economics", metrics.economics_snapshots ?? 0],
     ["self audits", metrics.self_audit_runs ?? 0],
+    ["closed loops", metrics.self_operating_cycles ?? 0],
     ["fix queue", metrics.self_fix_tasks_open ?? 0],
     ["learning", metrics.self_learning_events ?? 0],
     ["build queue", metrics.self_build_queue_open ?? 0],
@@ -667,9 +673,38 @@ export default async function AdminPage() {
           </div>
           <div className="panel">
             <h2>Self-Operating Engine</h2>
+            <div className="segment-grid">
+              <div className="segment-card">
+                <span className="tag">cycle</span>
+                <strong>{latestSelfCycle.status ?? "missing"}</strong>
+                <span>latest closed-loop decision</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">findings</span>
+                <strong>{latestSelfCycle.findings_count ?? 0}</strong>
+                <span>tracked quality and safety findings</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">fixes</span>
+                <strong>{latestSelfCycle.fix_tasks_created ?? 0}</strong>
+                <span>new deduped self-fix tasks</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">send</span>
+                <strong>{latestSelfCycleResult.send_mail ? "armed" : "off"}</strong>
+                <span>closed-loop mail capability</span>
+              </div>
+            </div>
             {selfOps.map(([label, value]) => (
               <div className="row" key={String(label)}><span className="tag">self</span><span>{String(label)}</span><span className="score">{String(value)}</span></div>
             ))}
+            {selfCycles.length ? selfCycles.slice(0, 3).map((cycle: any) => (
+              <div className="row" key={cycle.id}>
+                <span className="tag">{cycle.status ?? "cycle"}</span>
+                <span>{cycle.scope ?? "closed loop"}</span>
+                <span className="score">{cycle.findings_count ?? 0}</span>
+              </div>
+            )) : <div className="row"><span className="tag">idle</span><span>no closed-loop cycles recorded yet</span><span className="score">0</span></div>}
           </div>
           <div className="panel">
             <h2>Launch Pools</h2>
