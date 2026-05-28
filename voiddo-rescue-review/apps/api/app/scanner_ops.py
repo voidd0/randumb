@@ -46,6 +46,20 @@ def _retry_count(result_json: Any) -> int:
         return 0
 
 
+def _timeout_resilience_retry_count(result_json: Any) -> int:
+    if isinstance(result_json, str):
+        try:
+            result_json = json.loads(result_json)
+        except Exception:
+            result_json = {}
+    if not isinstance(result_json, dict):
+        return 0
+    try:
+        return int(result_json.get("scanner_timeout_resilience_retry_count") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def scanner_queue_health_snapshot(limit: int = 20) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 20), 100))
     failed = fetch_all(
@@ -84,7 +98,11 @@ def scanner_queue_health_snapshot(limit: int = 20) -> dict[str, Any]:
     )
 
 
-def retry_transient_scanner_failures(limit: int = 5, dry_run: bool = True) -> dict[str, Any]:
+def retry_transient_scanner_failures(
+    limit: int = 5,
+    dry_run: bool = True,
+    allow_timeout_resilience_retry: bool = False,
+) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 5), 25))
     candidates = fetch_all(
         """
@@ -99,7 +117,14 @@ def retry_transient_scanner_failures(limit: int = 5, dry_run: bool = True) -> di
     )
     selected = []
     for row in candidates:
-        if _retry_count(row.get("result_json")) >= 1:
+        retry_count = _retry_count(row.get("result_json"))
+        timeout_resilience_retry = (
+            allow_timeout_resilience_retry
+            and str(row.get("error") or "") == "TimeoutError"
+            and retry_count >= 1
+            and _timeout_resilience_retry_count(row.get("result_json")) < 1
+        )
+        if retry_count >= 1 and not timeout_resilience_retry:
             continue
         selected.append(row)
         if len(selected) >= safe_limit:
@@ -111,6 +136,7 @@ def retry_transient_scanner_failures(limit: int = 5, dry_run: bool = True) -> di
                 "candidate_count": len(selected),
                 "requeued_count": 0,
                 "candidate_errors": sorted({str(row.get("error") or "") for row in selected}),
+                "timeout_resilience_retry_enabled": bool(allow_timeout_resilience_retry),
                 "send_mail": False,
                 "smtp_called": False,
                 "live_outreach_allowed": False,
@@ -124,13 +150,21 @@ def retry_transient_scanner_failures(limit: int = 5, dry_run: bool = True) -> di
         current = row.get("result_json") if isinstance(row.get("result_json"), dict) else {}
         retry_count = _retry_count(current) + 1
         merged = dict(current or {})
+        timeout_resilience_retry = (
+            allow_timeout_resilience_retry
+            and str(row.get("error") or "") == "TimeoutError"
+            and _retry_count(current) >= 1
+            and _timeout_resilience_retry_count(current) < 1
+        )
         merged.update(
             {
                 "scanner_retry_count": retry_count,
-                "scanner_retry_reason": "transient_failure",
+                "scanner_retry_reason": "timeout_resilience_fix" if timeout_resilience_retry else "transient_failure",
                 "scanner_last_error": row.get("error"),
             }
         )
+        if timeout_resilience_retry:
+            merged["scanner_timeout_resilience_retry_count"] = _timeout_resilience_retry_count(current) + 1
         updated = execute(
             """
             UPDATE scanner_jobs

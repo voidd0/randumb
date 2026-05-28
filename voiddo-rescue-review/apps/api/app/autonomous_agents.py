@@ -184,7 +184,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "scout_campaign_quality_retention_agent": lambda: cleanup_scout_campaign_quality_history(),
         "scout_campaign_quality_regression_guard_agent": lambda: scout_campaign_quality_regression_guard(),
         "scanner_agent": lambda: scanner_queue_health_snapshot(int(payload.get("limit", 20))),
-        "scanner_retry_agent": lambda: retry_transient_scanner_failures(int(payload.get("limit", 5)), dry_run=bool(payload.get("dry_run", False))),
+        "scanner_retry_agent": lambda: retry_transient_scanner_failures(
+            int(payload.get("limit", 5)),
+            dry_run=bool(payload.get("dry_run", False)),
+            allow_timeout_resilience_retry=bool(payload.get("allow_timeout_resilience_retry", True)),
+        ),
         "scanner_queue_hygiene_agent": lambda: archive_scanner_queue_artifacts(
             int(payload.get("limit", 500)),
             apply=bool(payload.get("apply", True)),

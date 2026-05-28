@@ -93,6 +93,30 @@ def test_scanner_retry_requeues_once_and_marks_retry_count():
         _cleanup(token)
 
 
+def test_scanner_retry_allows_one_timeout_resilience_retry_after_worker_fix():
+    token = uuid.uuid4().hex[:8]
+    try:
+        job_id = _failed_job(token, "TimeoutError", 1)
+        result = retry_transient_scanner_failures(5, dry_run=False, allow_timeout_resilience_retry=True)
+        assert result["status"] in {"requeued", "idle"}
+        assert result["requeued_count"] >= 1
+        row = fetch_one("SELECT status, error, result_json FROM scanner_jobs WHERE id = %s", (job_id,))
+        assert row["status"] == "queued"
+        assert row["error"] is None
+        assert int(row["result_json"]["scanner_retry_count"]) == 2
+        assert int(row["result_json"]["scanner_timeout_resilience_retry_count"]) == 1
+        assert row["result_json"]["scanner_retry_reason"] == "timeout_resilience_fix"
+
+        execute("UPDATE scanner_jobs SET status = 'failed', error = 'TimeoutError', updated_at = now() WHERE id = %s", (job_id,))
+        second = retry_transient_scanner_failures(5, dry_run=False, allow_timeout_resilience_retry=True)
+        row = fetch_one("SELECT status, result_json FROM scanner_jobs WHERE id = %s", (job_id,))
+        assert row["status"] == "failed"
+        assert int(row["result_json"]["scanner_timeout_resilience_retry_count"]) == 1
+        assert second["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
 def test_scanner_ops_admin_and_agents_are_no_send():
     token = uuid.uuid4().hex[:8]
     try:

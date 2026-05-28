@@ -46,6 +46,14 @@ def _mailto_addresses(links: list[str]) -> list[str]:
     return addresses[:5]
 
 
+def _capture_screenshot(page, path: Path, full_page: bool = True) -> dict:
+    try:
+        page.screenshot(path=str(path), full_page=full_page, timeout=10000)
+        return {"ok": True, "path": str(path)}
+    except (PlaywrightTimeoutError, PlaywrightError) as exc:
+        return {"ok": False, "error": type(exc).__name__, "path": str(path)}
+
+
 def safe_public_scan(url: str, storage_root: str, timeout_ms: int = 15000) -> dict:
     """Run public, non-invasive homepage checks only."""
     parsed = urlparse(url)
@@ -73,22 +81,66 @@ def safe_public_scan(url: str, storage_root: str, timeout_ms: int = 15000) -> di
             except (PlaywrightTimeoutError, PlaywrightError) as exc:
                 navigation_error = type(exc).__name__
             status = response.status if response else 0
-            page.wait_for_timeout(800)
+            try:
+                page.wait_for_timeout(800)
+            except (PlaywrightTimeoutError, PlaywrightError) as exc:
+                navigation_error = navigation_error or type(exc).__name__
             desktop_path = shot_dir / "desktop.png"
-            page.screenshot(path=str(desktop_path), full_page=True)
-            screenshots.append({"type": "desktop", "file_path": str(desktop_path), "viewport": "1440x1100"})
+            desktop_shot = _capture_screenshot(page, desktop_path)
+            if desktop_shot["ok"]:
+                screenshots.append({"type": "desktop", "file_path": str(desktop_path), "viewport": "1440x1100"})
+            else:
+                issues.append(
+                    SafeIssue(
+                        "screenshot",
+                        "medium",
+                        "Desktop screenshot could not be captured",
+                        "The public browser session reached a screenshot timeout while collecting evidence.",
+                        "Re-check the site after reducing heavy homepage media or third-party scripts.",
+                        {"viewport": "desktop", "error": desktop_shot["error"]},
+                    )
+                )
 
             mobile = browser.new_page(viewport={"width": 390, "height": 844}, is_mobile=True)
             try:
                 mobile.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
             except (PlaywrightTimeoutError, PlaywrightError) as exc:
                 navigation_error = navigation_error or type(exc).__name__
-            mobile.wait_for_timeout(800)
+            try:
+                mobile.wait_for_timeout(800)
+            except (PlaywrightTimeoutError, PlaywrightError) as exc:
+                navigation_error = navigation_error or type(exc).__name__
             mobile_path = shot_dir / "mobile.png"
-            mobile.screenshot(path=str(mobile_path), full_page=True)
-            screenshots.append({"type": "mobile", "file_path": str(mobile_path), "viewport": "390x844"})
+            mobile_shot = _capture_screenshot(mobile, mobile_path)
+            if mobile_shot["ok"]:
+                screenshots.append({"type": "mobile", "file_path": str(mobile_path), "viewport": "390x844"})
+            else:
+                issues.append(
+                    SafeIssue(
+                        "screenshot",
+                        "medium",
+                        "Mobile screenshot could not be captured",
+                        "The public mobile browser session reached a screenshot timeout while collecting evidence.",
+                        "Re-check the site after reducing heavy homepage media or third-party scripts.",
+                        {"viewport": "mobile", "error": mobile_shot["error"]},
+                    )
+                )
 
-            html = page.content()
+            try:
+                html = page.content()
+            except (PlaywrightTimeoutError, PlaywrightError) as exc:
+                html = ""
+                navigation_error = navigation_error or type(exc).__name__
+                issues.append(
+                    SafeIssue(
+                        "availability",
+                        "high",
+                        "Homepage content could not be read reliably",
+                        "The public browser session loaded slowly enough that page HTML could not be collected reliably.",
+                        "Check heavy scripts, blocking resources, redirects, and hosting response time.",
+                        {"error": type(exc).__name__},
+                    )
+                )
             soup = BeautifulSoup(html, "html.parser")
             title = (soup.title.string or "").strip() if soup.title else ""
             meta = soup.find("meta", attrs={"name": "description"})

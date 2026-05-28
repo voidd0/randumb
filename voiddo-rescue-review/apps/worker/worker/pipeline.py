@@ -1,13 +1,95 @@
 from __future__ import annotations
 
 import json
+import multiprocessing as mp
 import os
 from typing import Any
+from urllib.parse import urlparse
 
 from psycopg.types.json import Jsonb
 
 from .db import connect
 from .scanner import safe_public_scan
+
+
+class ScannerJobTimeout(RuntimeError):
+    pass
+
+
+class ScannerChildError(RuntimeError):
+    def __init__(self, error_type: str):
+        super().__init__(error_type)
+        self.error_type = error_type
+
+
+def _scan_child(url: str, storage_root: str, queue: mp.Queue) -> None:
+    try:
+        queue.put({"ok": True, "result": safe_public_scan(url, storage_root)})
+    except Exception as exc:
+        queue.put({"ok": False, "error": type(exc).__name__})
+
+
+def run_safe_public_scan_with_timeout(url: str, storage_root: str) -> dict[str, Any]:
+    timeout_seconds = max(30, min(int(os.environ.get("SCANNER_JOB_TIMEOUT_SECONDS", "150") or 150), 300))
+    queue: mp.Queue = mp.Queue(maxsize=1)
+    process = mp.Process(target=_scan_child, args=(url, storage_root, queue), daemon=True)
+    process.start()
+    process.join(timeout_seconds)
+    if process.is_alive():
+        process.terminate()
+        process.join(5)
+        if process.is_alive():
+            process.kill()
+            process.join(5)
+        raise ScannerJobTimeout(f"scanner_job_timeout_{timeout_seconds}s")
+    if queue.empty():
+        raise RuntimeError("scanner_child_exited_without_result")
+    payload = queue.get()
+    if payload.get("ok"):
+        return payload["result"]
+    raise ScannerChildError(str(payload.get("error") or "scanner_child_error"))
+
+
+def timeout_scan_result(url: str, timeout_seconds: int) -> dict[str, Any]:
+    from .scanner import _slug
+
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower()
+    issue = {
+        "issue_type": "availability",
+        "severity": "critical",
+        "title": "Homepage timed out during public browser check",
+        "public_text": "The homepage did not finish a safe public browser check within the allowed time window.",
+        "recommendation": "Check hosting response time, blocking scripts, redirects, and heavy media before sending customers to the site.",
+        "evidence_json": {"timeout_seconds": timeout_seconds, "mode": "safe_public_browser_timeout"},
+    }
+    return {
+        "domain": domain,
+        "url": url,
+        "status": "completed",
+        "http_status": 0,
+        "duration_ms": timeout_seconds * 1000,
+        "title": "",
+        "meta_description": "",
+        "h1": [],
+        "counts": {"links": 0, "forms": 0, "mailto": 0, "tel": 0, "whatsapp": 0, "booking": 0},
+        "contact_evidence": {
+            "mailto_emails": [],
+            "has_phone_link": False,
+            "has_whatsapp_link": False,
+            "has_booking_link": False,
+            "has_form": False,
+        },
+        "public_slug": _slug(url),
+        "score": 55,
+        "issues": [issue],
+        "screenshots": [],
+        "robots_url": "",
+        "sitemap_url": "",
+        "safe_scan": True,
+        "partial_audit": True,
+        "partial_reason": "scanner_job_timeout",
+    }
 
 
 def claim_scanner_job() -> dict[str, Any] | None:
@@ -198,12 +280,25 @@ def process_one_scanner_job() -> dict[str, Any]:
     if not job:
         return {"processed": False}
     try:
-        result = safe_public_scan(job["url"], os.environ.get("STORAGE_ROOT", "/app/storage"))
+        result = run_safe_public_scan_with_timeout(job["url"], os.environ.get("STORAGE_ROOT", "/app/storage"))
         audit_id = persist_scan_result(job, result)
         return {"processed": True, "job_id": str(job["id"]), "priority": int(job.get("priority") or 0), "audit_id": audit_id, "slug": result.get("public_slug")}
+    except ScannerJobTimeout:
+        timeout_seconds = max(30, min(int(os.environ.get("SCANNER_JOB_TIMEOUT_SECONDS", "150") or 150), 300))
+        result = timeout_scan_result(job["url"], timeout_seconds)
+        audit_id = persist_scan_result(job, result)
+        return {
+            "processed": True,
+            "job_id": str(job["id"]),
+            "priority": int(job.get("priority") or 0),
+            "audit_id": audit_id,
+            "slug": result.get("public_slug"),
+            "partial_audit": True,
+        }
     except Exception as exc:
-        fail_scanner_job(str(job["id"]), type(exc).__name__)
-        return {"processed": True, "job_id": str(job["id"]), "priority": int(job.get("priority") or 0), "failed": True, "error": type(exc).__name__}
+        error_type = getattr(exc, "error_type", type(exc).__name__)
+        fail_scanner_job(str(job["id"]), error_type)
+        return {"processed": True, "job_id": str(job["id"]), "priority": int(job.get("priority") or 0), "failed": True, "error": error_type}
 
 
 def process_scanner_jobs(limit: int = 1) -> dict[str, Any]:

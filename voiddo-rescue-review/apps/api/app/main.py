@@ -201,6 +201,7 @@ async def scanner_retry_transient_run(request: Request):
         "scanner": retry_transient_scanner_failures(
             int(payload.get("limit", 5)),
             bool(payload.get("dry_run", True)),
+            bool(payload.get("allow_timeout_resilience_retry", False)),
         ),
     }
 
