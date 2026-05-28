@@ -212,7 +212,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "contact_enrichment_agent": lambda: run_hunter_contact_enrichment(int(payload.get("limit", 10)), dry_run=bool(payload.get("dry_run", True))),
         "contact_page_enrichment_agent": lambda: run_public_contact_page_enrichment(
             int(payload.get("limit", 10)),
-            dry_run=bool(payload.get("dry_run", True)),
+            dry_run=bool(payload.get("dry_run", False)),
             max_pages_per_domain=int(payload.get("max_pages_per_domain", 4)),
             max_seconds=int(payload.get("max_seconds", 45)),
         ),

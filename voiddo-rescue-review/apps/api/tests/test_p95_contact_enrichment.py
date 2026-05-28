@@ -211,6 +211,29 @@ def test_public_contact_page_agent_and_endpoint_are_admin_gated(monkeypatch):
         _cleanup(token)
 
 
+def test_public_contact_page_agent_enriches_by_default_with_time_budget(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        seeded = _seed_lead(token)
+        monkeypatch.setattr(
+            enrichment_module,
+            "fetch_public_contact_page",
+            lambda url: (200, f"<html><a href='mailto:office@{seeded['domain']}'>Office</a></html>", url),
+        )
+        agent = run_agent("contact_page_enrichment_agent", {"limit": 5, "max_seconds": 10})
+        result = agent["result_json"]
+        assert agent["status"] == "completed"
+        assert result["dry_run"] is False
+        assert result["enriched_count"] >= 1
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+        assert f"office@{seeded['domain']}" not in str(result)
+        row = fetch_one("SELECT email FROM leads WHERE id = %s", (seeded["lead_id"],))
+        assert row["email"] == f"office@{seeded['domain']}"
+    finally:
+        _cleanup(token)
+
+
 def test_hunter_enrichment_stops_on_rate_limit(monkeypatch):
     token = uuid.uuid4().hex[:8]
     try:
