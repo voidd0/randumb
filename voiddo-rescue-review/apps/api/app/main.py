@@ -115,6 +115,7 @@ from .quality_plugins import latest_quality_summary, quality_plugin_manifest, re
 from .lead_discovery import lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, quality_aware_regional_target_plan, regional_lead_discovery_cycle
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
+from .revenue_autonomy_gap import create_revenue_autonomy_gap_actions, revenue_autonomy_gap_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 from .source_adapters import directory_rows_to_csv, domain_list_to_csv
 from .scout_run_recovery import recover_stale_scout_runs, stale_scout_run_recovery_snapshot
@@ -907,6 +908,24 @@ def economics_audit_run():
 @app.get("/admin/economics/summary", dependencies=[Depends(require_admin)])
 def economics_summary_get():
     return {"ok": True, "summary": latest_economics_summary()}
+
+
+@app.get("/admin/revenue-autonomy-gap", dependencies=[Depends(require_admin)])
+def revenue_autonomy_gap_get():
+    return {"ok": True, "gap": revenue_autonomy_gap_snapshot()}
+
+
+@app.post("/admin/revenue-autonomy-gap/actions", dependencies=[Depends(require_admin)])
+async def revenue_autonomy_gap_actions_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "gap": create_revenue_autonomy_gap_actions(
+            int(payload.get("target_mrr_cents", 500_000)),
+            int(payload.get("approved_preview_target", 110)),
+            apply=bool(payload.get("apply", True)),
+        ),
+    }
 
 
 @app.get("/admin/economics/{product_key}", dependencies=[Depends(require_admin)])

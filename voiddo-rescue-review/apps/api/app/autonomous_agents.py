@@ -68,6 +68,7 @@ from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard, run_buy
 from .lead_discovery import apollo_organization_discovery, lead_discovery_target_plan, overpass_lead_discovery, performance_guided_regional_discovery_cycle, performance_guided_target_plan, quality_aware_regional_target_plan, regional_lead_discovery_cycle, stockpile_expansion_discovery_cycle, stockpile_expansion_target_plan
 from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
+from .revenue_autonomy_gap import create_revenue_autonomy_gap_actions, revenue_autonomy_gap_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 from .language_gate import check_no_ai_public_language
 from .scout_run_recovery import recover_stale_scout_runs, stale_scout_run_recovery_snapshot
@@ -492,6 +493,15 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "revenue_simulation_agent": lambda: run_synthetic_lead_simulation(int(payload.get("count", 25))),
         "revenue_loop_snapshot_agent": lambda: revenue_loop_snapshot(int(payload.get("limit", 25))),
         "revenue_loop_prepare_agent": lambda: prepare_revenue_loop(int(payload.get("limit", 25)), dry_run=True),
+        "revenue_autonomy_gap_agent": lambda: create_revenue_autonomy_gap_actions(
+            int(payload.get("target_mrr_cents", 500_000)),
+            int(payload.get("approved_preview_target", 110)),
+            apply=bool(payload.get("apply", True)),
+        ),
+        "revenue_autonomy_gap_snapshot_agent": lambda: revenue_autonomy_gap_snapshot(
+            int(payload.get("target_mrr_cents", 500_000)),
+            int(payload.get("approved_preview_target", 110)),
+        ),
         "mail_clean_window_agent": lambda: check_mail_clean_window(24),
         "mail_clean_window_transition_agent": lambda: run_clean_window_transition(24),
         "mailer_status_agent": lambda: mailer_status_snapshot(),
@@ -616,6 +626,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("policy_trend_reporting_agent", {}),
         ("mailer_business_kpi_agent", {}),
         ("mailer_self_audit_matrix_agent", {}),
+        ("revenue_autonomy_gap_agent", {"target_mrr_cents": 500_000, "approved_preview_target": 110, "apply": True}),
         ("quality_plugin_agent", {}),
         ("visual_qa_agent", {}),
         ("self_audit_agent", {}),
@@ -644,6 +655,7 @@ def test_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("policy_trend_reporting_agent", {}),
         ("mailer_business_kpi_agent", {}),
         ("mailer_self_audit_matrix_agent", {}),
+        ("revenue_autonomy_gap_snapshot_agent", {"target_mrr_cents": 500_000, "approved_preview_target": 110}),
         ("quality_plugin_agent", {}),
         ("warmup_block_recovery_snapshot_agent", {"limit": 1, "dry_run": True}),
         ("campaign_preview_hygiene_snapshot_agent", {"limit": 1, "dry_run": True}),

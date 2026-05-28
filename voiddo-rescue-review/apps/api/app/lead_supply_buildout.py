@@ -140,6 +140,7 @@ def lead_supply_buildout(
             break
 
         actions: list[dict[str, Any]] = []
+        new_source_hint = False
         if safe_enrichment_limit > 0:
             autopilot = lead_supply_autopilot(
                 target,
@@ -173,15 +174,36 @@ def lead_supply_buildout(
                 dry_run=False,
                 max_seconds=min(60, remaining_seconds),
             )
-            actions.append(_action_summary({"name": "stockpile_expansion_discovery_cycle", **expansion}))
+            expansion_summary = _action_summary({"name": "stockpile_expansion_discovery_cycle", **expansion})
+            actions.append(expansion_summary)
+            new_source_hint = (
+                new_source_hint
+                or int(expansion_summary.get("created_sources") or 0) > 0
+                or int(expansion_summary.get("non_empty_sources") or 0) > 0
+                or int(expansion_summary.get("found_count") or 0) > 0
+            )
             current = lead_stockpile_health_snapshot(target, canary, safe_limit)
 
-        if int(current.get("approved_preview_count") or 0) < target and int(current.get("source_candidate_count") or 0) == 0:
+        if (
+            int(current.get("approved_preview_count") or 0) < target
+            and int(current.get("source_candidate_count") or 0) == 0
+            and not new_source_hint
+        ):
             discovery = regional_lead_discovery_cycle(limit_targets=1, per_target_limit=15, dry_run=False)
-            actions.append(_action_summary({"name": "regional_lead_discovery_cycle", **discovery}))
+            discovery_summary = _action_summary({"name": "regional_lead_discovery_cycle", **discovery})
+            actions.append(discovery_summary)
+            new_source_hint = (
+                new_source_hint
+                or int(discovery_summary.get("created_sources") or 0) > 0
+                or int(discovery_summary.get("non_empty_sources") or 0) > 0
+                or int(discovery_summary.get("found_count") or 0) > 0
+            )
 
         refreshed = lead_stockpile_health_snapshot(target, canary, safe_limit)
-        if int(refreshed.get("source_candidate_count") or 0) > 0 and int(refreshed.get("scanner_active_count") or 0) <= 3:
+        if (
+            (int(refreshed.get("source_candidate_count") or 0) > 0 or new_source_hint)
+            and int(refreshed.get("scanner_active_count") or 0) <= 3
+        ):
             advance = advance_source_to_campaign(
                 None,
                 min(safe_limit, 20),
