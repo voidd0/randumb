@@ -314,6 +314,49 @@ def test_daily_business_and_blockers_reports_include_policy_trend(tmp_path):
     assert "No raw recipient addresses" in blockers_text
 
 
+def test_blockers_report_does_not_block_on_latest_empty_source_when_ready_pool_exists(tmp_path):
+    token = uuid.uuid4().hex[:8]
+    try:
+        ready_source = create_scout_source(
+            {
+                "name": f"ready-pool-{token}",
+                "source_type": "manual_csv_scout",
+                "country": "CA",
+                "niche": "dentists",
+                "config_json": {
+                    "csv": (
+                        "business_name,website_url,email,country,niche,source_url,confidence\n"
+                        f"Ready Pool,https://ready-{token}.example.test,owner@ready-{token}.example.test,CA,dentists,https://directory.example/{token},95\n"
+                    )
+                },
+            }
+        )
+        run_scout_source_readiness(str(ready_source["id"]))
+        execute(
+            "INSERT INTO scout_runs(source_id, status, country, niche, language) VALUES (%s, 'completed', 'CA', 'dentists', 'en')",
+            (ready_source["id"],),
+        )
+        blocked_source = create_scout_source(
+            {
+                "name": f"empty-source-{token}",
+                "source_type": "manual_csv_scout",
+                "country": "CA",
+                "niche": "dentists",
+                "config_json": {"csv": "business_name,website_url,email,country,niche,source_url,confidence\n"},
+            }
+        )
+        run_scout_source_readiness(str(blocked_source["id"]))
+
+        report = write_blockers_report(tmp_path / "blockers_report.md")
+        assert "scout_source_readiness_not_pass" not in report["blockers"]
+        assert report["send_mail"] is False
+        assert report["live_outreach_allowed"] is False
+    finally:
+        execute("DELETE FROM scout_runs WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s OR name LIKE %s)", (f"ready-pool-{token}", f"empty-source-{token}"))
+        execute("DELETE FROM scout_source_readiness_checks WHERE source_id IN (SELECT id FROM scout_sources WHERE name LIKE %s OR name LIKE %s)", (f"ready-pool-{token}", f"empty-source-{token}"))
+        execute("DELETE FROM scout_sources WHERE name LIKE %s OR name LIKE %s", (f"ready-pool-{token}", f"empty-source-{token}"))
+
+
 def test_migration_manifest_exists():
     assert os.path.exists("/app/migrations/005_p3_checkout_manifest.sql") or os.path.exists("apps/api/migrations/005_p3_checkout_manifest.sql")
 

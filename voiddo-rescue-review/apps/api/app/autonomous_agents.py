@@ -389,6 +389,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "campaign_remediation_executor_agent": lambda: execute_campaign_remediation(
             int(payload.get("limit", 10)),
             rerun_preflight=bool(payload.get("rerun_preflight", True)),
+            max_seconds=int(payload.get("max_seconds", 30)),
         ),
         "campaign_remediation_feedback_agent": lambda: campaign_remediation_feedback(
             int(payload.get("limit", 25)),

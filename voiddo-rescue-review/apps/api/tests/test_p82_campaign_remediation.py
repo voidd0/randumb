@@ -129,6 +129,8 @@ def test_campaign_remediation_executor_runs_only_safe_actions(monkeypatch):
         result = execute_campaign_remediation(25, rerun_preflight=True)
         execution = next(item for item in result["executions"] if item["campaign_id"] == campaign_id)
         assert result["send_mail"] is False
+        assert result["timed_out"] is False
+        assert result["max_seconds"] == 30
         assert execution["executed_count"] == 2
         assert execution["skipped_count"] == 1
         executed_actions = {item["action"] for item in execution["actions"] if item["status"] == "executed"}

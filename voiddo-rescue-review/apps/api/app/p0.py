@@ -1643,7 +1643,6 @@ def write_blockers_report(path: str | Path | None = None) -> dict[str, Any]:
     source_readiness_has_healthy_pool = (
         scout_source_readiness["current_sources_ready"] > 0
         and scout_source_readiness["regression_guard_decision"] in {"PASS_NO_SEND", "MISSING", "MISSING_NO_SEND"}
-        and scout_source_queue["candidate_count"] > 0
     )
     if scout_source_readiness["latest_status"] not in {"PASS_SOURCE_READY", "MISSING"} and not source_readiness_has_healthy_pool:
         blockers.append("scout_source_readiness_not_pass")

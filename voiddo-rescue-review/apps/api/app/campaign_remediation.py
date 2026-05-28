@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from psycopg.types.json import Jsonb
@@ -253,14 +254,23 @@ def _execute_safe_action(campaign_id: str, action: dict[str, Any]) -> dict[str, 
     }
 
 
-def execute_campaign_remediation(limit: int = 10, rerun_preflight: bool = True) -> dict[str, Any]:
+def execute_campaign_remediation(limit: int = 10, rerun_preflight: bool = True, max_seconds: int = 30) -> dict[str, Any]:
     rows = _latest_plan_rows(limit)
     executions: list[dict[str, Any]] = []
+    started = time.monotonic()
+    timed_out = False
     for row in rows:
+        if time.monotonic() - started > max(3, min(int(max_seconds or 30), 120)):
+            timed_out = True
+            break
         campaign_id = str(row["campaign_id"])
         plan = row.get("plan_json") or {}
         action_results = [_execute_safe_action(campaign_id, action) for action in plan.get("actions", [])]
-        preflight_result = campaign_preflight(campaign_id, 20) if rerun_preflight else {"status": "skipped"}
+        preflight_result = (
+            campaign_preflight(campaign_id, 20)
+            if rerun_preflight and time.monotonic() - started <= max(3, min(int(max_seconds or 30), 120))
+            else {"status": "skipped_timeout_guard" if rerun_preflight else "skipped"}
+        )
         executed = len([item for item in action_results if item["status"] == "executed"])
         skipped = len(action_results) - executed
         result = json_safe(
@@ -296,10 +306,12 @@ def execute_campaign_remediation(limit: int = 10, rerun_preflight: bool = True) 
         executions.append(result)
     return json_safe(
         {
-            "status": "executed" if executions else "idle_no_remediation_plans",
+            "status": "partial_timeout_guard" if timed_out else "executed" if executions else "idle_no_remediation_plans",
             "campaign_count": len(executions),
             "executed_count": sum(item["executed_count"] for item in executions),
             "skipped_count": sum(item["skipped_count"] for item in executions),
+            "timed_out": timed_out,
+            "max_seconds": max(3, min(int(max_seconds or 30), 120)),
             "executions": executions,
             **SAFE_FLAGS,
         }
