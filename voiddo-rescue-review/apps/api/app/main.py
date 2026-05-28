@@ -87,6 +87,7 @@ from .mailer_closed_loop import mailer_closed_loop_summary, run_mailer_closed_lo
 from .mailer_ops_actions import cleanup_synthetic_mailer_ops_runs, mailer_ops_action_summary, mailer_ops_retention_report_history, run_mailer_ops_action
 from .mail_recovery import check_mail_clean_window, create_mailer_draft
 from .reply_actions import plan_reply_action
+from .reply_safety_rehearsal import run_reply_safety_rehearsal
 from .customer_journey import customer_journey_snapshot
 from .customer_mail_simulation import run_customer_mail_simulation
 from .customer_revenue_watchdog import latest_paid_customer_watchdog_runs, run_paid_customer_watchdog
@@ -1282,6 +1283,11 @@ async def warmup_post_send_observe_run(request: Request):
 async def reply_action_plan_create(request: Request):
     payload = await request.json()
     return {"ok": True, "plan": plan_reply_action(payload.get("subject", ""), payload.get("body", ""), payload.get("mailbox", "support@voiddorescue.com"))}
+
+
+@app.post("/admin/replies/safety-rehearsal", dependencies=[Depends(require_admin)])
+def reply_action_rehearsal_create():
+    return {"ok": True, "rehearsal": run_reply_safety_rehearsal()}
 
 
 @app.get("/admin/quality/plugins", dependencies=[Depends(require_admin)])

@@ -49,6 +49,13 @@ def test_inbox_classifier_marks_unsafe_security_accusation():
     assert result["auto_reply_allowed"] is False
 
 
+def test_inbox_classifier_does_not_treat_issue_as_sue():
+    result = classify_reply("Re: possible website issue", "How much does the one-time fix cost?")
+    assert result["classification"] == "ask_price"
+    assert result["human_review_required"] is False
+    assert result["auto_reply_allowed"] is True
+
+
 def test_inbox_classifier_treats_delivery_observation_as_autonomous_signal():
     result = classify_reply("Re: diagnostic", "All fine, found it in spam, starred and answered")
     assert result["classification"] == "auto_reply"

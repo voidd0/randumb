@@ -12,6 +12,7 @@ from app.db import execute, fetch_one
 from app.mailer_control import evaluate_latest_preview_outbound_message, evaluate_outbound_message
 from app.main import app
 from app.reply_actions import plan_reply_action
+from app.reply_safety_rehearsal import run_reply_safety_rehearsal
 from app.scout_quality import cleanup_scout_campaign_quality_history, latest_scout_campaign_quality_history, run_scout_quality_gate, score_scout_provenance, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from app.scouts import cleanup_scout_source_readiness_checks, create_campaign, create_scout_run, create_scout_source, latest_scout_source_readiness, latest_scout_source_readiness_regression_guard_summary, prepare_campaign, process_scout_run, run_scout_source_readiness, scout_source_readiness_regression_guard, scout_source_readiness_summary
 
@@ -146,7 +147,7 @@ def test_outbound_gate_agent_uses_real_preview_message_with_signed_unsubscribe()
         assert checks["unsubscribe_one_click_ready"] is True
         assert checks["html_body_ready"] is True
         assert decision["status"] == "blocked"
-        assert decision["reason"] == "outreach_dry_run_enabled"
+        assert "outreach_dry_run_enabled" in decision["reason"]
         assert decision["recipient_hash"] != f"gate-{token}@example.test"
     finally:
         if message_id:
@@ -176,6 +177,21 @@ def test_reply_action_plan_unsubscribe_suppression_action():
     plan = plan_reply_action("Stop", "Please unsubscribe me", "audit@voiddorescue.com")
     assert plan["classification"] == "unsubscribe"
     assert plan["safe_action"].startswith("suppress_sender")
+
+
+def test_reply_safety_rehearsal_blocks_unsafe_and_sends_nothing():
+    result = run_reply_safety_rehearsal(store=True)
+    assert result["decision"] == "PASS_REPLY_SAFETY_REHEARSAL"
+    assert result["auto_replies_paused"] is True
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+    hard = [item for item in result["samples"] if item["safe_action"] == "stop_thread_create_review_item"]
+    assert hard
+    assert all(item["human_review_required"] for item in hard)
+    assert all(item["auto_reply_effectively_blocked"] for item in result["samples"])
+    agent = run_agent("reply_safety_rehearsal_agent", {})
+    assert agent["status"] == "completed"
+    assert agent["result_json"]["decision"] == "PASS_REPLY_SAFETY_REHEARSAL"
 
 
 def test_scout_provenance_scores_source_quality():

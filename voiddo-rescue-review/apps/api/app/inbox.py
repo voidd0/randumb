@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 
 UNSAFE = {
     "angry",
@@ -11,35 +13,43 @@ UNSAFE = {
 }
 
 
+def _has(text: str, terms: list[str]) -> bool:
+    for term in terms:
+        pattern = r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])"
+        if re.search(pattern, text):
+            return True
+    return False
+
+
 def classify_reply(subject: str, body: str) -> dict[str, object]:
     text = f"{subject}\n{body}".lower()
-    if any(word in text for word in ["unsubscribe", "remove me", "stop emailing"]):
+    if _has(text, ["unsubscribe", "remove me", "stop emailing"]):
         label = "unsubscribe"
-    elif any(word in text for word in ["wrong person", "not the right person", "not my website", "contact someone else"]):
+    elif _has(text, ["wrong person", "not the right person", "not my website", "contact someone else"]):
         label = "wrong_person"
-    elif any(word in text for word in ["angry", "harassment", "stop this now", "this is spam", "report you"]):
+    elif _has(text, ["angry", "harassment", "stop this now", "this is spam", "report you"]):
         label = "angry"
-    elif any(word in text for word in ["found it in spam", "in spam", "spam folder", "starred and answered", "starred and sent", "all fine"]):
+    elif _has(text, ["found it in spam", "in spam", "spam folder", "starred and answered", "starred and sent", "all fine"]):
         label = "auto_reply"
-    elif any(word in text for word in ["delivery status notification", "undelivered", "mail delivery failed"]):
+    elif _has(text, ["delivery status notification", "undelivered", "mail delivery failed"]):
         label = "bounce"
-    elif any(word in text for word in ["lawyer", "legal", "sue", "gdpr complaint"]):
+    elif _has(text, ["lawyer", "legal", "sue", "gdpr complaint"]):
         label = "legal_threat"
-    elif any(word in text for word in ["hack", "security scan", "unauthorized", "attack"]):
+    elif _has(text, ["hack", "security scan", "unauthorized", "attack"]):
         label = "security_accusation"
-    elif any(word in text for word in ["price", "cost", "how much"]):
+    elif _has(text, ["price", "cost", "how much"]):
         label = "ask_price"
-    elif any(word in text for word in ["details", "what did you find", "screenshot"]):
+    elif _has(text, ["details", "what did you find", "screenshot"]):
         label = "ask_details"
-    elif any(word in text for word in ["not interested", "no thanks"]):
+    elif _has(text, ["not interested", "no thanks"]):
         label = "not_interested"
-    elif any(word in text for word in ["call me", "book a call", "meeting"]):
+    elif _has(text, ["call me", "book a call", "meeting"]):
         label = "wants_call"
-    elif any(word in text for word in ["out of office", "automatic reply"]):
+    elif _has(text, ["out of office", "automatic reply"]):
         label = "out_of_office"
-    elif any(word in text for word in ["paid", "receipt", "invoice paid"]):
+    elif _has(text, ["paid", "receipt", "invoice paid"]):
         label = "paid"
-    elif any(word in text for word in ["yes", "interested", "fix it"]):
+    elif _has(text, ["yes", "interested", "fix it"]):
         label = "interested"
     else:
         label = "human_review_required"

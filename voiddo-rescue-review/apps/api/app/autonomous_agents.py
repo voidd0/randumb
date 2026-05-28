@@ -27,6 +27,7 @@ from .mailer_ops_actions import cleanup_mailer_ops_synthetic_history, write_mail
 from .mail_recovery import check_mail_clean_window
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
+from .reply_safety_rehearsal import run_reply_safety_rehearsal
 from .customer_journey import customer_journey_snapshot
 from .customer_mail_simulation import run_customer_mail_simulation
 from .customer_revenue_watchdog import latest_paid_customer_watchdog_runs, run_paid_customer_watchdog
@@ -421,6 +422,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "launch_operating_lane_agent": lambda: launch_operating_lane_snapshot(int(payload.get("limit", 25))),
         "launch_operating_lane_advance_agent": lambda: advance_launch_operating_lane(int(payload.get("limit", 25)), execute_safe_auto=False),
         "inbox_agent": lambda: {"dry_run": True, "status": "worker_polls_when_enabled"},
+        "reply_safety_rehearsal_agent": lambda: run_reply_safety_rehearsal(),
         "owner_command_agent": lambda: owner_command_control_summary(int(payload.get("limit", 20))),
         "checkout_agent": lambda: {"dry_run": True, "status": "paddle_webhook_handlers_ready"},
         "reporting_agent": lambda: runtime_state_snapshot(),
