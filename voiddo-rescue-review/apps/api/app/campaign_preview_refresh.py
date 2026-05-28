@@ -68,7 +68,7 @@ def refresh_campaign_previews_if_needed(limit: int = 100, stale_hours: int = 24,
     refreshed = 0
     status = "dry_run_refresh_recommended" if snapshot["should_refresh"] and dry_run else "fresh_noop"
     if snapshot["should_refresh"] and not dry_run:
-        prepared = prepare_campaign_control_room(limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=8)
+        prepared = prepare_campaign_control_room(limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=20)
         refreshed = int(prepared.get("campaign_previews_prepared") or 0)
         touched = fetch_all(
             """

@@ -159,7 +159,7 @@ def repair_campaign_pipeline(limit: int = 100, dry_run: bool = True, prepare_pre
     linked = _link_orphan_audits(safe_limit)
     scored = _score_linked_leads(safe_limit)
     prepared = (
-        prepare_campaign_control_room(safe_limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=5)
+        prepare_campaign_control_room(safe_limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=20)
         if prepare_previews
         else {
             "campaign_previews_prepared": 0,

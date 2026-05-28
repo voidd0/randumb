@@ -5,6 +5,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .audit_strength import score_audit_strength
+from .campaign_preview_reviews import preview_review_evidence
 from .db import execute, fetch_all, fetch_one
 from .p0 import json_safe
 
@@ -29,6 +30,7 @@ def held_preview_remediation_candidates(limit: int = 25) -> dict[str, Any]:
                latest_strength.final_score AS audit_strength_score,
                latest_strength.issues_json AS strength_issues,
                issue_counts.issue_count,
+               issue_counts.critical_high_count,
                shot_counts.screenshot_count
         FROM campaign_leads cl
         JOIN campaigns c ON c.id = cl.campaign_id
@@ -46,7 +48,10 @@ def held_preview_remediation_candidates(limit: int = 25) -> dict[str, Any]:
           SELECT final_score, issues_json FROM audit_strength_scores WHERE audit_id = cl.audit_id ORDER BY created_at DESC LIMIT 1
         ) latest_strength ON true
         LEFT JOIN LATERAL (
-          SELECT count(*) AS issue_count FROM audit_issues WHERE audit_id = cl.audit_id
+          SELECT count(*) AS issue_count,
+                 count(*) FILTER (WHERE severity IN ('critical', 'high')) AS critical_high_count
+          FROM audit_issues
+          WHERE audit_id = cl.audit_id
         ) issue_counts ON true
         LEFT JOIN LATERAL (
           SELECT count(*) AS screenshot_count FROM screenshots WHERE audit_id = cl.audit_id
@@ -64,18 +69,31 @@ def held_preview_remediation_candidates(limit: int = 25) -> dict[str, Any]:
         if not audit_strength and row.get("audit_id"):
             audit_strength = int(score_audit_strength(str(row["audit_id"]))["final_score"])
         issue_count = int(row["issue_count"] or 0)
+        critical_high_count = int(row["critical_high_count"] or 0)
         screenshot_count = int(row["screenshot_count"] or 0)
-        gaps = []
+        evidence = preview_review_evidence(
+            lead_score=int(row["lead_score"] or 0),
+            audit_strength=audit_strength,
+            issue_count=issue_count,
+            critical_high_count=critical_high_count,
+            screenshot_count=screenshot_count,
+            public_slug=row.get("public_slug"),
+        )
+        gaps = list(evidence["evidence_gaps"])
         if not row.get("public_slug"):
             gaps.append("missing_public_audit_slug")
         if not row.get("summary"):
             gaps.append("missing_summary")
-        if issue_count < 3:
-            gaps.append("fewer_than_three_issues")
         if screenshot_count < 1:
             gaps.append("missing_screenshots")
-        if audit_strength < 75:
-            gaps.append("audit_strength_below_auto_review_threshold")
+        gaps = sorted(set(gaps))
+        next_safe_actions = []
+        if {"missing_screenshot_evidence", "single_screenshot_only", "audit_strength_below_minimum_auto_review_path", "no_public_issues_recorded", "no_critical_or_high_public_issue"} & set(gaps):
+            next_safe_actions.append("refresh_public_scanner_evidence")
+        if {"missing_summary", "missing_public_audit_slug", "missing_public_audit_page"} & set(gaps):
+            next_safe_actions.append("repair_audit_page_metadata")
+        if "lead_score_below_lowest_auto_review_path" in gaps:
+            next_safe_actions.append("exclude_from_canary_until_stronger_public_signal")
         candidates.append(
             {
                 "campaign_lead_id": str(row["campaign_lead_id"]),
@@ -83,13 +101,19 @@ def held_preview_remediation_candidates(limit: int = 25) -> dict[str, Any]:
                 "audit_id": str(row["audit_id"]) if row.get("audit_id") else None,
                 "lead_score": int(row["lead_score"] or 0),
                 "audit_strength_score": audit_strength,
+                "issue_count": issue_count,
+                "critical_high_count": critical_high_count,
+                "screenshot_count": screenshot_count,
                 "business_name": row["business_name"],
                 "domain": row["domain"],
                 "url": row["url"],
                 "audit_slug": row["public_slug"],
                 "review_reason": row["review_reason"] or "",
                 "evidence_gaps": gaps,
-                "needs_scanner_refresh": bool({"fewer_than_three_issues", "missing_screenshots", "audit_strength_below_auto_review_threshold"} & set(gaps)),
+                "approval_paths": evidence["approval_paths"],
+                "decision_basis": evidence["decision_basis"],
+                "next_safe_actions": next_safe_actions,
+                "needs_scanner_refresh": "refresh_public_scanner_evidence" in next_safe_actions,
                 "needs_copy_or_summary_repair": bool({"missing_summary", "missing_public_audit_slug"} & set(gaps)),
             }
         )
@@ -192,4 +216,3 @@ def remediate_held_preview_reviews(limit: int = 25, dry_run: bool = True) -> dic
     result["run_id"] = str(saved["id"])
     result["created_at"] = saved["created_at"].isoformat()
     return result
-

@@ -132,7 +132,7 @@ def run_campaign_action(action: str, campaign_id: str | None = None, limit: int 
         return json_safe({**result, "send_mail": False, "smtp_called": False, "live_outreach_allowed": False, "raw_recipient_addresses_included": False, "secrets_included": False})
 
     if action == "refresh_previews":
-        refreshed = prepare_campaign_control_room(safe_limit, 70, dry_run=dry_run, offer_key="contact_form_repair", max_segments=8)
+        refreshed = prepare_campaign_control_room(safe_limit, 70, dry_run=dry_run, offer_key="contact_form_repair", max_segments=20)
         result = {"status": "completed" if not dry_run else "dry_run", "action": action, "refreshed": refreshed}
     elif action == "run_quality":
         campaigns = _campaign_summaries(min(safe_limit, 8))

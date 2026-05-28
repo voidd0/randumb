@@ -33,7 +33,15 @@ def _campaign_ids(limit: int, campaign_id: str | None = None) -> list[str]:
         SELECT c.id
         FROM campaigns c
         JOIN campaign_leads cl ON cl.campaign_id = c.id AND cl.status = 'preview'
+        JOIN LATERAL (
+          SELECT action
+          FROM campaign_preview_reviews
+          WHERE campaign_lead_id = cl.id
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) latest_review ON true
         WHERE c.status IN ('preview_ready', 'draft')
+          AND latest_review.action = 'approved'
         GROUP BY c.id
         ORDER BY max(cl.updated_at) DESC, c.updated_at DESC
         LIMIT %s

@@ -306,7 +306,7 @@ def prepare_campaign_control_room(
     max_segments: int = 3,
 ) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 100), 250))
-    safe_segments = max(1, min(int(max_segments or 3), 10))
+    safe_segments = max(1, min(int(max_segments or 3), 25))
     candidates_payload = qualified_campaign_lead_candidates(safe_limit, threshold)
     candidates = candidates_payload["candidates"]
     segments = campaign_segment_candidates(safe_limit, threshold)["segments"][:safe_segments]

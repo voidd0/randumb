@@ -257,6 +257,26 @@ def test_campaign_preflight_blocks_held_preview_review(monkeypatch):
         _cleanup(token)
 
 
+def test_campaign_preflight_batch_skips_held_only_campaigns(monkeypatch):
+    import app.campaign_preflight as preflight
+
+    token = uuid.uuid4().hex[:8]
+    try:
+        campaign_id = _campaign(token)
+        preview = fetch_one("SELECT id FROM campaign_leads WHERE campaign_id = %s LIMIT 1", (campaign_id,))
+        review_campaign_preview(str(preview["id"]), "held", "not enough public proof")
+        monkeypatch.setattr(preflight, "mailer_policy_score", _policy_pass)
+        monkeypatch.setattr(preflight, "campaign_preview_transport_gate_status", lambda campaign_id: _transport_preview_ready())
+        batch = campaign_preflight_batch(50)
+        assert all(run["campaign_id"] != campaign_id for run in batch["runs"])
+        explicit = campaign_preflight_batch(5, campaign_id)
+        assert explicit["failed_count"] == 1
+        assert explicit["runs"][0]["preview_review_summary"]["held_count"] == 1
+        assert explicit["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
 def test_campaign_preflight_excludes_held_rows_when_usable_rows_exist(monkeypatch):
     import app.campaign_preflight as preflight
 

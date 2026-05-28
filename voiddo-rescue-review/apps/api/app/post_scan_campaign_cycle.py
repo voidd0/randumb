@@ -48,7 +48,7 @@ def post_scan_campaign_cycle(limit: int = 100, dry_run: bool = True) -> dict[str
     source_perf = scout_source_performance(safe_limit, store=not dry_run)
     pipeline = repair_campaign_pipeline(safe_limit, dry_run=dry_run, prepare_previews=False)
     prepared = (
-        prepare_campaign_control_room(safe_limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=8)
+        prepare_campaign_control_room(safe_limit, 70, dry_run=False, offer_key="contact_form_repair", max_segments=20)
         if not dry_run
         else {"status": "dry_run", "campaign_previews_prepared": 0, **SAFE_FLAGS}
     )

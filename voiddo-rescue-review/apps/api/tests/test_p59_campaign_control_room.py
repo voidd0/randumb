@@ -313,7 +313,13 @@ def test_campaign_preview_self_review_approves_single_high_issue_with_two_screen
         assert result["decisions"][0]["issue_count"] == 1
         assert result["decisions"][0]["critical_high_count"] == 1
         assert result["decisions"][0]["screenshot_count"] == 2
+        assert result["decisions"][0]["approval_paths"]["single_high_issue_two_screenshot_path"] is True
         assert result["approved_count"] == 1
+        latest = latest_campaign_preview_reviews(20)
+        review_row = [item for item in latest["reviews"] if item["campaign_lead_id"] == row["campaign_lead_id"]][0]
+        assert review_row["evidence"]["critical_high_count"] == 1
+        assert review_row["evidence"]["screenshot_count"] == 2
+        assert review_row["evidence"]["decision_basis"] == "approval_path_matched"
         assert result["send_mail"] is False
     finally:
         _cleanup(token)
@@ -365,6 +371,9 @@ def test_held_preview_remediation_queues_safe_evidence_refresh_without_send():
         snapshot = held_preview_remediation_candidates(100)
         candidate = [item for item in snapshot["candidates"] if item["domain"] == f"p59-{token}.clinic"][0]
         assert "missing_screenshots" in candidate["evidence_gaps"]
+        assert "missing_screenshot_evidence" in candidate["evidence_gaps"]
+        assert candidate["approval_paths"]["strong_score_path"] is False
+        assert "refresh_public_scanner_evidence" in candidate["next_safe_actions"]
         result = remediate_held_preview_reviews(100, dry_run=False)
         assert result["send_mail"] is False
         assert result["live_outreach_allowed"] is False

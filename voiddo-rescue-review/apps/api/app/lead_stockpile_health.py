@@ -75,6 +75,20 @@ def _preflight_counts() -> dict[str, int]:
         ) latest ON true
         WHERE c.status IN ('draft', 'preview_ready')
           AND upper(COALESCE(c.country, '')) !~ %s
+          AND EXISTS (
+            SELECT 1
+            FROM campaign_leads cl
+            JOIN LATERAL (
+              SELECT action
+              FROM campaign_preview_reviews
+              WHERE campaign_lead_id = cl.id
+              ORDER BY created_at DESC
+              LIMIT 1
+            ) latest_review ON true
+            WHERE cl.campaign_id = c.id
+              AND cl.status = 'preview'
+              AND latest_review.action = 'approved'
+          )
         GROUP BY latest.decision
         """,
         (TEST_COUNTRY_PATTERN,),

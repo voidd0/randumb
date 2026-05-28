@@ -28,7 +28,23 @@ def normalize_preview_review_action(action: str) -> str:
     return normalized
 
 
-def review_campaign_preview(campaign_lead_id: str, action: str, reason: str = "", actor: str = "admin") -> dict[str, Any]:
+def _review_safety_flags() -> dict[str, bool]:
+    return {
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_recipient_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
+def review_campaign_preview(
+    campaign_lead_id: str,
+    action: str,
+    reason: str = "",
+    actor: str = "admin",
+    evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     normalized = normalize_preview_review_action(action)
     row = fetch_one(
         """
@@ -45,6 +61,7 @@ def review_campaign_preview(campaign_lead_id: str, action: str, reason: str = ""
     if not row:
         raise ValueError("campaign_preview_not_found")
     clean_reason = (reason or "").strip()[:280]
+    clean_evidence = evidence or {}
     result = {
         "campaign_lead_id": str(row["id"]),
         "campaign_id": str(row["campaign_id"]),
@@ -55,11 +72,8 @@ def review_campaign_preview(campaign_lead_id: str, action: str, reason: str = ""
         "lead_score": int(row["score"] or 0),
         "action": normalized,
         "reason": clean_reason,
-        "send_mail": False,
-        "smtp_called": False,
-        "live_outreach_allowed": False,
-        "raw_recipient_addresses_included": False,
-        "secrets_included": False,
+        "evidence": json_safe(clean_evidence) if clean_evidence else {},
+        **_review_safety_flags(),
     }
     review = execute(
         """
@@ -89,6 +103,7 @@ def latest_campaign_preview_reviews(limit: int = 25) -> dict[str, Any]:
     rows = fetch_all(
         """
         SELECT r.id, r.campaign_lead_id, r.action, r.reason, r.actor, r.created_at,
+               r.result_json,
                c.name AS campaign_name, b.domain, a.public_slug
         FROM campaign_preview_reviews r
         JOIN campaign_leads cl ON cl.id = r.campaign_lead_id
@@ -110,9 +125,10 @@ def latest_campaign_preview_reviews(limit: int = 25) -> dict[str, Any]:
             "actor": row["actor"],
             "campaign_name": row["campaign_name"],
             "domain": row["domain"],
-            "audit_slug": row["public_slug"],
-            "created_at": row["created_at"],
-        }
+                "audit_slug": row["public_slug"],
+                "evidence": (row["result_json"] or {}).get("evidence", {}) if isinstance(row["result_json"], dict) else {},
+                "created_at": row["created_at"],
+            }
         for row in rows
     ]
     return json_safe(
@@ -180,6 +196,52 @@ def campaign_preview_review_summary(campaign_id: str) -> dict[str, Any]:
     )
 
 
+def preview_review_evidence(
+    *,
+    lead_score: int,
+    audit_strength: int,
+    issue_count: int,
+    critical_high_count: int,
+    screenshot_count: int,
+    public_slug: str | None,
+) -> dict[str, Any]:
+    approval_paths = {
+        "strong_score_path": lead_score >= 80 and audit_strength >= 75,
+        "two_issue_evidence_path": lead_score >= 75 and audit_strength >= 70 and issue_count >= 2 and critical_high_count >= 1 and screenshot_count >= 1,
+        "single_high_issue_two_screenshot_path": lead_score >= 74 and audit_strength >= 70 and critical_high_count >= 1 and screenshot_count >= 2,
+        "local_evidence_strength_path": lead_score >= 72 and audit_strength >= 77,
+    }
+    gaps = []
+    if not public_slug:
+        gaps.append("missing_public_audit_page")
+    if lead_score < 72:
+        gaps.append("lead_score_below_lowest_auto_review_path")
+    if audit_strength < 70:
+        gaps.append("audit_strength_below_minimum_auto_review_path")
+    if issue_count < 1:
+        gaps.append("no_public_issues_recorded")
+    if critical_high_count < 1:
+        gaps.append("no_critical_or_high_public_issue")
+    if screenshot_count < 1:
+        gaps.append("missing_screenshot_evidence")
+    elif screenshot_count < 2:
+        gaps.append("single_screenshot_only")
+    if issue_count < 2:
+        gaps.append("single_issue_only")
+    decision_basis = "approval_path_matched" if public_slug and any(approval_paths.values()) else "needs_more_evidence"
+    return {
+        "lead_score": lead_score,
+        "audit_strength_score": audit_strength,
+        "issue_count": issue_count,
+        "critical_high_count": critical_high_count,
+        "screenshot_count": screenshot_count,
+        "has_public_audit_page": bool(public_slug),
+        "approval_paths": approval_paths,
+        "evidence_gaps": gaps,
+        "decision_basis": decision_basis,
+    }
+
+
 def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_id: str | None = None, reconsider_held: bool = False) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 25), 100))
     rows = fetch_all(
@@ -237,6 +299,14 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
         issue_count = int(row["issue_count"] or 0)
         critical_high_count = int(row["critical_high_count"] or 0)
         screenshot_count = int(row["screenshot_count"] or 0)
+        evidence = preview_review_evidence(
+            lead_score=lead_score,
+            audit_strength=audit_strength,
+            issue_count=issue_count,
+            critical_high_count=critical_high_count,
+            screenshot_count=screenshot_count,
+            public_slug=row.get("public_slug"),
+        )
         domain = (row["domain"] or "").lower()
         lead_status = row["lead_status"] or ""
         action = "held"
@@ -271,11 +341,14 @@ def auto_review_campaign_previews(limit: int = 25, apply: bool = True, campaign_
             "issue_count": issue_count,
             "critical_high_count": critical_high_count,
             "screenshot_count": screenshot_count,
+            "evidence_gaps": evidence["evidence_gaps"],
+            "approval_paths": evidence["approval_paths"],
+            "decision_basis": evidence["decision_basis"],
             "action": action,
             "reason": reason,
         }
         if apply:
-            review_campaign_preview(str(row["campaign_lead_id"]), action, reason, "campaign_preview_self_review_agent")
+            review_campaign_preview(str(row["campaign_lead_id"]), action, reason, "campaign_preview_self_review_agent", evidence)
             applied += 1
         decisions.append(decision)
     return json_safe(
