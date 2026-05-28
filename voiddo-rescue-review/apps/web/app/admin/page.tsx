@@ -53,6 +53,18 @@ export default async function AdminPage() {
     await postJson("/admin/lead-stockpile-health/run", { target_preview_count, canary_count, limit, apply });
   }
 
+  async function runLeadSupplyBuildout(formData: FormData) {
+    "use server";
+    const target_preview_count = Number(formData.get("target_preview_count") || 100);
+    const canary_count = Number(formData.get("canary_count") || 20);
+    const limit = Number(formData.get("limit") || 120);
+    const max_cycles = Number(formData.get("max_cycles") || 1);
+    const max_seconds = Number(formData.get("max_seconds") || 90);
+    const enrichment_limit = Number(formData.get("enrichment_limit") || 0);
+    const apply = String(formData.get("apply") || "true") === "true";
+    await postJson("/admin/lead-supply-buildout/run", { target_preview_count, canary_count, limit, max_cycles, max_seconds, enrichment_limit, apply });
+  }
+
   const requestHeaders = await headers();
   const authorization = requestHeaders.get("authorization") || "";
   const data = await fetchJson("/admin/metrics", authorization ? { Authorization: authorization } : {});
@@ -78,6 +90,8 @@ export default async function AdminPage() {
   const campaignControlRoomData = await fetchJson("/admin/campaign-control-room?limit=25&threshold=70", authorization ? { Authorization: authorization } : {});
   const campaignActionsData = await fetchJson("/admin/campaign-actions?limit=8", authorization ? { Authorization: authorization } : {});
   const leadStockpileData = await fetchJson("/admin/lead-stockpile-health?target_preview_count=50&canary_count=20&limit=100", authorization ? { Authorization: authorization } : {});
+  const leadSupplyBuildoutData = await fetchJson("/admin/lead-supply-buildout?target_preview_count=100&canary_count=20&limit=120", authorization ? { Authorization: authorization } : {});
+  const qualityTargetsData = await fetchJson("/admin/lead-discovery/quality-aware-regional-targets?limit_targets=5", authorization ? { Authorization: authorization } : {});
   const launchReadinessData = await fetchJson("/admin/launch-readiness-scoreboard?limit=25", authorization ? { Authorization: authorization } : {});
   const launchActivationData = await fetchJson("/admin/launch-activation?limit=25", authorization ? { Authorization: authorization } : {});
   const launchRunbookData = await fetchJson("/admin/launch-activation/runbook?limit=25", authorization ? { Authorization: authorization } : {});
@@ -136,6 +150,10 @@ export default async function AdminPage() {
   const leadStockpile = leadStockpileData?.health || {};
   const leadStockpileHistory = leadStockpileData?.history || {};
   const latestLeadStockpileRun = Array.isArray(leadStockpileHistory.runs) ? leadStockpileHistory.runs[0] || {} : {};
+  const leadSupplyBuildout = leadSupplyBuildoutData?.supply || {};
+  const leadSupplyAfter = leadSupplyBuildout.after || {};
+  const qualityTargets = qualityTargetsData?.plan || {};
+  const qualityTargetRows = Array.isArray(qualityTargets.targets) ? qualityTargets.targets : [];
   const launchReadiness = launchReadinessData?.scoreboard || {};
   const launchActivation = launchActivationData?.activation || {};
   const launchRunbook = launchRunbookData?.runbook || {};
@@ -308,6 +326,16 @@ export default async function AdminPage() {
                 <span>{leadStockpile.decision ?? "checking"}</span>
               </div>
               <div className="segment-card">
+                <span className="tag">supply loop</span>
+                <strong>{leadSupplyBuildout.decision ?? "checking"}</strong>
+                <span>{leadSupplyAfter.approved_preview_count ?? leadStockpile.approved_preview_count ?? 0}/{leadSupplyAfter.target_preview_count ?? 100} reserve</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">target plan</span>
+                <strong>{qualityTargets.selected_count ?? 0}/{qualityTargets.target_pool_count ?? 0}</strong>
+                <span>{qualityTargets.strategy ?? "quality-aware scouting"}</span>
+              </div>
+              <div className="segment-card">
                 <span className="tag">canary stock</span>
                 <strong>{leadStockpile.live_queue_candidate_count ?? liveQueue.candidate_count ?? 0}/{leadStockpile.canary_count ?? 20}</strong>
                 <span>approved queue candidates</span>
@@ -431,8 +459,24 @@ export default async function AdminPage() {
                 <span>held {leadStockpile.held_preview_count ?? 0}</span>
                 <span>latest {latestLeadStockpileRun.decision ?? "none"}</span>
               </div>
+              <div className="segment-row">
+                <span className="readiness-chip">{leadSupplyBuildout.status ?? "supply"}</span>
+                <strong>Bounded supply buildout</strong>
+                <span>decision {leadSupplyBuildout.decision ?? "not run"}</span>
+                <span>cycles {leadSupplyBuildout.cycle_count ?? 0}</span>
+                <span>scanner {leadSupplyAfter.scanner_active_count ?? leadStockpile.scanner_active_count ?? 0}</span>
+              </div>
             </div>
             <div className="segments-list">
+              {qualityTargetRows.slice(0, 5).map((target: any) => (
+                <div className="segment-row" key={`${target.country}-${target.city}-${target.niche}`}>
+                  <span className="readiness-chip">{target.tier ?? "target"}</span>
+                  <strong>{target.country} · {target.city} · {target.niche}</strong>
+                  <span>quality {target.quality_score ?? 0}</span>
+                  <span>priority {target.priority ?? 0}</span>
+                  <span>{target.source_name ?? "source"}</span>
+                </div>
+              ))}
               {campaignSegments.slice(0, 6).map((segment: any) => (
                 <div className="segment-row" key={`${segment.country}-${segment.language}-${segment.niche}`}>
                   <span className="readiness-chip">{segment.decision ?? "preview"}</span>
@@ -523,6 +567,16 @@ export default async function AdminPage() {
                 <input type="hidden" name="limit" value="100" />
                 <input type="hidden" name="apply" value="true" />
                 <button className="button secondary" type="submit">Refresh stockpile</button>
+              </form>
+              <form action={runLeadSupplyBuildout}>
+                <input type="hidden" name="target_preview_count" value="100" />
+                <input type="hidden" name="canary_count" value="20" />
+                <input type="hidden" name="limit" value="120" />
+                <input type="hidden" name="max_cycles" value="1" />
+                <input type="hidden" name="max_seconds" value="90" />
+                <input type="hidden" name="enrichment_limit" value="0" />
+                <input type="hidden" name="apply" value="true" />
+                <button className="button secondary" type="submit">Run supply step</button>
               </form>
             </div>
             <div className="segment-grid">
