@@ -638,14 +638,25 @@ def scout_source_readiness_regression_guard(limit: int = 12) -> dict[str, Any]:
         seen_sources.add(source_key)
         if row.get("status") == "PASS_SOURCE_READY":
             continue
-        had_prior_pass = any(
-            prior_row.get("source_id") == source_key
-            and prior_row.get("id") != row.get("id")
-            and prior_row.get("status") == "PASS_SOURCE_READY"
-            and not any(bool(prior_row.get(flag)) for flag in ["send_mail", "smtp_called", "live_outreach_allowed", "raw_recipient_addresses_included", "secrets_included"])
-            for prior_row in rows
+        prior_pass = fetch_one(
+            """
+            SELECT id
+            FROM scout_source_readiness_checks
+            WHERE source_id = %s
+              AND id != %s
+              AND status = 'PASS_SOURCE_READY'
+              AND send_mail = false
+              AND smtp_called = false
+              AND live_outreach_allowed = false
+              AND raw_recipient_addresses_included = false
+              AND secrets_included = false
+              AND created_at <= %s
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            (source_key, row.get("id"), row.get("created_at")),
         )
-        if had_prior_pass:
+        if prior_pass:
             degraded_latest_for_source = dict(row)
             break
     latest = degraded_latest_for_source or (safe_pass_rows[0] if safe_pass_rows else latest_overall)
