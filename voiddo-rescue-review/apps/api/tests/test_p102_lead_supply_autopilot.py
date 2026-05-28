@@ -182,6 +182,53 @@ def test_lead_supply_buildout_runs_bounded_safe_cycle(monkeypatch):
     assert result["live_outreach_allowed"] is False
 
 
+def test_lead_supply_buildout_summarizes_nested_source_campaign_counts():
+    result = buildout_module._action_summary(
+        {
+            "name": "advance_source_to_campaign",
+            "status": "advanced",
+            "source_queue": {"queued_count": 1, "created_scanner_jobs": 4},
+            "scout_processing": {"processed": 1, "accepted": 3, "found_count": 7},
+            "campaign_control_room": {"preview_generation": {"created": 2}},
+            "blockers": [],
+        }
+    )
+    assert result["queued_count"] == 1
+    assert result["created_scanner_jobs"] == 4
+    assert result["processed"] == 1
+    assert result["accepted_count"] == 3
+    assert result["found_count"] == 7
+    assert result["campaign_previews_created"] == 2
+    assert result["blocker_count"] == 0
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+
+
+def test_lead_supply_buildout_summarizes_nested_scout_processing_results():
+    result = buildout_module._action_summary(
+        {
+            "name": "advance_source_to_campaign",
+            "status": "advanced",
+            "source_queue": {"queued_count": 1},
+            "scout_processing": {
+                "processed": 2,
+                "results": [
+                    {"found": 2, "accepted": 1, "scanner_jobs": 1},
+                    {"found": 3, "accepted": 2, "scanner_jobs": 2},
+                ],
+            },
+            "campaign_control_room": {"preview_generation": {"created": 2}},
+        }
+    )
+    assert result["processed"] == 2
+    assert result["found_count"] == 5
+    assert result["accepted_count"] == 3
+    assert result["created_scanner_jobs"] == 3
+    assert result["campaign_previews_created"] == 2
+    assert result["send_mail"] is False
+    assert result["live_outreach_allowed"] is False
+
+
 def test_lead_supply_buildout_endpoint_and_agent_are_admin_gated():
     assert client.get("/admin/lead-supply-buildout").status_code == 401
     response = client.get("/admin/lead-supply-buildout", headers=admin_headers())

@@ -53,17 +53,37 @@ def _progress_key(snapshot: dict[str, Any]) -> tuple[int, int, int, int, int]:
 
 
 def _action_summary(action: dict[str, Any]) -> dict[str, Any]:
+    source_queue = action.get("source_queue") or {}
+    scout_processing = action.get("scout_processing") or {}
+    campaign_control_room = action.get("campaign_control_room") or {}
+    preview_generation = campaign_control_room.get("preview_generation") or {}
+    scout_results = scout_processing.get("results") or []
+    scout_found = sum(int(item.get("found") or item.get("found_count") or 0) for item in scout_results if isinstance(item, dict))
+    scout_accepted = sum(int(item.get("accepted") or item.get("accepted_count") or 0) for item in scout_results if isinstance(item, dict))
+    scout_jobs = sum(int(item.get("scanner_jobs") or item.get("created_scanner_jobs") or 0) for item in scout_results if isinstance(item, dict))
+    blockers = action.get("blockers") or []
     return {
         "name": action.get("name"),
         "status": action.get("status") or action.get("decision") or "completed",
         "decision": action.get("decision"),
         "created_sources": int(action.get("created_sources") or 0),
         "non_empty_sources": int(action.get("non_empty_sources") or 0),
-        "accepted_count": int(action.get("accepted_count") or 0),
-        "found_count": int(action.get("found_count") or 0),
-        "created_scanner_jobs": int(action.get("created_scanner_jobs") or 0),
-        "queued_count": int(action.get("queued_count") or 0),
-        "processed": int(action.get("processed") or 0),
+        "accepted_count": int(
+            action.get("accepted_count") or scout_processing.get("accepted_count") or scout_processing.get("accepted") or scout_accepted or 0
+        ),
+        "found_count": int(action.get("found_count") or scout_processing.get("found_count") or scout_processing.get("found") or scout_found or 0),
+        "created_scanner_jobs": int(
+            action.get("created_scanner_jobs")
+            or source_queue.get("created_scanner_jobs")
+            or scout_processing.get("created_scanner_jobs")
+            or scout_processing.get("scanner_jobs")
+            or scout_jobs
+            or 0
+        ),
+        "queued_count": int(action.get("queued_count") or source_queue.get("queued_count") or 0),
+        "processed": int(action.get("processed") or scout_processing.get("processed") or 0),
+        "campaign_previews_created": int(action.get("campaign_previews_created") or preview_generation.get("created") or 0),
+        "blocker_count": len(blockers),
         **SAFE_FLAGS,
     }
 
