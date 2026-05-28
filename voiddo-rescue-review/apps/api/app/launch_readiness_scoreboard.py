@@ -44,6 +44,11 @@ def _visual_quality_evidence() -> dict[str, Any]:
 
 def _state(score: int, blockers: list[dict[str, Any]], evidence: dict[str, Any]) -> str:
     settings = evidence["settings"]
+    live_flags_armed = (
+        not settings["outreach_dry_run"]
+        and not settings["outreach_paused"]
+        and settings["first_live_send_flag"]
+    )
     if blockers:
         if any(row.get("code") == "warmup_maturity_not_verified" for row in blockers) and evidence["checkout"]["ready"]:
             return "WARMUP_SCHEDULED_NO_OUTREACH"
@@ -52,16 +57,14 @@ def _state(score: int, blockers: list[dict[str, Any]], evidence: dict[str, Any])
         return "NOT_LAUNCH_READY"
     if not evidence["warmup_maturity"].get("allowed") and int(evidence["warmup"].get("scheduled_total", 0) or 0) > 0:
         return "WARMUP_SCHEDULED_NO_OUTREACH"
-    if int(evidence["campaigns"].get("ready_candidate_count", 0) or 0) > 0:
-        return "PREVIEW_PIPELINE_READY_NO_OUTREACH"
     if (
         score >= 95
-        and not settings["outreach_dry_run"]
-        and not settings["outreach_paused"]
-        and settings["first_live_send_flag"]
+        and live_flags_armed
         and evidence["transport_gate"].get("allowed") is True
     ):
         return "LIVE_OUTREACH_READY"
+    if int(evidence["campaigns"].get("ready_candidate_count", 0) or 0) > 0:
+        return "PREVIEW_PIPELINE_READY_NO_OUTREACH"
     return "CHECKOUT_READY_NOT_WARMED" if evidence["checkout"]["ready"] else "NOT_LAUNCH_READY"
 
 
@@ -80,6 +83,12 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
     policy_score = mailer_policy_score()
     policy_history = latest_mailer_policy_score_history(3)
     transport = latest_preview_transport_gate_status()
+    live_flags_armed = not settings.outreach_dry_run and not settings.outreach_paused and settings.first_live_send_flag
+    live_flags_partially_changed = (
+        settings.outreach_dry_run is not True
+        or settings.outreach_paused is not True
+        or settings.first_live_send_flag is not False
+    ) and not live_flags_armed
     settings_evidence = {
         "global_kill_switch": settings.global_kill_switch,
         "scanning_paused": settings.scanning_paused,
@@ -145,11 +154,11 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
     if policy_score.get("decision") != "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW":
         _add_blocker(blockers, "mailer_policy_score_not_ready", "high", policy_score.get("decision"))
         score -= 15
-    if transport.get("allowed"):
+    if transport.get("allowed") and not live_flags_armed:
         _add_blocker(blockers, "transport_gate_unexpectedly_allows_live_send", "critical")
         score -= 50
-    if not settings.outreach_paused or not settings.outreach_dry_run or settings.first_live_send_flag:
-        _add_blocker(blockers, "live_outreach_flags_not_blocked", "critical", settings_evidence)
+    if live_flags_partially_changed:
+        _add_blocker(blockers, "live_outreach_flags_inconsistent", "critical", settings_evidence)
         score -= 50
 
     score = max(0, min(100, score))

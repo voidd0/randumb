@@ -123,6 +123,87 @@ def test_launch_readiness_scoreboard_can_reach_preview_state_but_not_live_withou
     assert result["evidence"]["transport_gate"]["checks"]["unsubscribe_one_click_ready"] is True
 
 
+def test_launch_readiness_scoreboard_can_reach_live_state_when_all_live_flags_and_transport_pass(monkeypatch):
+    settings = SimpleNamespace(
+        global_kill_switch=False,
+        scanning_paused=False,
+        outreach_dry_run=False,
+        outreach_paused=False,
+        auto_replies_paused=True,
+        first_live_send_flag=True,
+        paddle_provisioning_paused=False,
+    )
+    monkeypatch.setattr(scoreboard_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(scoreboard_module, "checkout_config_status", lambda _: {"ready": True, "missing_price_keys": []})
+    monkeypatch.setattr(scoreboard_module, "latest_decision", lambda table: "PASS")
+    monkeypatch.setattr(
+        scoreboard_module,
+        "mail_signal_summary",
+        lambda hours=24: {"window_hours": hours, "items": [], "bounce_or_dsn_count": 0, "rate_limit_count": 0, "spam_signal_count": 0},
+    )
+    monkeypatch.setattr(scoreboard_module, "warmup_calendar_health", lambda: {"scheduled_total": 10, "sent_today": 5, "due_now": 0, "blocked_today": 0})
+    monkeypatch.setattr(scoreboard_module, "warmup_domain_maturity_status", lambda settings=None: {"allowed": True, "warmup_sent_count": 5, "legacy_warmup_event_count": 0, "maturity_source": "warmup_schedule_sent", "blockers": []})
+    monkeypatch.setattr(
+        scoreboard_module,
+        "latest_quality_summary",
+        lambda: {
+            "all_pass": True,
+            "blockers": [],
+            "runs": [
+                {"tool": "huanshu", "status": "PASS"},
+                {"tool": "axe-core-playwright", "status": "PASS"},
+                {"tool": "pa11y", "status": "PASS"},
+                {"tool": "lighthouse-ci", "status": "PASS"},
+            ],
+        },
+    )
+    monkeypatch.setattr(scoreboard_module, "mailer_policy_score", lambda: {"score": 100, "decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW", "blockers": []})
+    monkeypatch.setattr(scoreboard_module, "latest_mailer_policy_score_history", lambda limit=3: {"latest_decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW"})
+    monkeypatch.setattr(scoreboard_module, "latest_preview_transport_gate_status", lambda: {"allowed": True, "reason": "allowed", "checks": {"has_unsubscribe": True, "unsubscribe_one_click_ready": True, "html_body_ready": True}, "source": "latest_preview_outreach_message"})
+    monkeypatch.setattr(scoreboard_module, "revenue_loop_snapshot", lambda limit=25: {"launch_readiness_state": "PREVIEW_PIPELINE_READY_NO_OUTREACH", "scanner": {"audit_count": 1}, "customers": {"customer_count": 1, "payment_count": 1, "fix_request_count": 1}})
+    monkeypatch.setattr(scoreboard_module, "source_campaign_operator_snapshot", lambda limit=25: {"candidate_count": 1, "queued_or_running_runs": [], "scanner_jobs": {"completed": 1}})
+    monkeypatch.setattr(scoreboard_module, "campaign_control_room_snapshot", lambda limit=25, threshold=70: {"candidate_count": 1, "ready_candidate_count": 1, "segment_count": 1})
+    monkeypatch.setattr(scoreboard_module, "buyer_journey_readiness_scoreboard", lambda: {"campaign_preview_count": 1, "live_outreach_sent_count": 0, "warmup_sent_count": 5})
+    monkeypatch.setattr(scoreboard_module, "_count", lambda sql, params=(): 0)
+
+    result = launch_readiness_scoreboard(5)
+    assert result["blocker_count"] == 0
+    assert result["state"] == "LIVE_OUTREACH_READY"
+    assert result["live_outreach_allowed"] is True
+
+
+def test_launch_readiness_scoreboard_blocks_inconsistent_live_flags(monkeypatch):
+    settings = SimpleNamespace(
+        global_kill_switch=False,
+        scanning_paused=False,
+        outreach_dry_run=False,
+        outreach_paused=True,
+        auto_replies_paused=True,
+        first_live_send_flag=False,
+        paddle_provisioning_paused=False,
+    )
+    monkeypatch.setattr(scoreboard_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(scoreboard_module, "checkout_config_status", lambda _: {"ready": True, "missing_price_keys": []})
+    monkeypatch.setattr(scoreboard_module, "latest_decision", lambda table: "PASS")
+    monkeypatch.setattr(scoreboard_module, "mail_signal_summary", lambda hours=24: {"window_hours": hours, "items": [], "bounce_or_dsn_count": 0, "rate_limit_count": 0, "spam_signal_count": 0})
+    monkeypatch.setattr(scoreboard_module, "warmup_calendar_health", lambda: {"scheduled_total": 10, "sent_today": 5, "due_now": 0, "blocked_today": 0})
+    monkeypatch.setattr(scoreboard_module, "warmup_domain_maturity_status", lambda settings=None: {"allowed": True, "warmup_sent_count": 5, "legacy_warmup_event_count": 0, "maturity_source": "warmup_schedule_sent", "blockers": []})
+    monkeypatch.setattr(scoreboard_module, "latest_quality_summary", lambda: {"all_pass": True, "blockers": [], "runs": [{"tool": "huanshu", "status": "PASS"}, {"tool": "axe-core-playwright", "status": "PASS"}, {"tool": "pa11y", "status": "PASS"}, {"tool": "lighthouse-ci", "status": "PASS"}]})
+    monkeypatch.setattr(scoreboard_module, "mailer_policy_score", lambda: {"score": 100, "decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW", "blockers": []})
+    monkeypatch.setattr(scoreboard_module, "latest_mailer_policy_score_history", lambda limit=3: {"latest_decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW"})
+    monkeypatch.setattr(scoreboard_module, "latest_preview_transport_gate_status", lambda: {"allowed": False, "reason": "live_outreach_not_approved", "checks": {}})
+    monkeypatch.setattr(scoreboard_module, "revenue_loop_snapshot", lambda limit=25: {"launch_readiness_state": "PREVIEW_PIPELINE_READY_NO_OUTREACH", "scanner": {"audit_count": 1}, "customers": {"customer_count": 1, "payment_count": 1, "fix_request_count": 1}})
+    monkeypatch.setattr(scoreboard_module, "source_campaign_operator_snapshot", lambda limit=25: {"candidate_count": 1, "queued_or_running_runs": [], "scanner_jobs": {"completed": 1}})
+    monkeypatch.setattr(scoreboard_module, "campaign_control_room_snapshot", lambda limit=25, threshold=70: {"candidate_count": 1, "ready_candidate_count": 1, "segment_count": 1})
+    monkeypatch.setattr(scoreboard_module, "buyer_journey_readiness_scoreboard", lambda: {"campaign_preview_count": 1, "live_outreach_sent_count": 0, "warmup_sent_count": 5})
+    monkeypatch.setattr(scoreboard_module, "_count", lambda sql, params=(): 0)
+
+    result = launch_readiness_scoreboard(5)
+    assert result["state"] != "LIVE_OUTREACH_READY"
+    assert "live_outreach_flags_inconsistent" in {item["code"] for item in result["blockers"]}
+    assert result["live_outreach_allowed"] is False
+
+
 def test_launch_readiness_scoreboard_blocks_unverified_warmup_maturity(monkeypatch):
     settings = SimpleNamespace(
         global_kill_switch=False,
