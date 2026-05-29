@@ -1551,6 +1551,8 @@ def scout_source_queue_preview_snapshot(limit: int = 20) -> dict[str, Any]:
 
 
 def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> dict[str, Any]:
+    from .canary_clean_window_forecast import canary_clean_window_forecast
+
     mail_qa_decision = latest_mail_qa_decision()
     bounce_count = recent_mail_signal_count(["bounce", "dsn"], 24)
     rate_limit_signal_count = recent_mail_signal_count(["smtp_rate_limit"], 24)
@@ -1565,6 +1567,7 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
         and os.environ.get("OUTREACH_PAUSED", "true").lower() == "false"
         and os.environ.get("FIRST_LIVE_SEND_FLAG", "false").lower() == "true"
     )
+    clean_window = canary_clean_window_forecast(24, store=False)
     if bounce_count > 0 or rate_limit_signal_count > 0 or spam_signal_count > 0 or mail_auth_failure_count > 0:
         next_allowed_action = "wait_until_recent_mail_risk_signal_window_clears_then_recheck_mail_qa"
     elif mail_qa_decision != "PASS":
@@ -1593,6 +1596,9 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
         "rate_limit_signal_count": rate_limit_signal_count,
         "spam_signal_count": spam_signal_count,
         "mail_auth_failure_count": mail_auth_failure_count,
+        "canary_clean_window_status": clean_window.get("status"),
+        "canary_clean_window_eligible_after": clean_window.get("eligible_after"),
+        "canary_clean_window_seconds_remaining": int(clean_window.get("seconds_remaining") or 0),
         "next_allowed_action": next_allowed_action,
         "launch_readiness_state": launch_readiness_state(),
         "mailer_policy_trend": mailer_policy_trend_snapshot(),
@@ -1625,10 +1631,16 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
         f"- deliverability_diagnostic_sent_count: {snapshot['deliverability_diagnostic_sent_count']}",
         f"- warmup_sent_count: {snapshot['warmup_sent_count']}",
         f"- live_outreach_sent_count: {snapshot['live_outreach_sent_count']}",
+        f"- live_outreach_bounced_count: {snapshot['live_outreach_bounced_count']}",
+        f"- live_outreach_sent_or_bounced_count: {snapshot['live_outreach_sent_or_bounced_count']}",
+        f"- live_outreach_queued_count: {snapshot['live_outreach_queued_count']}",
         f"- bounce_count_24h: {snapshot['bounce_count']}",
         f"- rate_limit_signal_count_24h: {snapshot['rate_limit_signal_count']}",
         f"- spam_signal_count_24h: {snapshot['spam_signal_count']}",
         f"- mail_auth_failure_count_24h: {snapshot['mail_auth_failure_count']}",
+        f"- canary_clean_window_status: {snapshot['canary_clean_window_status']}",
+        f"- canary_clean_window_eligible_after: {snapshot['canary_clean_window_eligible_after']}",
+        f"- canary_clean_window_seconds_remaining: {snapshot['canary_clean_window_seconds_remaining']}",
         f"- next_allowed_action: {snapshot['next_allowed_action']}",
         f"- launch_readiness_state: {snapshot['launch_readiness_state']}",
         f"- mailer_policy_score_history_count: {policy_trend['policy_score_history_count']}",
