@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from psycopg.types.json import Jsonb
 
@@ -1166,7 +1167,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     blocked = bool(owner_mail_blockers)
     email_sent = False
     send_decision = "blocked_owner_mail_gate" if blocked else "not_sent_draft_only"
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(ZoneInfo("Asia/Jerusalem")).date().isoformat()
     today_payment = fetch_one(
         """
         SELECT count(*) AS count, COALESCE(sum(amount), 0) AS amount
