@@ -17,10 +17,11 @@ SAFE_FLAGS = {
     "raw_recipient_addresses_included": False,
     "secrets_included": False,
 }
-CANARY_BLOCKED_DOMAIN_EXACT = ("redroof.com", "chcb.org", "oscc.ca")
+CANARY_BLOCKED_DOMAIN_EXACT = ("redroof.com", "chcb.org", "oscc.ca", "theisens.com")
 CANARY_BLOCKED_TEXT_PATTERNS = (
     "%redroof%",
     "%red roof%",
+    "%theisens%",
     "%communityhealth%",
     "%community health%",
     "%healthsystem%",

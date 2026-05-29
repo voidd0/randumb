@@ -61,6 +61,7 @@ EXCLUDED_LARGE_BRAND_TOKENS = {
     "ryancompanies",
     "schooldistrict",
     "super8",
+    "theisens",
     "twitter",
     "university",
     "wales.nhs.uk",
@@ -86,6 +87,7 @@ EXCLUDED_LARGE_BRAND_DOMAINS = {
     "idealimage.com",
     "redroof.com",
     "rona.ca",
+    "theisens.com",
     "chcb.org",
     "oscc.ca",
 }

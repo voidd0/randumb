@@ -19,10 +19,11 @@ SAFE_FLAGS = {
     "secrets_included": False,
 }
 TEST_COUNTRY_PATTERN = r"^(P7|P8|P9|P10|P11|P12|P59|P60|P61|P62|P63|P68|P72|P73|P74)"
-CANARY_BLOCKED_DOMAIN_EXACT = ("redroof.com", "chcb.org", "oscc.ca")
+CANARY_BLOCKED_DOMAIN_EXACT = ("redroof.com", "chcb.org", "oscc.ca", "theisens.com")
 CANARY_BLOCKED_TEXT_PATTERNS = (
     "%redroof%",
     "%red roof%",
+    "%theisens%",
     "%communityhealth%",
     "%community health%",
     "%healthsystem%",
