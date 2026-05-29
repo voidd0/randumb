@@ -89,8 +89,11 @@ def main() -> int:
 
     current["OUTREACH_DRY_RUN"] = "true"
     current["OUTREACH_PAUSED"] = "true"
+    current["OUTREACH_WORKER_ENABLED"] = "false"
+    current["OUTREACH_MESSAGES_PER_TICK"] = "1"
     current["AUTO_REPLIES_PAUSED"] = "true"
     current["FIRST_LIVE_SEND_FLAG"] = "false"
+    current["ALLOW_LIVE_OUTREACH_ACTIVATION"] = current.get("ALLOW_LIVE_OUTREACH_ACTIVATION", "false")
     current["EMAIL_QA_REQUIRED"] = "true"
     current["VISUAL_QA_REQUIRED"] = "true"
 
