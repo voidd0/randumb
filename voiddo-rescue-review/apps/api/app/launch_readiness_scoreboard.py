@@ -7,6 +7,7 @@ from .buyer_journey_scenarios import buyer_journey_readiness_scoreboard
 from .campaign_control_room import campaign_control_room_snapshot
 from .config import get_settings
 from .db import fetch_one
+from .mail_send_compliance import run_mail_send_compliance_agent
 from .mailer_control_room import latest_mailer_policy_score_history, mailer_policy_score
 from .p0 import json_safe, latest_decision, latest_preview_transport_gate_status, latest_production_visual_qa_decision, mail_signal_summary, warmup_calendar_health, warmup_domain_maturity_status
 from .quality_plugins import latest_quality_summary
@@ -82,6 +83,7 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
     visual = _visual_quality_evidence()
     policy_score = mailer_policy_score()
     policy_history = latest_mailer_policy_score_history(3)
+    send_compliance = run_mail_send_compliance_agent(write_report=False)
     transport = latest_preview_transport_gate_status()
     live_flags_armed = not settings.outreach_dry_run and not settings.outreach_paused and settings.first_live_send_flag
     live_flags_partially_changed = (
@@ -154,6 +156,9 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
     if policy_score.get("decision") != "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW":
         _add_blocker(blockers, "mailer_policy_score_not_ready", "high", policy_score.get("decision"))
         score -= 15
+    if send_compliance.get("decision") != "PASS":
+        _add_blocker(blockers, "mail_send_compliance_not_pass", "critical", send_compliance.get("blockers", []))
+        score -= 30
     if transport.get("allowed") and not live_flags_armed:
         _add_blocker(blockers, "transport_gate_unexpectedly_allows_live_send", "critical")
         score -= 50
@@ -193,6 +198,13 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
         },
         "buyer_journey": buyer_journey,
         "transport_gate": transport,
+        "mail_send_compliance": {
+            "decision": send_compliance.get("decision"),
+            "status": send_compliance.get("status"),
+            "blocker_count": send_compliance.get("blocker_count", 0),
+            "blockers": send_compliance.get("blockers", []),
+            "outgoing_totals": send_compliance.get("outgoing_totals", {}),
+        },
         "counts": {
             "live_outreach_sent": _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'"),
             "warmup_sent": _count("SELECT count(*) FROM warmup_schedule WHERE status = 'sent'"),
