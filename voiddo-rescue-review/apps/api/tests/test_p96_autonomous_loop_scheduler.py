@@ -185,6 +185,42 @@ def test_live_canary_control_blocks_without_activation_env(monkeypatch):
     assert result["blockers"] == ["allow_live_outreach_activation_env_false"]
 
 
+def test_live_canary_control_does_not_stage_duplicate_when_queue_exists(monkeypatch):
+    script_path = SCRIPT_PATH.with_name("rescue_live_canary_control.py")
+    spec = importlib.util.spec_from_file_location("rescue_live_canary_control", script_path)
+    assert spec and spec.loader
+    control = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(control)
+    calls: list[str] = []
+
+    class Args:
+        confirm = "START LIVE OUTREACH"
+        confirm_send_window = ""
+        send_window = False
+        apply = True
+        limit = 20
+
+    monkeypatch.setattr(control, "preflight", lambda _token, _limit: {"activation": {"decision": "READY_FOR_OPERATOR_ENV_ACTIVATION", "blockers": []}, "packet": {"status": "ready", "blockers": []}, "plan": {"decision": "READY_NO_SEND_CANARY_WINDOW_PLAN", "blockers": []}})
+    monkeypatch.setattr(control, "write_env_updates", lambda _updates: "/tmp/backup.env")
+    monkeypatch.setattr(control, "restart_services", lambda _services: None)
+    monkeypatch.setattr(control, "live_queue_status", lambda _token, _limit: {"history": {"queued_message_count": 3}})
+
+    def fake_api(path, _token, payload=None, method="POST", timeout=180):
+        calls.append(path)
+        if path == "/admin/launch-activation/apply":
+            return {"activation": {"activation": {"decision": "READY_RECORDED_NO_ENV_CHANGE"}}}
+        if path == "/admin/outreach/live-queue/stage":
+            raise AssertionError("must not stage when queued messages already exist")
+        return {}
+
+    monkeypatch.setattr(control, "api_request", fake_api)
+    result = control.activate(Args(), {"ALLOW_LIVE_OUTREACH_ACTIVATION": "true"}, "token")
+    assert result["status"] == "applied"
+    assert result["staged_decision"] == "SKIPPED_EXISTING_QUEUED_CANARY"
+    assert result["existing_queued_message_count"] == 3
+    assert "/admin/outreach/live-queue/stage" not in calls
+
+
 def test_run_loop_retries_remote_disconnected(monkeypatch):
     calls = {"count": 0}
 

@@ -84,6 +84,10 @@ def preflight(token: str, limit: int) -> dict:
     return {"activation": activation, "packet": packet, "plan": plan}
 
 
+def live_queue_status(token: str, limit: int) -> dict:
+    return api_request(f"/admin/outreach/live-queue?limit={limit}", token, None, method="GET")
+
+
 def blockers_from_preflight(snapshot: dict) -> list[str]:
     blockers: list[str] = []
     if snapshot["activation"].get("decision") != "READY_FOR_OPERATOR_ENV_ACTIVATION":
@@ -128,11 +132,22 @@ def activate(args: argparse.Namespace, env: dict[str, str], token: str) -> dict:
         token,
         {"confirm_text": "START LIVE OUTREACH", "requested_by": "host_canary_control", "limit": args.limit, "dry_run": False},
     )["activation"]
-    staged = api_request(
-        "/admin/outreach/live-queue/stage",
-        token,
-        {"limit": args.limit, "dry_run": False, "requested_by": "host_canary_control"},
-    )["queue"]
+    queue_before = live_queue_status(token, args.limit)
+    queued_before = int((queue_before.get("history") or {}).get("queued_message_count") or 0)
+    if queued_before > 0:
+        staged = {
+            "result": {
+                "decision": "SKIPPED_EXISTING_QUEUED_CANARY",
+                "staged_count": 0,
+                "existing_queued_message_count": queued_before,
+            }
+        }
+    else:
+        staged = api_request(
+            "/admin/outreach/live-queue/stage",
+            token,
+            {"limit": args.limit, "dry_run": False, "requested_by": "host_canary_control"},
+        )["queue"]
     worker_enabled = False
     if args.send_window:
         backup = write_env_updates({"OUTREACH_WORKER_ENABLED": "true", "OUTREACH_MESSAGES_PER_TICK": "1"})
@@ -146,6 +161,7 @@ def activate(args: argparse.Namespace, env: dict[str, str], token: str) -> dict:
         "activation_decision": activation.get("activation", {}).get("decision"),
         "staged_decision": staged.get("result", {}).get("decision"),
         "staged_count": staged.get("result", {}).get("staged_count"),
+        "existing_queued_message_count": staged.get("result", {}).get("existing_queued_message_count", queued_before),
         "sent_count": 0,
         "secrets_included": False,
     }
