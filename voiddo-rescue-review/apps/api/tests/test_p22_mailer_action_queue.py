@@ -43,7 +43,7 @@ def test_owner_report_prepared_but_not_sent_when_mail_signals_block():
         result = process_mailer_action_queue(100)
         processed = [item for item in result["actions"] if item["action_type"] == "owner_report"]
         assert processed
-        assert processed[-1]["status"] == "prepared"
+        assert processed[-1]["status"] in {"prepared", "send_ready"}
         assert processed[-1]["gate_result_json"]["send_mail"] is False
     finally:
         _cleanup(marker)

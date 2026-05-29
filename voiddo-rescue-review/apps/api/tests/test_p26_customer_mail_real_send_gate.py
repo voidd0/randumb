@@ -39,6 +39,9 @@ def _clean_mail_gates(monkeypatch, *, sending_enabled: bool = True, real_enabled
             auto_replies_paused=True,
             customer_mail_sending_enabled=sending_enabled,
             customer_mail_real_send_enabled=real_enabled,
+            owner_report_email_enabled=False,
+            owner_sale_email_enabled=False,
+            owner_command_email="owner-p26@example.test",
             smtp_from_default="audit@voiddorescue.com",
             smtp_host="mail.example.test",
             smtp_port=587,
@@ -119,6 +122,61 @@ def test_customer_mail_smtp_failure_records_failed(monkeypatch):
         assert action["status"] == "failed"
         assert action["result_json"]["error_type"] == "RuntimeError"
         assert action["result_json"]["send_mail"] is False
+    finally:
+        _cleanup(marker)
+
+
+def test_owner_report_mail_sends_only_with_owner_flag(monkeypatch):
+    import app.mailer_action_queue as queue
+
+    marker = "p26-owner-report-send"
+    try:
+        _cleanup(marker)
+
+        monkeypatch.setattr(
+            queue,
+            "get_settings",
+            lambda: SimpleNamespace(
+                outreach_paused=True,
+                first_live_send_flag=False,
+                auto_replies_paused=True,
+                customer_mail_sending_enabled=False,
+                customer_mail_real_send_enabled=False,
+                owner_report_email_enabled=True,
+                owner_sale_email_enabled=False,
+                owner_command_email="owner-p26@example.test",
+                smtp_from_default="audit@voiddorescue.com",
+                smtp_host="mail.example.test",
+                smtp_port=587,
+                smtp_username="audit@example.test",
+                smtp_password="secret",
+            ),
+        )
+        monkeypatch.setattr(queue, "mail_signal_summary", lambda hours=24: {"bounce_or_dsn_count": 0, "rate_limit_count": 0, "spam_signal_count": 0, "mail_auth_failure_count": 0, "items": [], "window_hours": hours})
+        monkeypatch.setattr(queue, "latest_mail_qa_decision", lambda: "PASS")
+        monkeypatch.setattr(queue, "throttle_decision", lambda scope, scope_key, min_delay_seconds=600: {"allowed": True, "reason": "allowed", "checks": {}})
+        monkeypatch.setattr(queue, "record_throttle_send", lambda scope, scope_key, reason="sent": {"scope": scope, "scope_key": scope_key, "reason": reason})
+        monkeypatch.setattr(queue, "send_customer_mail_via_smtp", lambda action, preview: {"sent": True, "smtp_called": True, "provider_message_id": "<owner-p26@voiddorescue.test>"})
+
+        action = enqueue_mailer_action(
+            {
+                "action_type": "owner_report",
+                "mailbox": "support@voiddorescue.com",
+                "template_key": "owner_status_report",
+                "marker": marker,
+                "payload_json": {"report_date": "2026-05-29", "source": marker},
+            }
+        )
+        processed = queue.process_mailer_action_queue(10)
+        processed_action = next(item for item in processed["actions"] if item["id"] == action["id"])
+        assert processed_action["status"] == "send_ready"
+
+        result = send_customer_mail(10)
+        sent = next(item for item in result["actions"] if item["id"] == action["id"])
+        assert sent["status"] == "sent"
+        assert sent["result_json"]["send_mail"] is True
+        assert result["send_mail"] is True
+        assert "owner-p26@example.test" not in str(result)
     finally:
         _cleanup(marker)
 

@@ -642,7 +642,7 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
         audit_context = _link_customer_to_audit_context(customer_id, data)
         product_key = product_key_from_payload(data, settings)
         amount, currency = _amount_from_payload(data)
-        execute(
+        payment_row = execute(
             """
             INSERT INTO payments(customer_id, paddle_transaction_id, amount, currency, product_key, status)
             VALUES (%s, %s, %s, %s, %s, 'paid')
@@ -653,6 +653,39 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
             (customer_id, data.get("id"), amount, currency, product_key),
         )
         actions.append("payment_recorded")
+        try:
+            from .mailer_action_queue import enqueue_mailer_action, process_mailer_action_queue, send_customer_mail
+
+            if _is_qa_customer_email(email):
+                actions.append("owner_sale_notification_skipped_test_customer")
+            else:
+                owner_action = enqueue_mailer_action(
+                    {
+                        "action_type": "owner_sale_notification",
+                        "risk_level": "SAFE_AUTO",
+                        "mailbox": "support@voiddorescue.com",
+                        "template_key": "owner_sale_notification",
+                        "payload_json": {
+                            "source_event": "transaction.paid",
+                            "payment_id": str(payment_row["id"]),
+                            "paddle_transaction_id": data.get("id"),
+                            "product_key": product_key,
+                            "amount": amount,
+                            "currency": currency,
+                            "customer_hash": hashlib.sha256(str(email).strip().lower().encode("utf-8")).hexdigest()[:24],
+                            "audit_context_linked": bool(audit_context),
+                        },
+                    }
+                )
+                actions.append("owner_sale_notification_queued")
+                process_mailer_action_queue(20)
+                owner_send = send_customer_mail(20)
+                if owner_action.get("status") == "send_ready" or owner_send.get("send_mail"):
+                    actions.append("owner_sale_notification_send_ready")
+                if owner_send.get("send_mail"):
+                    actions.append("owner_sale_notification_sent")
+        except Exception as exc:
+            actions.append(f"owner_sale_notification_queue_failed:{type(exc).__name__}")
         if product_key in ONETIME_FIX_PRODUCTS:
             fix_row = execute(
                 """
@@ -779,6 +812,39 @@ def handle_paddle_event(payload: dict[str, Any], provisioning_paused: bool) -> d
             "INSERT INTO system_events(type, severity, message, payload_json) VALUES (%s, %s, %s, %s)",
             (f"paddle.{event_type}", "info", "Paddle subscription event processed", Jsonb({"actions": actions, "provisioning_paused": provisioning_paused})),
         )
+        if event_type in {"subscription.created", "subscription.activated"}:
+            try:
+                from .mailer_action_queue import enqueue_mailer_action, process_mailer_action_queue, send_customer_mail
+
+                if _is_qa_customer_email(email):
+                    actions.append("owner_sale_notification_skipped_test_customer")
+                else:
+                    owner_action = enqueue_mailer_action(
+                        {
+                            "action_type": "owner_sale_notification",
+                            "risk_level": "SAFE_AUTO",
+                            "mailbox": "support@voiddorescue.com",
+                            "template_key": "owner_sale_notification",
+                            "payload_json": {
+                                "source_event": event_type,
+                                "paddle_subscription_id": data.get("id"),
+                                "product_key": product_key,
+                                "amount": 0,
+                                "currency": "subscription",
+                                "customer_hash": hashlib.sha256(str(email).strip().lower().encode("utf-8")).hexdigest()[:24],
+                                "audit_context_linked": bool(audit_context),
+                            },
+                        }
+                    )
+                    actions.append("owner_sale_notification_queued")
+                    process_mailer_action_queue(20)
+                    owner_send = send_customer_mail(20)
+                    if owner_action.get("status") == "send_ready" or owner_send.get("send_mail"):
+                        actions.append("owner_sale_notification_send_ready")
+                    if owner_send.get("send_mail"):
+                        actions.append("owner_sale_notification_sent")
+            except Exception as exc:
+                actions.append(f"owner_sale_notification_queue_failed:{type(exc).__name__}")
         return {"event_type": event_type, "actions": actions, "provisioning_paused": provisioning_paused}
 
     if event_type in {"payment.failed", "transaction.payment_failed"}:

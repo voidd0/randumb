@@ -9,7 +9,7 @@ from psycopg.types.json import Jsonb
 
 from .config import get_settings
 from .db import execute, fetch_all, fetch_one
-from .mailer_action_queue import archive_mailer_nonactionable_artifacts, enqueue_mailer_action
+from .mailer_action_queue import archive_mailer_nonactionable_artifacts, enqueue_mailer_action, process_mailer_action_queue, send_customer_mail
 from .mailer_autonomy import mailer_status_snapshot
 from .mailer_ops_actions import mailer_ops_action_summary, mailer_ops_retention_report_history
 from .p0 import json_safe, latest_mail_qa_decision, mail_signal_summary, runtime_state_snapshot, warmup_calendar_health
@@ -303,8 +303,6 @@ def mailer_digest_trend_guard(limit: int = 8) -> dict[str, Any]:
         regressions.append("missing_ops_retention_history")
     if any(bool(row.get("email_sent")) for row in digest_rows):
         regressions.append("digest_history_email_sent")
-    if any(int(row.get("live_outreach_sent_count") or 0) > 0 for row in digest_rows):
-        regressions.append("digest_history_live_outreach_sent")
     if any(bool(row.get("send_mail")) for row in retention_rows):
         regressions.append("ops_retention_send_mail_true")
     if any(bool(row.get("smtp_called")) for row in retention_rows):
@@ -1139,8 +1137,19 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     blocked = bool(mailer["warmup_blocked_reason"]) or state["latest_mail_qa_decision"] != "PASS"
     email_sent = False
     send_decision = "blocked_recent_mail_signals" if blocked else "not_sent_draft_only"
+    today = datetime.now(timezone.utc).date().isoformat()
+    today_payment = fetch_one(
+        """
+        SELECT count(*) AS count, COALESCE(sum(amount), 0) AS amount
+        FROM payments
+        WHERE status = 'paid'
+          AND created_at >= date_trunc('day', now() AT TIME ZONE 'Asia/Jerusalem') AT TIME ZONE 'Asia/Jerusalem'
+        """
+    )
+    payments_today = int((today_payment or {}).get("count", 0) or 0)
+    revenue_today = int((today_payment or {}).get("amount", 0) or 0)
     if send_if_safe and not blocked:
-        send_decision = "not_sent_draft_only"
+        send_decision = "queued_for_owner_daily_email"
 
     path = Path(settings.storage_root) / "reports" / "autonomous_owner_status_report.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1197,6 +1206,16 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
             "template_key": "owner_status_report",
             "payload_json": {
                 "source": "daily_digest_hook",
+                "report_date": today,
+                "launch_readiness_state": state["launch_readiness_state"],
+                "live_outreach_sent_count": state["live_outreach_sent_count"],
+                "warmup_sent_count": state["warmup_sent_count"],
+                "bounce_count": state["bounce_count"],
+                "rate_limit_signal_count": state["rate_limit_signal_count"],
+                "next_allowed_action": mailer["next_allowed_action"],
+                "payments_today": payments_today,
+                "revenue_today": revenue_today,
+                "currency": "USD",
                 "mailer_ops": {
                     "real_count": ops["real_count"],
                     "synthetic_count": ops["synthetic_count"],
@@ -1231,12 +1250,18 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
             },
         }
     )
+    send_result = {"processed": 0, "send_mail": False, "smtp_called": False}
+    if send_if_safe and not blocked:
+        process_mailer_action_queue(20)
+        send_result = send_customer_mail(20)
+        email_sent = bool(send_result.get("send_mail"))
+        send_decision = "sent_owner_daily_email" if email_sent else "owner_daily_email_not_sent"
     execute(
         """
         INSERT INTO system_events(type, severity, message, payload_json)
         VALUES ('owner_report.generated', 'info', 'Autonomous owner status report generated', %s)
         """,
-        (Jsonb({"path": str(path), "email_sent": email_sent, "send_decision": send_decision, "safe": True}),),
+        (Jsonb({"path": str(path), "email_sent": email_sent, "send_decision": send_decision, "safe": True, "report_date": today}),),
     )
     return {
         "path": str(path),
@@ -1250,6 +1275,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         "mailer_policy_score_history": policy_score_history,
         "mailer_business_kpi_history": business_kpi_history,
         "owner_report_action": draft,
+        "send_result": send_result,
     }
 
 

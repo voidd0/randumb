@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     auto_replies_paused: bool = True
     customer_mail_sending_enabled: bool = False
     customer_mail_real_send_enabled: bool = False
+    owner_report_email_enabled: bool = False
+    owner_sale_email_enabled: bool = False
     paddle_provisioning_paused: bool = True
     first_live_send_flag: bool = False
     allow_live_outreach_activation: bool = False

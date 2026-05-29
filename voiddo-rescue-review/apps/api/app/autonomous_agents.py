@@ -506,7 +506,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "customer_mail_simulation_agent": lambda: run_customer_mail_simulation(True),
         "paid_customer_watchdog_agent": lambda: run_paid_customer_watchdog(int(payload.get("limit", 25)), repair=bool(payload.get("repair", True))),
         "paid_customer_watchdog_history_agent": lambda: latest_paid_customer_watchdog_runs(int(payload.get("limit", 10))),
-        "mailer_digest_agent": lambda: write_owner_status_report(send_if_safe=False),
+        "mailer_digest_agent": lambda: write_owner_status_report(send_if_safe=True),
         "mailer_digest_retention_agent": lambda: cleanup_mailer_digest_history(90),
         "mailer_digest_trend_guard_agent": lambda: mailer_digest_trend_guard(),
         "mailer_policy_score_agent": lambda: mailer_policy_score(),
