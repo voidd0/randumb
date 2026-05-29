@@ -774,12 +774,12 @@ def runtime_heavy_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         (
             "lead_supply_buildout_agent",
             {
-                "target_preview_count": 140,
+                "target_preview_count": 120,
                 "canary_count": 20,
                 "limit": 120,
                 "max_cycles": 1,
-                "max_seconds": 90,
-                "enrichment_limit": 1,
+                "max_seconds": 45,
+                "enrichment_limit": 0,
                 "apply": True,
             },
         ),

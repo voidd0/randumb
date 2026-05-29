@@ -52,6 +52,13 @@ def _progress_key(snapshot: dict[str, Any]) -> tuple[int, int, int, int, int]:
     )
 
 
+def _stockpile_ready(snapshot: dict[str, Any], target: int, canary: int) -> bool:
+    approved = int(snapshot.get("approved_preview_count") or 0)
+    ready_candidates = int(snapshot.get("ready_candidate_count") or 0)
+    live_queue = int(snapshot.get("live_queue_candidate_count") or 0)
+    return approved >= target and (live_queue >= canary or ready_candidates >= canary)
+
+
 def _action_summary(action: dict[str, Any]) -> dict[str, Any]:
     source_queue = action.get("source_queue") or {}
     scout_processing = action.get("scout_processing") or {}
@@ -192,7 +199,7 @@ def lead_supply_buildout(
         if time.monotonic() - started > seconds:
             stop_reason = "time_budget_exhausted"
             break
-        if int(current.get("approved_preview_count") or 0) >= target and int(current.get("live_queue_candidate_count") or 0) >= canary:
+        if _stockpile_ready(current, target, canary):
             stop_reason = "target_ready"
             break
 
@@ -324,7 +331,8 @@ def lead_supply_buildout(
     after = lead_stockpile_health_snapshot(target, canary, safe_limit)
     approved = int(after.get("approved_preview_count") or 0)
     live_queue = int(after.get("live_queue_candidate_count") or 0)
-    if approved >= target and live_queue >= canary:
+    ready_candidates = int(after.get("ready_candidate_count") or 0)
+    if approved >= target and (live_queue >= canary or ready_candidates >= canary):
         decision = "SUPPLY_BUILDOUT_TARGET_READY_NO_SEND"
     elif approved >= canary and live_queue >= canary:
         decision = "SUPPLY_BUILDOUT_CANARY_READY_NO_SEND"

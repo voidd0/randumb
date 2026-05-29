@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 import app.lead_supply_autopilot as supply_module
 import app.lead_supply_buildout as buildout_module
-from app.autonomous_agents import run_agent, runtime_daily_loop_plan
+from app.autonomous_agents import run_agent, runtime_daily_loop_plan, runtime_heavy_loop_plan
 from app.lead_supply_autopilot import lead_supply_autopilot
 from app.lead_supply_buildout import lead_supply_buildout
 from app.main import app
@@ -132,6 +132,25 @@ def test_lead_supply_buildout_dry_run_is_no_send(monkeypatch):
     assert result["cycles"] == []
     assert result["send_mail"] is False
     assert result["smtp_called"] is False
+    assert result["live_outreach_allowed"] is False
+
+
+def test_lead_supply_buildout_stops_when_stockpile_ready_but_mail_gate_blocks_live_queue(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(buildout_module, "lead_stockpile_health_snapshot", lambda *args: _health(122, live_queue=0))
+    monkeypatch.setattr(buildout_module, "stockpile_expansion_discovery_cycle", lambda *args, **kwargs: calls.append("stockpile") or {"status": "unexpected"})
+    monkeypatch.setattr(buildout_module, "regional_lead_discovery_cycle", lambda *args, **kwargs: calls.append("regional") or {"status": "unexpected"})
+    monkeypatch.setattr(buildout_module, "advance_source_to_campaign", lambda *args, **kwargs: calls.append("advance") or {"status": "unexpected"})
+    monkeypatch.setattr(buildout_module, "campaign_preflight_batch", lambda *args, **kwargs: calls.append("preflight") or {"status": "unexpected"})
+
+    result = lead_supply_buildout(target_preview_count=110, canary_count=20, max_cycles=3, apply=True)
+    assert calls == []
+    assert result["stop_reason"] == "target_ready"
+    assert result["decision"] == "SUPPLY_BUILDOUT_TARGET_READY_NO_SEND"
+    assert result["cycle_count"] == 0
+    assert result["after"]["live_queue_candidate_count"] == 0
+    assert result["after"]["ready_candidate_count"] >= 20
+    assert result["send_mail"] is False
     assert result["live_outreach_allowed"] is False
 
 
@@ -438,3 +457,15 @@ def test_runtime_daily_loop_uses_bounded_supply_buildout_not_heavy_stockpile():
     assert payloads["lead_supply_buildout_agent"]["enrichment_limit"] == 0
     assert payloads["lead_supply_buildout_agent"]["apply"] is False
     assert payloads["post_scan_campaign_cycle_agent"]["dry_run"] is False
+
+
+def test_runtime_heavy_loop_keeps_supply_buildout_bounded():
+    plan = runtime_heavy_loop_plan()
+    payloads = dict(plan)
+    assert "lead_supply_buildout_agent" in payloads
+    payload = payloads["lead_supply_buildout_agent"]
+    assert payload["target_preview_count"] <= 120
+    assert payload["max_cycles"] == 1
+    assert payload["max_seconds"] <= 45
+    assert payload["enrichment_limit"] == 0
+    assert payload["apply"] is True
