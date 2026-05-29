@@ -108,6 +108,7 @@ from .canary_checkout_simulation import run_canary_checkout_simulation
 from .canary_operator_packet import build_canary_operator_packet, latest_canary_operator_packet
 from .canary_send_window_plan import build_canary_send_window_plan, latest_canary_send_window_plan
 from .canary_scale_plan import canary_scale_plan
+from .canary_bounce_recovery import backfill_bounce_dsn_details, canary_bounce_recovery, latest_canary_bounce_recovery_runs
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
@@ -651,6 +652,37 @@ async def outreach_post_send_observer_run(request: Request):
         "observer": outreach_post_send_observer(
             int(payload.get("window_hours", 24)),
             apply_pause=bool(payload.get("apply_pause", True)),
+        ),
+    }
+
+
+@app.get("/admin/outreach/bounce-recovery", dependencies=[Depends(require_admin)])
+def outreach_bounce_recovery_get(limit: int = 10):
+    return {"ok": True, "history": latest_canary_bounce_recovery_runs(limit)}
+
+
+@app.post("/admin/outreach/bounce-recovery/run", dependencies=[Depends(require_admin)])
+async def outreach_bounce_recovery_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "recovery": canary_bounce_recovery(
+            int(payload.get("window_hours", 24)),
+            apply_pause=bool(payload.get("apply_pause", True)),
+            store=True,
+        ),
+    }
+
+
+@app.post("/admin/outreach/bounce-dsn-backfill", dependencies=[Depends(require_admin)])
+async def outreach_bounce_dsn_backfill_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "backfill": backfill_bounce_dsn_details(
+            int(payload.get("window_hours", 24)),
+            int(payload.get("limit", 50)),
+            apply=bool(payload.get("apply", True)),
         ),
     }
 

@@ -55,6 +55,7 @@ from .canary_operator_packet import build_canary_operator_packet
 from .canary_scale_plan import canary_scale_plan
 from .canary_next_batch_preparer import prepare_next_canary_batch_if_ready
 from .canary_send_window_plan import build_canary_send_window_plan
+from .canary_bounce_recovery import backfill_bounce_dsn_details, canary_bounce_recovery, latest_canary_bounce_recovery_runs
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .post_scan_campaign_cycle import post_scan_campaign_cycle
@@ -482,6 +483,17 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("canary_limit", 20)),
             int(payload.get("next_batch_limit", 40)),
         ),
+        "canary_bounce_recovery_agent": lambda: canary_bounce_recovery(
+            int(payload.get("window_hours", 24)),
+            apply_pause=bool(payload.get("apply_pause", True)),
+            store=True,
+        ),
+        "bounce_dsn_backfill_agent": lambda: backfill_bounce_dsn_details(
+            int(payload.get("window_hours", 24)),
+            int(payload.get("limit", 50)),
+            apply=bool(payload.get("apply", True)),
+        ),
+        "canary_bounce_recovery_history_agent": lambda: latest_canary_bounce_recovery_runs(int(payload.get("limit", 10))),
         "outreach_post_send_observer_agent": lambda: outreach_post_send_observer(int(payload.get("window_hours", 24)), apply_pause=bool(payload.get("apply_pause", True))),
         "outreach_post_send_observer_history_agent": lambda: latest_outreach_post_send_observer_runs(int(payload.get("limit", 10))),
         "launch_repair_plan_agent": lambda: launch_repair_plan(int(payload.get("limit", 25))),
@@ -638,6 +650,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("warmup_block_recovery_snapshot_agent", {"limit": 50}),
         ("warmup_post_send_observer_agent", {"limit": 10}),
         ("outreach_post_send_observer_agent", {"window_hours": 24, "apply_pause": True}),
+        ("canary_bounce_recovery_agent", {"window_hours": 24, "apply_pause": True}),
         ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),
         ("canary_next_batch_preparer_agent", {"canary_limit": 20, "next_batch_limit": 40}),
         ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),
