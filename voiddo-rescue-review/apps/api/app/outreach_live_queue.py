@@ -17,6 +17,31 @@ SAFE_FLAGS = {
     "raw_recipient_addresses_included": False,
     "secrets_included": False,
 }
+CANARY_BLOCKED_DOMAIN_EXACT = ("redroof.com", "chcb.org", "oscc.ca")
+CANARY_BLOCKED_TEXT_PATTERNS = (
+    "%redroof%",
+    "%red roof%",
+    "%communityhealth%",
+    "%community health%",
+    "%healthsystem%",
+    "%health system%",
+    "%urgentcare%",
+    "%urgent care%",
+    "%hospital%",
+    "%medicalcenter%",
+    "%medical center%",
+    "%medicalcentre%",
+    "%medical centre%",
+    "%seniorcitizens%",
+    "%senior citizens%",
+    "%seniorcenter%",
+    "%senior center%",
+    "%seniorcentre%",
+    "%senior centre%",
+    "%dui%",
+    "%criminaldefense%",
+    "%criminal defense%",
+)
 
 
 def _candidate_rows(limit: int = 20) -> list[dict[str, Any]]:
@@ -48,6 +73,11 @@ def _candidate_rows(limit: int = 20) -> list[dict[str, Any]]:
               AND om.html_body IS NOT NULL
               AND om.html_body <> ''
               AND om.body LIKE '%%/unsubscribe/u_%%'
+              AND regexp_replace(lower(COALESCE(b.domain, a.domain, '')), '^www\\.', '') <> ALL(%s)
+              AND NOT (
+                    lower(COALESCE(b.name, '') || ' ' || COALESCE(b.domain, '') || ' ' || COALESCE(b.website_url, '') || ' ' || COALESCE(l.niche, ''))
+                    LIKE ANY(%s)
+              )
               AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
               AND COALESCE(b.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
               AND NOT EXISTS (
@@ -65,7 +95,7 @@ def _candidate_rows(limit: int = 20) -> list[dict[str, Any]]:
             ORDER BY om.id, om.created_at DESC
             LIMIT %s
             """,
-            (max(1, min(int(limit or 20), 100)),),
+            (list(CANARY_BLOCKED_DOMAIN_EXACT), list(CANARY_BLOCKED_TEXT_PATTERNS), max(1, min(int(limit or 20), 100))),
         )
     ]
 

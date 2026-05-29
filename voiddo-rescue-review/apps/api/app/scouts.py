@@ -52,6 +52,8 @@ EXCLUDED_LARGE_BRAND_TOKENS = {
     "nhs.uk",
     "radissonhotels",
     "renown",
+    "redroof",
+    "redroofinn",
     "bupa",
     "homehardware",
     "idealimage",
@@ -82,7 +84,10 @@ EXCLUDED_LARGE_BRAND_DOMAINS = {
     "bupa.co.uk",
     "homehardware.ca",
     "idealimage.com",
+    "redroof.com",
     "rona.ca",
+    "chcb.org",
+    "oscc.ca",
 }
 SUPPORTED_SCOUT_TYPES = {
     "manual_csv_scout",
@@ -329,6 +334,8 @@ def _is_sensitive_health_or_public_target(business_name: str, domain: str, websi
         token in combined
         for token in [
             "communityhealth",
+            "communityhealthcenter",
+            "communityhealthcenters",
             "dukehealth",
             "healthsystem",
             "hopkinsmedicine",
@@ -339,6 +346,9 @@ def _is_sensitive_health_or_public_target(business_name: str, domain: str, websi
             "medicalcentre",
             "nhs",
             "renown",
+            "seniorcenter",
+            "seniorcentre",
+            "seniorcitizens",
         ]
     )
 

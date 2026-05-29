@@ -19,6 +19,31 @@ SAFE_FLAGS = {
     "secrets_included": False,
 }
 TEST_COUNTRY_PATTERN = r"^(P7|P8|P9|P10|P11|P12|P59|P60|P61|P62|P63|P68|P72|P73|P74)"
+CANARY_BLOCKED_DOMAIN_EXACT = ("redroof.com", "chcb.org", "oscc.ca")
+CANARY_BLOCKED_TEXT_PATTERNS = (
+    "%redroof%",
+    "%red roof%",
+    "%communityhealth%",
+    "%community health%",
+    "%healthsystem%",
+    "%health system%",
+    "%urgentcare%",
+    "%urgent care%",
+    "%hospital%",
+    "%medicalcenter%",
+    "%medical center%",
+    "%medicalcentre%",
+    "%medical centre%",
+    "%seniorcitizens%",
+    "%senior citizens%",
+    "%seniorcenter%",
+    "%senior center%",
+    "%seniorcentre%",
+    "%senior centre%",
+    "%dui%",
+    "%criminaldefense%",
+    "%criminal defense%",
+)
 
 
 def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
@@ -68,6 +93,12 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
         ) latest_strength ON true
         WHERE om.status = 'preview'
           AND upper(COALESCE(c.country, '')) !~ %s
+          AND lower(COALESCE(c.niche, '')) NOT IN ('government', 'banks', 'bank', 'hospital', 'hospitals', 'gambling', 'adult', 'crypto', 'political')
+          AND regexp_replace(lower(COALESCE(b.domain, a.domain, '')), '^www\\.', '') <> ALL(%s)
+          AND NOT (
+                lower(COALESCE(b.name, '') || ' ' || COALESCE(b.domain, '') || ' ' || COALESCE(b.website_url, '') || ' ' || COALESCE(c.niche, ''))
+                LIKE ANY(%s)
+          )
           AND lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
           AND lower(COALESCE(l.email, '')) NOT LIKE '%%.example.test'
           AND lower(COALESCE(b.domain, '')) NOT IN ('example.com', 'localhost')
@@ -81,7 +112,7 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
         ORDER BY om.created_at DESC, om.id DESC
         LIMIT %s
         """,
-        (TEST_COUNTRY_PATTERN, safe_limit),
+        (TEST_COUNTRY_PATTERN, list(CANARY_BLOCKED_DOMAIN_EXACT), list(CANARY_BLOCKED_TEXT_PATTERNS), safe_limit),
     )
     items: list[dict[str, Any]] = []
     domain_counts: Counter[str] = Counter()

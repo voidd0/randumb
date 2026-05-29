@@ -324,6 +324,82 @@ def test_live_outreach_queue_uses_latest_preview_review_only():
         _cleanup(token)
 
 
+def test_canary_and_live_queue_skip_large_or_sensitive_first_batch_targets():
+    token = uuid.uuid4().hex[:8]
+    try:
+        business = execute(
+            """
+            INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
+            VALUES (%s, 'US', 'Control', 'en', 'local tourism', 'p99', %s, %s, %s, 'scouted')
+            RETURNING id
+            """,
+            (f"Red Roof Control {token}", "https://www.redroof.com", "www.redroof.com", f"owner@redroof-{token}.example.com"),
+        )
+        lead = execute(
+            """
+            INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
+            VALUES (%s, %s, 'p99', 'qualified', 92, 'en', 'US', 'Control', 'local tourism')
+            RETURNING id
+            """,
+            (business["id"], f"owner@redroof-{token}.example.com"),
+        )
+        audit = execute(
+            """
+            INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+            VALUES (%s, %s, 'www.redroof.com', 'https://www.redroof.com', 'completed', 90, 'P99 redroof audit', %s, now())
+            RETURNING id
+            """,
+            (business["id"], lead["id"], f"p99-redroof-{token}"),
+        )
+        campaign = execute(
+            """
+            INSERT INTO campaigns(name, status, country, language, niche, offer_key, dry_run)
+            VALUES (%s, 'preview_ready', 'US', 'en', 'local tourism', 'contact_form_repair', true)
+            RETURNING id
+            """,
+            (f"p99-redroof-{token}",),
+        )
+        preview = execute(
+            """
+            INSERT INTO campaign_leads(campaign_id, lead_id, audit_id, status, score, preview_json)
+            VALUES (%s, %s, %s, 'preview', 92, %s)
+            RETURNING id
+            """,
+            (campaign["id"], lead["id"], audit["id"], Jsonb({"token": token})),
+        )
+        execute(
+            "INSERT INTO audit_strength_scores(audit_id, final_score, proof_score, commercial_score, completeness_score, issues_json) VALUES (%s, 88, 90, 88, 84, '[]'::jsonb)",
+            (audit["id"],),
+        )
+        execute("INSERT INTO campaign_preview_reviews(campaign_lead_id, action, reason, actor) VALUES (%s, 'approved', 'p99 redroof proof', 'test')", (preview["id"],))
+        execute(
+            """
+            INSERT INTO campaign_preflight_runs(campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json)
+            VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s)
+            """,
+            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT"})),
+        )
+        execute(
+            """
+            INSERT INTO outreach_messages(lead_id, audit_id, mailbox, subject, body, html_body, status)
+            VALUES (%s, %s, 'audit@voiddorescue.com', %s, %s, %s, 'preview')
+            """,
+            (
+                lead["id"],
+                audit["id"],
+                f"p99 redroof {token}",
+                f"Public non-invasive website check.\nUnsubscribe: https://go.rescue.voiddo.com/unsubscribe/u_00000000-0000-0000-0000-000000000000.{token}",
+                "<!doctype html><html><body>Vøiddo Rescue</body></html>",
+            ),
+        )
+        assert "redroof.com" not in str(live_outreach_queue_candidates(100))
+        result = canary_batch_quality(100, store=False)
+        assert "redroof.com" not in str(result)
+        assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
 def test_transport_gate_exposes_live_quota_and_blocks_daily_cap():
     token = uuid.uuid4().hex[:8]
     try:
