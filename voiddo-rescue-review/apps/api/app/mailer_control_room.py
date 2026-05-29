@@ -1137,7 +1137,10 @@ def latest_mailer_self_audit_matrix_history(limit: int = 5) -> dict[str, Any]:
 
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
+    from .canary_scale_plan import canary_scale_plan
+
     state = runtime_state_snapshot()
+    canary = canary_scale_plan(20, 40, store=True)
     mailer = mailer_control_room_summary(write_snapshot=True)
     ops = mailer_ops_action_summary()
     ops_retention_history = mailer_ops_retention_report_history()
@@ -1173,6 +1176,11 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                 f"- latest_mail_qa_decision: `{state['latest_mail_qa_decision']}`",
                 f"- warmup_sent_count: `{state['warmup_sent_count']}`",
                 f"- live_outreach_sent_count: `{state['live_outreach_sent_count']}`",
+                f"- canary_decision: `{canary['decision']}`",
+                f"- canary_queued_count: `{canary['queued_count']}`",
+                f"- canary_linked_reply_count: `{canary['reply_count_since_first_send']}`",
+                f"- canary_linked_click_count: `{canary['click_count_since_first_send']}`",
+                f"- canary_blockers: `{len(canary['blockers'])}`",
                 f"- bounce_or_dsn_count_24h: `{state['bounce_count']}`",
                 f"- rate_limit_signal_count_24h: `{state['rate_limit_signal_count']}`",
                 f"- mailer_status: `{mailer['latest_snapshot'].get('status', 'unknown')}`",
@@ -1219,6 +1227,14 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                 "report_date": today,
                 "launch_readiness_state": state["launch_readiness_state"],
                 "live_outreach_sent_count": state["live_outreach_sent_count"],
+                "canary": {
+                    "decision": canary["decision"],
+                    "sent_count": canary["sent_count"],
+                    "queued_count": canary["queued_count"],
+                    "linked_reply_count": canary["reply_count_since_first_send"],
+                    "linked_click_count": canary["click_count_since_first_send"],
+                    "blocker_count": len(canary["blockers"]),
+                },
                 "warmup_sent_count": state["warmup_sent_count"],
                 "bounce_count": state["bounce_count"],
                 "rate_limit_signal_count": state["rate_limit_signal_count"],
@@ -1278,6 +1294,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         "email_sent": email_sent,
         "send_decision": send_decision,
         "state": state,
+        "canary": canary,
         "mailer": mailer,
         "monitoring": monitoring,
         "mailer_ops": ops,
