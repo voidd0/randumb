@@ -14,6 +14,9 @@ def test_daily_report_includes_mailer_ops_summary():
     text = Path(report["path"]).read_text()
     assert "mailer_ops_real_count" in text
     assert "mailer_ops_blocked_unsafe_count" in text
+    assert "studio_mail_monitor_decision" in text
+    assert report["studio_mail"]["send_mail"] is False
+    assert report["studio_mail"]["live_outreach_allowed"] is False
     assert report["mailer_ops"]["real_count"] >= 1
     execute("DELETE FROM mailer_ops_runs")
     execute("DELETE FROM mailer_action_queue WHERE payload_json::text LIKE %s", ("%daily_digest_hook%",))

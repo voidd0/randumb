@@ -1138,9 +1138,11 @@ def latest_mailer_self_audit_matrix_history(limit: int = 5) -> dict[str, Any]:
 def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     settings = get_settings()
     from .canary_scale_plan import canary_scale_plan
+    from .studio_mail_monitor import studio_mail_monitor_health
 
     state = runtime_state_snapshot()
     canary = canary_scale_plan(20, 40, store=True)
+    studio_mail = studio_mail_monitor_health(15)
     mailer = mailer_control_room_summary(write_snapshot=True)
     ops = mailer_ops_action_summary()
     ops_retention_history = mailer_ops_retention_report_history()
@@ -1181,6 +1183,10 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                 f"- canary_linked_reply_count: `{canary['reply_count_since_first_send']}`",
                 f"- canary_linked_click_count: `{canary['click_count_since_first_send']}`",
                 f"- canary_blockers: `{len(canary['blockers'])}`",
+                f"- studio_mail_monitor_decision: `{studio_mail['decision']}`",
+                f"- studio_mail_monitor_latest_status: `{studio_mail['latest_run']['status']}`",
+                f"- studio_mail_monitor_latest_scanned: `{studio_mail['latest_run']['scanned_count']}`",
+                f"- studio_mail_monitor_latest_owner_commands: `{studio_mail['latest_run']['owner_command_count']}`",
                 f"- bounce_or_dsn_count_24h: `{state['bounce_count']}`",
                 f"- rate_limit_signal_count_24h: `{state['rate_limit_signal_count']}`",
                 f"- mailer_status: `{mailer['latest_snapshot'].get('status', 'unknown')}`",
@@ -1234,6 +1240,13 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                     "linked_reply_count": canary["reply_count_since_first_send"],
                     "linked_click_count": canary["click_count_since_first_send"],
                     "blocker_count": len(canary["blockers"]),
+                },
+                "studio_mail": {
+                    "decision": studio_mail["decision"],
+                    "blocker_count": len(studio_mail["blockers"]),
+                    "latest_status": studio_mail["latest_run"]["status"],
+                    "latest_scanned_count": studio_mail["latest_run"]["scanned_count"],
+                    "latest_owner_command_count": studio_mail["latest_run"]["owner_command_count"],
                 },
                 "warmup_sent_count": state["warmup_sent_count"],
                 "bounce_count": state["bounce_count"],
@@ -1310,6 +1323,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         "send_decision": send_decision,
         "state": state,
         "canary": canary,
+        "studio_mail": studio_mail,
         "mailer": mailer,
         "monitoring": monitoring,
         "mailer_ops": ops,
