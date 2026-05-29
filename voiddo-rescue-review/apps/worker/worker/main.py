@@ -7,6 +7,7 @@ from .inbox_engine import poll_all
 from .outreach_transport import process_outreach_queue
 from .pipeline import process_scanner_jobs
 from .scouts import process_one_scout_run
+from .studio_mail_monitor import poll_studio_mailbox
 
 
 def log(event: str, **payload):
@@ -35,6 +36,20 @@ def main():
                     log("inbox_poll_complete", messages=len(messages), auto_replies_paused=os.environ.get("AUTO_REPLIES_PAUSED", "true"))
                 except Exception as exc:
                     log("inbox_poll_failed", error=type(exc).__name__)
+            if os.environ.get("STUDIO_MAIL_MONITOR_ENABLED", "false").lower() == "true":
+                try:
+                    result = poll_studio_mailbox(int(os.environ.get("STUDIO_MAIL_MESSAGES_PER_TICK", "20") or "20"))
+                    if result.get("scanned") or result.get("error"):
+                        log(
+                            "studio_mail_poll_complete",
+                            scanned=result.get("scanned", 0),
+                            stored=result.get("stored", 0),
+                            owner_commands=result.get("owner_commands", 0),
+                            marked_seen=result.get("marked_seen", 0),
+                            error=result.get("error", ""),
+                        )
+                except Exception as exc:
+                    log("studio_mail_poll_failed", error=type(exc).__name__)
             if os.environ.get("OUTREACH_WORKER_ENABLED", "false").lower() == "true":
                 try:
                     result = process_outreach_queue(int(os.environ.get("OUTREACH_MESSAGES_PER_TICK", "1") or "1"))

@@ -91,6 +91,7 @@ services:
     volumes:
       - voiddo_rescue_storage:/app/storage
       - ./codex_tasks:/app/codex_tasks
+      - /root/.voiddo-mailbox-creds:/run/secrets/voiddo_mailbox_creds:ro
     depends_on:
       api:
         condition: service_healthy
