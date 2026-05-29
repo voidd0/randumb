@@ -5,6 +5,7 @@ from pathlib import Path
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
 from app.mailer_action_queue import archive_mailer_nonactionable_artifacts, process_mailer_action_queue
+import app.mailer_control_room as mailer_control_room_module
 from app.mailer_control_room import cleanup_mailer_policy_score_history, latest_mailer_business_kpi_history, latest_mailer_digest_trend_guard_summary, latest_mailer_policy_score_history, latest_mailer_policy_score_regression_guard_summary, mailer_business_kpi_snapshot, mailer_digest_summary, mailer_policy_score, mailer_policy_score_regression_guard, mailer_policy_score_retention_summary, mailer_self_audit_matrix_snapshot
 from app.main import app
 from fastapi.testclient import TestClient
@@ -603,6 +604,32 @@ def test_mailer_business_kpi_agent_persists_no_send_history():
     assert history["raw_recipient_addresses_included"] is False
     assert history["secrets_included"] is False
     execute("DELETE FROM mailer_business_kpi_history WHERE id = %s", (history["id"],))
+
+
+def test_mailer_business_kpi_reports_active_canary_next_action(monkeypatch):
+    runtime = {
+        "mailer_policy_trend": {
+            "latest_policy_score": 100,
+            "latest_policy_decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW",
+            "policy_score_trend_direction": "stable",
+        },
+        "scheduled_warmup_count": 28,
+        "warmup_sent_count": 50,
+        "live_outreach_sent_count": 12,
+        "latest_mail_qa_decision": "PASS",
+        "launch_readiness_state": "LIVE_OUTREACH_READY",
+    }
+
+    def fake_fetch_one(sql, params=()):
+        return {"count": 0}
+
+    monkeypatch.setattr(mailer_control_room_module, "runtime_state_snapshot", lambda: runtime)
+    monkeypatch.setattr(mailer_control_room_module, "fetch_all", lambda sql, params=(): [])
+    monkeypatch.setattr(mailer_control_room_module, "fetch_one", fake_fetch_one)
+    snapshot = mailer_control_room_module.mailer_business_kpi_snapshot()
+    assert snapshot["next_safe_action"] == "continue_active_canary_under_post_send_observer_and_hard_spacing"
+    assert snapshot["send_mail"] is False
+    assert snapshot["live_outreach_allowed"] is False
 
 
 def test_mailer_business_kpi_endpoint_requires_auth_and_is_redacted():

@@ -879,6 +879,9 @@ def mailer_business_kpi_snapshot() -> dict[str, Any]:
     queue_rows = fetch_one("SELECT count(*) AS count FROM mailer_action_queue")
     ledger_rows = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
     resolver_rows = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
+    next_safe_action = "keep_live_outreach_blocked_and_continue_autonomous_monitoring"
+    if runtime.get("launch_readiness_state") == "LIVE_OUTREACH_READY" and int(runtime.get("live_outreach_sent_count") or 0) > 0:
+        next_safe_action = "continue_active_canary_under_post_send_observer_and_hard_spacing"
     return json_safe(
         {
             "replies_count": int(replies["count"]) if replies else 0,
@@ -895,7 +898,7 @@ def mailer_business_kpi_snapshot() -> dict[str, Any]:
             "live_outreach_sent_count": runtime["live_outreach_sent_count"],
             "mail_qa_decision": runtime["latest_mail_qa_decision"],
             "launch_readiness_state": runtime["launch_readiness_state"],
-            "next_safe_action": "keep_live_outreach_blocked_and_continue_autonomous_monitoring",
+            "next_safe_action": next_safe_action,
             "send_mail": False,
             "smtp_called": False,
             "live_outreach_allowed": False,
