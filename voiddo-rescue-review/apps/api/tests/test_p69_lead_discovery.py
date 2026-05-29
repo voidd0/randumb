@@ -549,6 +549,51 @@ def test_quality_aware_regional_target_plan_uses_deep_bank_when_static_banks_are
     assert plan["live_outreach_allowed"] is False
 
 
+def test_quality_aware_regional_target_plan_refreshes_existing_when_no_new_targets(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    primary = [{"country": "US", "city": f"UsedPrimary{token}", "language": "en", "niche": "dentists", "priority": 100}]
+    reserve = [{"country": "IE", "city": f"UsedReserve{token}", "language": "en", "niche": "dentists", "priority": 80, "tier": "reserve"}]
+    monkeypatch.setattr(discovery_module, "FIRST_TIER_TARGETS", primary)
+    monkeypatch.setattr(discovery_module, "RESERVE_REGIONAL_TARGETS", reserve)
+    monkeypatch.setattr(discovery_module, "WINNER_EXPANSION_TARGETS", [])
+    monkeypatch.setattr(discovery_module, "STOCKPILE_EXPANSION_TARGETS", [])
+    monkeypatch.setattr(discovery_module, "DEEP_EXPANSION_TARGETS", [])
+
+    def fake_fetch_all(sql, params=()):
+        if "SELECT name FROM scout_sources" in sql:
+            return [
+                {"name": f"overpass-US-UsedPrimary{token}-dentists"},
+                {"name": f"overpass-IE-UsedReserve{token}-dentists"},
+            ]
+        if "FROM scout_source_performance_scores" in sql:
+            return [
+                {
+                    "country": "US",
+                    "niche": "dentists",
+                    "source_count": 1,
+                    "qualified_rate": 0.25,
+                    "average_final_score": 72,
+                    "email_coverage": 0.8,
+                    "issue_signal_rate": 0.6,
+                    "qualified_count": 2,
+                    "promote_count": 1,
+                    "watch_count": 0,
+                    "pause_count": 0,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(discovery_module, "fetch_all", fake_fetch_all)
+    plan = quality_aware_regional_target_plan(2)
+    assert plan["status"] == "ready_refresh_existing_sources"
+    assert plan["selected_count"] == 2
+    assert plan["candidate_count"] == 0
+    assert plan["refresh_candidate_count"] == 2
+    assert all(item["refresh_existing_source"] is True for item in plan["targets"])
+    assert plan["send_mail"] is False
+    assert plan["live_outreach_allowed"] is False
+
+
 def test_quality_aware_regional_target_plan_blocks_mature_zero_qualified_segments(monkeypatch):
     token = uuid.uuid4().hex[:8]
     monkeypatch.setattr(

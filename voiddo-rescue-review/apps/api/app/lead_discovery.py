@@ -591,12 +591,11 @@ def quality_aware_regional_target_plan(limit_targets: int = 5) -> dict[str, Any]
     existing_source_names = {str(row["name"]) for row in fetch_all("SELECT name FROM scout_sources WHERE name LIKE %s", ("overpass-%",))}
     performance = _source_segment_performance_summary()
     candidates: list[dict[str, Any]] = []
+    refresh_candidates: list[dict[str, Any]] = []
     blocked_segments: list[dict[str, Any]] = []
     target_pool = [*lead_discovery_target_plan(False)["targets"], *RESERVE_REGIONAL_TARGETS, *WINNER_EXPANSION_TARGETS, *STOCKPILE_EXPANSION_TARGETS, *DEEP_EXPANSION_TARGETS]
     for target in target_pool:
         source_name = f"overpass-{target['country'].upper()}-{target['city']}-{target['niche']}"
-        if source_name in existing_source_names:
-            continue
         key = (str(target["country"]).upper(), str(target["niche"]))
         perf = performance.get(
             key,
@@ -630,7 +629,7 @@ def quality_aware_regional_target_plan(limit_targets: int = 5) -> dict[str, Any]
             - low_yield_penalty,
             2,
         )
-        candidates.append(
+        candidate = (
             {
                 **target,
                 "source_name": source_name,
@@ -642,13 +641,20 @@ def quality_aware_regional_target_plan(limit_targets: int = 5) -> dict[str, Any]
                 },
             }
         )
+        if source_name in existing_source_names:
+            candidate["refresh_existing_source"] = True
+            refresh_candidates.append(candidate)
+            continue
+        candidates.append(candidate)
     candidates.sort(key=lambda item: (item["quality_score"], item.get("priority", 0)), reverse=True)
-    selected = candidates[:safe_limit]
+    refresh_candidates.sort(key=lambda item: (item["quality_score"], item.get("priority", 0)), reverse=True)
+    selected = candidates[:safe_limit] if candidates else refresh_candidates[:safe_limit]
     return {
-        "status": "ready" if selected else "no_quality_targets",
+        "status": "ready" if candidates and selected else ("ready_refresh_existing_sources" if selected else "no_quality_targets"),
         "selected_count": len(selected),
         "targets": selected,
         "candidate_count": len(candidates),
+        "refresh_candidate_count": len(refresh_candidates),
         "target_pool_count": len(target_pool),
         "blocked_segment_count": len(blocked_segments),
         "blocked_segments": blocked_segments[:25],
