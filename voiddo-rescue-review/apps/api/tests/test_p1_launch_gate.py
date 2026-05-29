@@ -91,6 +91,29 @@ def test_owner_pause_all_records_safe_pause_result():
         execute("DELETE FROM runtime_controls WHERE source = 'owner_command' AND reason = 'PAUSE ALL'")
 
 
+def test_owner_russian_no_spam_alias_pauses_outreach():
+    try:
+        result = store_owner_command(
+            {
+                "mailbox": "support",
+                "uid": uuid.uuid4().hex,
+                "message_id": uuid.uuid4().hex,
+                "sender": owner_email(),
+                "reply_to": owner_email(),
+                "subject": "Не спамь",
+                "body": "Не спамь",
+                "authentication_results": "dkim=pass",
+            }
+        )
+        assert result["status"] == "executed"
+        assert result["command"] == "PAUSE OUTREACH"
+        assert result["result_json"]["action"] == "pause_recorded"
+        control = fetch_one("SELECT value FROM runtime_controls WHERE key = 'pause_outreach' AND reason = 'PAUSE OUTREACH'")
+        assert control and control["value"] is True
+    finally:
+        execute("DELETE FROM runtime_controls WHERE source = 'owner_command' AND reason = 'PAUSE OUTREACH'")
+
+
 def test_owner_report_today_creates_report_file():
     result = store_owner_command(
         {
@@ -472,11 +495,18 @@ def test_mail_qa_can_pass_with_tls_and_approved_pool(monkeypatch):
 
 
 def test_transport_refuses_without_flags_and_when_suppressed_or_missing_unsubscribe(monkeypatch):
-    base = transport_gate_status({"email": "lead@example.com", "body": "Unsubscribe: https://go.example/u"})
+    import app.p0 as p0
+
+    unsubscribe_url = f"https://go.rescue.voiddo.com/unsubscribe/u_{uuid.uuid4()}.abc"
+    monkeypatch.setattr(
+        p0,
+        "get_settings",
+        lambda: SimpleNamespace(outreach_dry_run=True, outreach_paused=False, first_live_send_flag=False),
+    )
+    base = transport_gate_status({"email": "lead@example.com", "body": f"Unsubscribe: {unsubscribe_url}", "html_body": f"<!doctype html><a href=\"{unsubscribe_url}\">Unsubscribe</a>"})
     assert not base["allowed"]
     assert base["reason"] == "outreach_dry_run_enabled"
 
-    import app.p0 as p0
     monkeypatch.setattr(
         p0,
         "get_settings",
@@ -489,7 +519,7 @@ def test_transport_refuses_without_flags_and_when_suppressed_or_missing_unsubscr
         "INSERT INTO suppression_list(email, reason, source) VALUES (%s, 'test', 'test')",
         ("blocked@example.com",),
     )
-    suppressed = transport_gate_status({"email": "blocked@example.com", "body": "Unsubscribe: https://go.example/u"})
+    suppressed = transport_gate_status({"email": "blocked@example.com", "body": f"Unsubscribe: {unsubscribe_url}", "html_body": f"<!doctype html><a href=\"{unsubscribe_url}\">Unsubscribe</a>"})
     assert not suppressed["allowed"]
     assert suppressed["reason"] == "recipient_suppressed"
 

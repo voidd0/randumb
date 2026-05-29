@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from email import message_from_bytes
 from email.message import EmailMessage
 from email.utils import parseaddr
+import httpx
 import imaplib
 import os
 import re
@@ -22,8 +23,11 @@ class InboxMessage:
     mailbox: str
     uid: str
     sender: str
+    reply_to: str
+    message_id: str
     subject: str
     body: str
+    authentication_results: str
     classification: str
     human_review_required: bool
     auto_reply_allowed: bool
@@ -74,6 +78,39 @@ def classify(subject: str, body: str) -> tuple[str, bool, bool]:
     return label, label in UNSAFE or label == "human_review_required", label in SAFE_AUTO_REPLY
 
 
+def owner_emails() -> set[str]:
+    raw = ",".join([os.environ.get("OWNER_COMMAND_EMAIL", ""), os.environ.get("STUDIO_OWNER_COMMAND_EMAILS", "")])
+    return {item.strip().lower() for item in raw.split(",") if item.strip()}
+
+
+def is_owner_sender(sender: str, reply_to: str = "") -> bool:
+    owners = owner_emails()
+    sender_email = parseaddr(sender or "")[1].lower()
+    reply_email = parseaddr(reply_to or "")[1].lower() if reply_to else sender_email
+    return bool(owners) and sender_email in owners and reply_email in owners | {sender_email}
+
+
+def submit_owner_command(item: InboxMessage) -> dict:
+    token = os.environ.get("ADMIN_AUTH_TOKEN", "")
+    if not token:
+        raise RuntimeError("admin_auth_token_missing")
+    api_base = os.environ.get("API_INTERNAL_BASE_URL", "http://api:8080").rstrip("/")
+    payload = {
+        "mailbox": item.mailbox,
+        "uid": item.uid,
+        "message_id": item.message_id or item.uid,
+        "sender": item.sender,
+        "reply_to": item.reply_to,
+        "subject": item.subject,
+        "body": item.body,
+        "authentication_results": item.authentication_results,
+    }
+    with httpx.Client(timeout=20.0) as client:
+        response = client.post(f"{api_base}/owner/commands", headers={"X-Admin-Token": token}, json=payload)
+        response.raise_for_status()
+        return response.json().get("command", {})
+
+
 def extract_text(msg) -> str:
     if msg.is_multipart():
         for part in msg.walk():
@@ -104,9 +141,15 @@ def read_unseen(mailbox: str, username: str, password: str, limit: int = 20) -> 
             msg = message_from_bytes(raw)
             subject = str(msg.get("Subject", ""))
             sender = parseaddr(str(msg.get("From", "")))[1]
+            reply_to = parseaddr(str(msg.get("Reply-To", "")))[1]
+            message_id = str(msg.get("Message-ID", "")) or uid
+            authentication_results = str(msg.get("Authentication-Results", ""))
             body = extract_text(msg)
-            label, human, auto = classify(subject, body)
-            messages.append(InboxMessage(mailbox, uid, sender, subject, body[:4000], label, human, auto))
+            if is_owner_sender(sender, reply_to):
+                label, human, auto = "owner_command", False, False
+            else:
+                label, human, auto = classify(subject, body)
+            messages.append(InboxMessage(mailbox, uid, sender, reply_to, message_id, subject, body[:4000], authentication_results, label, human, auto))
         imap.logout()
     return messages
 
@@ -155,6 +198,15 @@ def poll_all() -> list[InboxMessage]:
             continue
         all_messages.extend(read_unseen(mailbox, username, password))
     for item in all_messages:
+        if item.classification == "owner_command":
+            try:
+                submit_owner_command(item)
+            except Exception:
+                item.classification = "owner_command_api_failed"
+                item.human_review_required = False
+                item.auto_reply_allowed = False
+                persist_message(item)
+            continue
         persist_message(item)
         if item.auto_reply_allowed and not item.human_review_required:
             send_auto_reply(item.sender, item.classification)
