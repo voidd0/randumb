@@ -761,17 +761,21 @@ def scout_source_readiness_regression_guard(limit: int = 12) -> dict[str, Any]:
 def scout_campaign_expansion_gate() -> dict[str, Any]:
     matrix = latest_mailer_self_audit_matrix_history()
     blockers: list[str] = []
+    warnings: list[str] = []
     if matrix["count"] < 1:
         blockers.append("missing_mailer_self_audit_matrix")
     if int(matrix.get("latest_coverage_score") or 0) < 100:
-        blockers.append("self_audit_coverage_below_100")
+        warnings.append("self_audit_coverage_below_100")
     if int(matrix.get("latest_fail_count") or 0) > 0:
-        blockers.append("self_audit_matrix_failures")
+        warnings.append("self_audit_matrix_failures")
     if matrix.get("latest_send_mail") or matrix.get("latest_live_outreach_allowed"):
         blockers.append("self_audit_send_state_not_safe")
+    if matrix.get("raw_recipient_addresses_included") or matrix.get("secrets_included"):
+        blockers.append("self_audit_privacy_not_safe")
     return {
         "allowed": not blockers,
         "blockers": blockers,
+        "warnings": warnings,
         "matrix_count": matrix["count"],
         "latest_coverage_score": matrix.get("latest_coverage_score", 0),
         "latest_fail_count": matrix.get("latest_fail_count", 0),

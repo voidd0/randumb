@@ -9,6 +9,7 @@ from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
 from app.main import app
 import app.source_campaign_operator as operator_module
+import app.scouts as scouts_module
 from app.scouts import prepare_scout_source_from_adapter
 from app.source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
 
@@ -63,6 +64,27 @@ def _allow_expansion(monkeypatch) -> None:
         "secrets_included": False,
     }
     monkeypatch.setattr(operator_module, "scout_campaign_expansion_gate", lambda: gate)
+
+
+def test_scout_campaign_expansion_gate_allows_no_send_warning_matrix(monkeypatch):
+    monkeypatch.setattr(
+        scouts_module,
+        "latest_mailer_self_audit_matrix_history",
+        lambda: {
+            "count": 1,
+            "latest_coverage_score": 88,
+            "latest_fail_count": 1,
+            "latest_send_mail": False,
+            "latest_live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        },
+    )
+    gate = scouts_module.scout_campaign_expansion_gate()
+    assert gate["allowed"] is True
+    assert gate["blockers"] == []
+    assert "self_audit_coverage_below_100" in gate["warnings"]
+    assert "self_audit_matrix_failures" in gate["warnings"]
 
 
 def test_source_campaign_operator_snapshot_is_no_send_and_redacted():
