@@ -839,9 +839,15 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
                 cur.execute(
                     """
                     INSERT INTO suppression_list(email, reason, source)
-                    VALUES (%s, 'unsubscribe_reply', 'inbox')
+                    SELECT %s, 'unsubscribe_reply', 'inbox'
+                    WHERE NOT EXISTS (
+                      SELECT 1 FROM suppression_list
+                      WHERE lower(email) = lower(%s)
+                        AND reason = 'unsubscribe_reply'
+                        AND source = 'inbox'
+                    )
                     """,
-                    (sender,),
+                    (sender, sender),
                 )
             if classification in {"bounce", "auto_reply", "out_of_office", "interested", "ask_price", "ask_details"}:
                 cur.execute(
@@ -3045,18 +3051,25 @@ def suppress_unsubscribe_token(token: str) -> dict[str, Any]:
     )
     if not lead or not lead["email"]:
         return {"ok": False, "status": "lead_not_found", "suppressed": False, "send_mail": False, "live_outreach_allowed": False}
-    execute(
+    inserted = execute(
         """
         INSERT INTO suppression_list(email, domain, reason, source)
-        VALUES (%s, %s, 'one_click_unsubscribe', 'unsubscribe_token')
-        ON CONFLICT DO NOTHING
+        SELECT %s, %s, 'one_click_unsubscribe', 'unsubscribe_token'
+        WHERE NOT EXISTS (
+          SELECT 1 FROM suppression_list
+          WHERE lower(email) = lower(%s)
+            AND lower(COALESCE(domain, '')) = lower(COALESCE(%s, ''))
+            AND reason = 'one_click_unsubscribe'
+            AND source = 'unsubscribe_token'
+        )
+        RETURNING id
         """,
-        (lead["email"], lead["domain"]),
+        (lead["email"], lead["domain"], lead["email"], lead["domain"]),
     )
     execute("UPDATE leads SET status = 'unsubscribed', updated_at = now() WHERE id = %s", (lead_id,))
     return {
         "ok": True,
-        "status": "suppressed",
+        "status": "suppressed" if inserted else "already_suppressed",
         "suppressed": True,
         "lead_id": lead_id,
         "recipient_hash": hashlib.sha256(str(lead["email"]).strip().lower().encode("utf-8")).hexdigest()[:24],

@@ -68,8 +68,17 @@ def persist_message(item: Any) -> bool:
             )
             if item.classification == "unsubscribe":
                 cur.execute(
-                    "INSERT INTO suppression_list(email, reason, source) VALUES (%s, 'unsubscribe_reply', 'inbox')",
-                    (sender,),
+                    """
+                    INSERT INTO suppression_list(email, reason, source)
+                    SELECT %s, 'unsubscribe_reply', 'inbox'
+                    WHERE NOT EXISTS (
+                      SELECT 1 FROM suppression_list
+                      WHERE lower(email) = lower(%s)
+                        AND reason = 'unsubscribe_reply'
+                        AND source = 'inbox'
+                    )
+                    """,
+                    (sender, sender),
                 )
             if item.classification in {"bounce", "auto_reply", "out_of_office", "interested", "ask_price", "ask_details"}:
                 cur.execute(

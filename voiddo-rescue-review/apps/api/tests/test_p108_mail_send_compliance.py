@@ -7,12 +7,16 @@ from psycopg.types.json import Jsonb
 from app.autonomous_agents import run_agent
 from app.db import execute, fetch_one
 from app.mail_send_compliance import mail_send_compliance_snapshot, run_mail_send_compliance_agent
+from app.p0 import persist_inbound_message, signed_unsubscribe_url_for_lead, suppress_unsubscribe_token
 
 
 def cleanup(token: str) -> None:
     execute("DELETE FROM email_events WHERE message_id LIKE %s OR payload_json::text LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM outreach_messages WHERE subject LIKE %s OR provider_message_id LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM warmup_schedule WHERE result_json::text LIKE %s OR sender_mailbox LIKE %s", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM suppression_list WHERE email LIKE %s OR domain LIKE %s", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM leads WHERE email LIKE %s", (f"%{token}%",))
+    execute("DELETE FROM businesses WHERE domain LIKE %s OR email LIKE %s", (f"%{token}%", f"%{token}%"))
 
 
 def test_mail_send_compliance_accepts_registered_outreach_with_one_click_unsubscribe():
@@ -105,3 +109,66 @@ def test_mail_send_compliance_agent_records_no_send_run():
     assert agent["result_json"]["send_mail"] is False
     assert agent["result_json"]["live_outreach_allowed"] is False
     assert fetch_one("SELECT count(*) AS count FROM agent_runs WHERE agent = 'mail_send_compliance_agent'")["count"] >= 1
+
+
+def test_one_click_unsubscribe_is_idempotent_and_hash_only():
+    token = uuid.uuid4().hex[:8]
+    try:
+        business = execute(
+            """
+            INSERT INTO businesses(name, domain, website_url, email)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id
+            """,
+            (f"Unsub {token}", f"{token}.example.test", f"https://{token}.example.test", f"team@{token}.example.test"),
+        )
+        lead = execute(
+            """
+            INSERT INTO leads(business_id, email, status)
+            VALUES (%s, %s, 'new')
+            RETURNING id
+            """,
+            (business["id"], f"lead@{token}.example.test"),
+        )
+        unsubscribe_url = signed_unsubscribe_url_for_lead(str(lead["id"]))
+        unsubscribe_token = unsubscribe_url.rsplit("/", 1)[-1]
+
+        first = suppress_unsubscribe_token(unsubscribe_token)
+        second = suppress_unsubscribe_token(unsubscribe_token)
+
+        assert first["ok"] is True
+        assert first["suppressed"] is True
+        assert second["ok"] is True
+        assert second["status"] == "already_suppressed"
+        assert "recipient_hash" in first
+        assert "lead@" not in str(first)
+        row = fetch_one("SELECT count(*) AS count FROM suppression_list WHERE lower(email) = lower(%s)", (f"lead@{token}.example.test",))
+        assert int(row["count"] or 0) == 1
+    finally:
+        cleanup(token)
+
+
+def test_unsubscribe_reply_suppression_is_idempotent():
+    token = uuid.uuid4().hex[:8]
+    sender = f"reply-{token}@example.test"
+    try:
+        message = {
+            "mailbox": "audit@voiddorescue.com",
+            "uid": f"uid-{token}",
+            "message_id": f"<reply-{token}@example.test>",
+            "sender": sender,
+            "subject": "unsubscribe",
+            "body": "Please unsubscribe me.",
+        }
+        first = persist_inbound_message(message)
+        second = persist_inbound_message(message)
+        assert first["stored"] is True
+        assert first["classification"] == "unsubscribe"
+        assert second["duplicate"] is True
+        row = fetch_one(
+            "SELECT count(*) AS count FROM suppression_list WHERE lower(email) = lower(%s) AND reason = 'unsubscribe_reply'",
+            (sender,),
+        )
+        assert int(row["count"] or 0) == 1
+    finally:
+        cleanup(token)
