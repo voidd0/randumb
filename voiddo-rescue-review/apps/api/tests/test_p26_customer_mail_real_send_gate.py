@@ -113,6 +113,68 @@ def test_owner_report_gate_still_blocks_rate_limit_signal(monkeypatch):
         _cleanup(marker)
 
 
+def test_owner_sale_gate_ignores_cold_bounce_signal(monkeypatch):
+    import app.mailer_action_queue as queue
+
+    marker = "p26-owner-sale-bounce-does-not-block"
+    try:
+        _cleanup(marker)
+        _clean_mail_gates(monkeypatch, owner_sale_enabled=True)
+        monkeypatch.setattr(queue, "mail_signal_summary", lambda hours=24: {"bounce_or_dsn_count": 3, "rate_limit_count": 0, "spam_signal_count": 2, "mail_auth_failure_count": 0, "items": [], "window_hours": hours})
+        action = enqueue_mailer_action(
+            {
+                "action_type": "owner_sale_notification",
+                "risk_level": "SAFE_AUTO",
+                "mailbox": "support@voiddorescue.com",
+                "template_key": "owner_sale_notification",
+                "source_event": "paddle_webhook",
+                "product_key": "contact_form_repair",
+                "amount": 99,
+                "currency": "USD",
+                "customer_hash": marker,
+                "paddle_transaction_id": marker,
+            }
+        )
+        result = process_mailer_action_queue(10)
+        processed = next(item for item in result["actions"] if item["id"] == action["id"])
+        assert processed["status"] == "send_ready"
+        assert processed["gate_result_json"]["reason"] == "send_ready_no_send_gate"
+        assert "recent_bounce_or_dsn" not in processed["gate_result_json"]["blockers"]
+        assert "recent_spam_signal" not in processed["gate_result_json"]["blockers"]
+    finally:
+        _cleanup(marker)
+
+
+def test_owner_sale_gate_still_blocks_rate_limit_signal(monkeypatch):
+    import app.mailer_action_queue as queue
+
+    marker = "p26-owner-sale-rate-limit-blocks"
+    try:
+        _cleanup(marker)
+        _clean_mail_gates(monkeypatch, owner_sale_enabled=True)
+        monkeypatch.setattr(queue, "mail_signal_summary", lambda hours=24: {"bounce_or_dsn_count": 0, "rate_limit_count": 1, "spam_signal_count": 0, "mail_auth_failure_count": 0, "items": [], "window_hours": hours})
+        action = enqueue_mailer_action(
+            {
+                "action_type": "owner_sale_notification",
+                "risk_level": "SAFE_AUTO",
+                "mailbox": "support@voiddorescue.com",
+                "template_key": "owner_sale_notification",
+                "source_event": "paddle_webhook",
+                "product_key": "contact_form_repair",
+                "amount": 99,
+                "currency": "USD",
+                "customer_hash": marker,
+                "paddle_transaction_id": marker,
+            }
+        )
+        result = process_mailer_action_queue(10)
+        processed = next(item for item in result["actions"] if item["id"] == action["id"])
+        assert processed["status"] == "prepared"
+        assert "recent_rate_limit" in processed["gate_result_json"]["blockers"]
+    finally:
+        _cleanup(marker)
+
+
 def test_customer_mail_real_send_default_blocked(monkeypatch):
     marker = "p26-default-blocked"
     try:

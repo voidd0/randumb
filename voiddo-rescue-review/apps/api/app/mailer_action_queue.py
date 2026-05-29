@@ -393,7 +393,7 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
         "throttle": throttle,
         "template_qa": rendered["qa"] if rendered else None,
         "campaign_preflight": campaign_preflight,
-        "reason": "prepared_no_send" if status == "prepared" else "blocked_by_gate",
+        "reason": "send_ready_no_send_gate" if status == "send_ready" else "prepared_no_send" if status == "prepared" else "blocked_by_gate",
     }
 
 
