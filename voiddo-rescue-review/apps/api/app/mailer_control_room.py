@@ -1035,11 +1035,21 @@ def mailer_self_audit_matrix_snapshot() -> dict[str, Any]:
             "history_rows": kpi["count"],
         },
         {
-            "key": "warmup_gate",
-            "passed": runtime["live_outreach_sent_count"] == 0,
-            "evidence": "warmup is separate from cold outreach and live outreach remains zero",
+            "key": "live_canary_safety_gate",
+            "passed": (
+                runtime["latest_mail_qa_decision"] == "PASS"
+                and int(runtime.get("bounce_count", 0) or 0) == 0
+                and int(runtime.get("rate_limit_signal_count", 0) or 0) == 0
+                and int(runtime.get("spam_signal_count", 0) or 0) == 0
+                and int(runtime.get("mail_auth_failure_count", 0) or 0) == 0
+            ),
+            "evidence": "authorized live canary is allowed only while mail QA and post-send risk signals stay clean",
             "warmup_sent_count": runtime["warmup_sent_count"],
             "live_outreach_sent_count": runtime["live_outreach_sent_count"],
+            "bounce_count": runtime["bounce_count"],
+            "rate_limit_signal_count": runtime["rate_limit_signal_count"],
+            "spam_signal_count": runtime["spam_signal_count"],
+            "mail_auth_failure_count": runtime["mail_auth_failure_count"],
         },
         {
             "key": "no_send_proof",

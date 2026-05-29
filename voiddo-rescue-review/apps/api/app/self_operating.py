@@ -4,8 +4,10 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from .config import get_settings
 from .db import execute, fetch_all, fetch_one
 from .economics import run_economics_audit
+from .mail_send_compliance import mail_send_compliance_snapshot
 from .p0 import mail_signal_summary, runtime_state_snapshot
 
 
@@ -72,10 +74,32 @@ def queue_self_build(module: str, title: str, priority: str = "P2", acceptance: 
 def run_self_audit(scope: str = "full") -> dict[str, Any]:
     state = runtime_state_snapshot()
     signals = mail_signal_summary(24)
+    settings = get_settings()
+    send_compliance = mail_send_compliance_snapshot(24)
     findings: list[dict[str, Any]] = []
 
-    if int(state.get("live_outreach_sent_count", 0)) > 0:
-        findings.append({"severity": "critical", "code": "live_outreach_sent", "message": "Live outreach happened before final launch gate."})
+    live_outreach_sent = int(state.get("live_outreach_sent_count", 0) or 0)
+    live_runtime_armed = (
+        settings.outreach_dry_run is False
+        and settings.outreach_paused is False
+        and settings.first_live_send_flag is True
+    )
+    live_mail_signals_clean = (
+        int(state.get("bounce_count", 0) or 0) == 0
+        and int(state.get("rate_limit_signal_count", 0) or 0) == 0
+        and int(state.get("spam_signal_count", 0) or 0) == 0
+        and int(state.get("mail_auth_failure_count", 0) or 0) == 0
+        and state.get("latest_mail_qa_decision") == "PASS"
+        and send_compliance.get("decision") == "PASS"
+    )
+    if live_outreach_sent > 0 and not (live_runtime_armed and live_mail_signals_clean):
+        findings.append(
+            {
+                "severity": "critical",
+                "code": "unauthorized_or_unsafe_live_outreach_sent",
+                "message": "Live outreach exists without the required runtime flags and clean mail-safety evidence.",
+            }
+        )
     if int(state.get("bounce_count", 0)) > 0:
         findings.append({"severity": "high", "code": "recent_bounce_or_dsn", "message": "Recent bounce/DSN signals block warmup and outreach."})
     if int(state.get("rate_limit_signal_count", 0)) > 0:
