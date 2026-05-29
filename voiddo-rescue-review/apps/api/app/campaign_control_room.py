@@ -61,7 +61,11 @@ def qualified_campaign_lead_candidates(limit: int = 100, threshold: int = 70) ->
           AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
           AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(s.email) = lower(l.email))
           AND NOT EXISTS (SELECT 1 FROM suppression_list s WHERE lower(COALESCE(s.domain, '')) = lower(COALESCE(b.domain, '')))
-        ORDER BY COALESCE(ls.final_score, l.score, 0) DESC, a.created_at DESC
+        ORDER BY
+          CASE WHEN COALESCE(latest_strength.final_score, 0) >= 70 THEN 0 ELSE 1 END,
+          COALESCE(latest_strength.final_score, 0) DESC,
+          COALESCE(ls.final_score, l.score, 0) DESC,
+          a.created_at DESC
         LIMIT %s
         """,
         (safe_threshold, TEST_COUNTRY_PATTERN, safe_limit),

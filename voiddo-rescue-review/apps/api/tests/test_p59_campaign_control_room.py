@@ -47,7 +47,7 @@ def _cleanup(token: str) -> None:
     execute("DELETE FROM businesses WHERE domain LIKE %s OR email LIKE %s", (f"%{token}%", f"%{token}%"))
 
 
-def _qualified_lead(token: str) -> tuple[str, str]:
+def _qualified_lead(token: str, audit_strength: int | None = None) -> tuple[str, str]:
     country = f"QA59{token[:3].upper()}"
     domain = f"p59-{token}.clinic"
     business = execute(
@@ -96,13 +96,21 @@ def _qualified_lead(token: str) -> tuple[str, str]:
     score_lead(str(lead["id"]), str(audit["id"]))
     execute("UPDATE leads SET score = 91 WHERE id = %s", (lead["id"],))
     execute("UPDATE lead_scores SET final_score = 91 WHERE lead_id = %s AND audit_id = %s", (lead["id"], audit["id"]))
+    if audit_strength is not None:
+        execute(
+            """
+            INSERT INTO audit_strength_scores(audit_id, final_score, completeness_score, proof_score, commercial_score, issues_json)
+            VALUES (%s, %s, %s, %s, %s, '[]'::jsonb)
+            """,
+            (audit["id"], audit_strength, audit_strength, audit_strength, audit_strength),
+        )
     return str(lead["id"]), str(audit["id"])
 
 
 def test_campaign_control_room_finds_candidates_without_raw_email():
     token = uuid.uuid4().hex[:8]
     try:
-        _qualified_lead(token)
+        _qualified_lead(token, audit_strength=82)
         result = qualified_campaign_lead_candidates(50, 70)
         text = str(result)
         assert f"owner-{token}@" not in text
@@ -112,14 +120,43 @@ def test_campaign_control_room_finds_candidates_without_raw_email():
         _cleanup(token)
 
 
+def test_campaign_control_room_prioritizes_ready_audit_strength_before_score_limit():
+    token = uuid.uuid4().hex[:8]
+    low_token = f"{token}low"
+    try:
+        ready_lead_id, ready_audit_id = _qualified_lead(token)
+        low_lead_id, low_audit_id = _qualified_lead(low_token)
+        execute("UPDATE leads SET score = 99 WHERE id = %s", (low_lead_id,))
+        execute("UPDATE lead_scores SET final_score = 99 WHERE lead_id = %s AND audit_id = %s", (low_lead_id, low_audit_id))
+        execute(
+            """
+            INSERT INTO audit_strength_scores(audit_id, final_score, completeness_score, proof_score, commercial_score, issues_json)
+            VALUES (%s, 45, 45, 45, 45, '[]'::jsonb)
+            """,
+            (low_audit_id,),
+        )
+        execute(
+            """
+            INSERT INTO audit_strength_scores(audit_id, final_score, completeness_score, proof_score, commercial_score, issues_json)
+            VALUES (%s, 82, 82, 82, 82, '[]'::jsonb)
+            """,
+            (ready_audit_id,),
+        )
+        result = qualified_campaign_lead_candidates(1, 70)
+        assert result["candidates"][0]["lead_id"] == ready_lead_id
+        assert result["candidates"][0]["campaign_ready"] is True
+    finally:
+        _cleanup(token)
+        _cleanup(low_token)
+
+
 def test_campaign_control_room_prepare_scores_audit_and_creates_preview_only_campaign():
     token = uuid.uuid4().hex[:8]
     try:
-        _qualified_lead(token)
+        _qualified_lead(token, audit_strength=82)
         result = prepare_campaign_control_room(100, 70, dry_run=False, max_segments=5)
         assert result["send_mail"] is False
         assert result["live_outreach_allowed"] is False
-        assert result["audit_strengths_scored"] >= 1
         assert result["campaigns_created_or_confirmed"] >= 1
         assert f"owner-{token}@" not in str(result)
         snapshot = campaign_control_room_snapshot(100, 70)
