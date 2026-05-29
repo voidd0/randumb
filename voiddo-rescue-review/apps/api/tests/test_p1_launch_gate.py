@@ -63,6 +63,10 @@ def test_owner_status_executes_metrics_result():
     assert result["status"] == "executed"
     assert result["result_json"]["action"] == "metrics"
     assert "metrics" in result["result_json"]
+    assert result["result_json"]["runtime_state"]["live_outreach_sent_count"] >= 0
+    assert result["result_json"]["runtime_state"]["mail_auth_failure_count"] >= 0
+    assert result["result_json"]["mail_send_compliance"]["send_mail"] is False
+    assert result["result_json"]["mail_send_compliance"]["live_outreach_allowed"] is False
 
 
 def test_owner_pause_all_records_safe_pause_result():

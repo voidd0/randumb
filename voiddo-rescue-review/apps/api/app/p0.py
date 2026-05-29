@@ -1458,8 +1458,10 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
     mail_qa_decision = latest_mail_qa_decision()
     bounce_count = recent_mail_signal_count(["bounce", "dsn"], 24)
     rate_limit_signal_count = recent_mail_signal_count(["smtp_rate_limit"], 24)
-    if bounce_count > 0 or rate_limit_signal_count > 0:
-        next_allowed_action = "wait_until_recent_bounce_and_rate_limit_window_clears_then_recheck_mail_qa"
+    spam_signal_count = recent_mail_signal_count(["spam_signal"], 24)
+    mail_auth_failure_count = recent_mail_signal_count(MAIL_AUTH_BLOCKING_SIGNAL_TYPES, 24)
+    if bounce_count > 0 or rate_limit_signal_count > 0 or spam_signal_count > 0 or mail_auth_failure_count > 0:
+        next_allowed_action = "wait_until_recent_mail_risk_signal_window_clears_then_recheck_mail_qa"
     elif mail_qa_decision != "PASS":
         next_allowed_action = "run_mail_qa_and_keep_sends_blocked_until_pass"
     else:
@@ -1479,6 +1481,8 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
         "live_outreach_sent_count": _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'"),
         "bounce_count": bounce_count,
         "rate_limit_signal_count": rate_limit_signal_count,
+        "spam_signal_count": spam_signal_count,
+        "mail_auth_failure_count": mail_auth_failure_count,
         "next_allowed_action": next_allowed_action,
         "launch_readiness_state": launch_readiness_state(),
         "mailer_policy_trend": mailer_policy_trend_snapshot(),
@@ -1513,6 +1517,8 @@ def write_runtime_state_report(path: str | Path, branch_head: str = "", current_
         f"- live_outreach_sent_count: {snapshot['live_outreach_sent_count']}",
         f"- bounce_count_24h: {snapshot['bounce_count']}",
         f"- rate_limit_signal_count_24h: {snapshot['rate_limit_signal_count']}",
+        f"- spam_signal_count_24h: {snapshot['spam_signal_count']}",
+        f"- mail_auth_failure_count_24h: {snapshot['mail_auth_failure_count']}",
         f"- next_allowed_action: {snapshot['next_allowed_action']}",
         f"- launch_readiness_state: {snapshot['launch_readiness_state']}",
         f"- mailer_policy_score_history_count: {policy_trend['policy_score_history_count']}",
@@ -1750,7 +1756,15 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
         )
         result = {"ok": False, "action": "review_required", "reason": "high_risk_command_blocked", "codex_task_id": str(task["id"])}
     elif command == "STATUS":
-        result = {"ok": True, "action": "metrics", "metrics": admin_metrics_from_db()}
+        from .mail_send_compliance import mail_send_compliance_snapshot
+
+        result = {
+            "ok": True,
+            "action": "metrics",
+            "metrics": admin_metrics_from_db(),
+            "runtime_state": runtime_state_snapshot(),
+            "mail_send_compliance": mail_send_compliance_snapshot(),
+        }
     elif command == "REPORT TODAY":
         result = {"ok": True, "action": "report_today", "report": write_owner_daily_report()}
     elif command == "PAUSE ALL":
