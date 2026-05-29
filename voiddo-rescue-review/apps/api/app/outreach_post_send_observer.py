@@ -63,8 +63,13 @@ def outreach_post_send_observer(window_hours: int = 24, apply_pause: bool = True
     reply_count = _count(
         """
         SELECT count(*) AS count
-        FROM inbox_threads
-        WHERE updated_at >= now() - (%s || ' hours')::interval
+        FROM inbox_threads it
+        WHERE it.lead_id IN (
+            SELECT lead_id FROM outreach_messages
+            WHERE status = 'sent'
+              AND lead_id IS NOT NULL
+        )
+          AND it.updated_at >= now() - (%s || ' hours')::interval
         """,
         (hours,),
     )
