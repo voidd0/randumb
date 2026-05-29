@@ -6,6 +6,7 @@ import app.p0 as p0
 def test_runtime_state_next_action_matches_active_canary(monkeypatch):
     counts = {
         "SELECT count(*) FROM outreach_messages WHERE status = 'sent'": 12,
+        "SELECT count(*) FROM outreach_messages WHERE status = 'bounced'": 1,
         "SELECT count(*) FROM outreach_messages WHERE status = 'queued'": 8,
     }
 
@@ -28,3 +29,5 @@ def test_runtime_state_next_action_matches_active_canary(monkeypatch):
     snapshot = p0.runtime_state_snapshot()
     assert snapshot["next_allowed_action"] == "continue_active_canary_under_post_send_observer_and_hard_spacing"
     assert snapshot["live_outreach_sent_count"] == 12
+    assert snapshot["live_outreach_bounced_count"] == 1
+    assert snapshot["live_outreach_sent_or_bounced_count"] == 13

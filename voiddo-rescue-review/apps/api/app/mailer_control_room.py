@@ -880,7 +880,7 @@ def mailer_business_kpi_snapshot() -> dict[str, Any]:
     ledger_rows = fetch_one("SELECT count(*) AS count FROM mailer_send_ledger")
     resolver_rows = fetch_one("SELECT count(*) AS count FROM recipient_resolver_audit")
     next_safe_action = "keep_live_outreach_blocked_and_continue_autonomous_monitoring"
-    if runtime.get("launch_readiness_state") == "LIVE_OUTREACH_READY" and int(runtime.get("live_outreach_sent_count") or 0) > 0:
+    if runtime.get("launch_readiness_state") == "LIVE_OUTREACH_READY" and int(runtime.get("live_outreach_sent_or_bounced_count") or runtime.get("live_outreach_sent_count") or 0) > 0:
         next_safe_action = "continue_active_canary_under_post_send_observer_and_hard_spacing"
     return json_safe(
         {
@@ -896,6 +896,9 @@ def mailer_business_kpi_snapshot() -> dict[str, Any]:
             "warmup_scheduled_count": runtime["scheduled_warmup_count"],
             "warmup_sent_count": runtime["warmup_sent_count"],
             "live_outreach_sent_count": runtime["live_outreach_sent_count"],
+            "live_outreach_bounced_count": runtime.get("live_outreach_bounced_count", 0),
+            "live_outreach_sent_or_bounced_count": runtime.get("live_outreach_sent_or_bounced_count", runtime["live_outreach_sent_count"]),
+            "live_outreach_queued_count": runtime.get("live_outreach_queued_count", 0),
             "mail_qa_decision": runtime["latest_mail_qa_decision"],
             "launch_readiness_state": runtime["launch_readiness_state"],
             "next_safe_action": next_safe_action,

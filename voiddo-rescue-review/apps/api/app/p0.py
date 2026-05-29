@@ -1555,6 +1555,8 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
     spam_signal_count = recent_mail_signal_count(["spam_signal"], 24)
     mail_auth_failure_count = recent_mail_signal_count(MAIL_AUTH_BLOCKING_SIGNAL_TYPES, 24)
     live_outreach_sent_count = _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'")
+    live_outreach_bounced_count = _count("SELECT count(*) FROM outreach_messages WHERE status = 'bounced'")
+    live_outreach_sent_or_bounced_count = live_outreach_sent_count + live_outreach_bounced_count
     live_outreach_queued_count = _count("SELECT count(*) FROM outreach_messages WHERE status = 'queued'")
     live_flags_armed = (
         os.environ.get("OUTREACH_DRY_RUN", "true").lower() == "false"
@@ -1565,7 +1567,7 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
         next_allowed_action = "wait_until_recent_mail_risk_signal_window_clears_then_recheck_mail_qa"
     elif mail_qa_decision != "PASS":
         next_allowed_action = "run_mail_qa_and_keep_sends_blocked_until_pass"
-    elif live_flags_armed and live_outreach_sent_count > 0 and live_outreach_queued_count > 0:
+    elif live_flags_armed and live_outreach_sent_or_bounced_count > 0 and live_outreach_queued_count > 0:
         next_allowed_action = "continue_active_canary_under_post_send_observer_and_hard_spacing"
     else:
         next_allowed_action = "continue_monitored_warmup_and_canary_preview_preparation_no_cold_outreach"
@@ -1582,6 +1584,9 @@ def runtime_state_snapshot(branch_head: str = "", current_zip_sha: str = "") -> 
         "deliverability_diagnostic_sent_count": _count("SELECT count(*) FROM test_inboxes WHERE last_test_at IS NOT NULL"),
         "warmup_sent_count": _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'"),
         "live_outreach_sent_count": live_outreach_sent_count,
+        "live_outreach_bounced_count": live_outreach_bounced_count,
+        "live_outreach_sent_or_bounced_count": live_outreach_sent_or_bounced_count,
+        "live_outreach_queued_count": live_outreach_queued_count,
         "bounce_count": bounce_count,
         "rate_limit_signal_count": rate_limit_signal_count,
         "spam_signal_count": spam_signal_count,

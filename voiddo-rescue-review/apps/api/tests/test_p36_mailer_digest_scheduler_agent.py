@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from app.autonomous_agents import run_agent, run_daily_loop
 from app.db import execute, fetch_one
 from app.mailer_action_queue import archive_mailer_nonactionable_artifacts, process_mailer_action_queue
@@ -12,6 +14,23 @@ from fastapi.testclient import TestClient
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_runtime_mail_signals(monkeypatch, request):
+    if request.node.name == "test_mailer_policy_score_blocks_recent_bounce_signal":
+        return
+    monkeypatch.setattr(
+        mailer_control_room_module,
+        "mail_signal_summary",
+        lambda _hours=24: {
+            "items": [],
+            "bounce_or_dsn_count": 0,
+            "rate_limit_count": 0,
+            "spam_signal_count": 0,
+            "mail_auth_failure_count": 0,
+        },
+    )
 
 
 def admin_headers() -> dict[str, str]:
@@ -615,7 +634,10 @@ def test_mailer_business_kpi_reports_active_canary_next_action(monkeypatch):
         },
         "scheduled_warmup_count": 28,
         "warmup_sent_count": 50,
-        "live_outreach_sent_count": 12,
+        "live_outreach_sent_count": 11,
+        "live_outreach_bounced_count": 1,
+        "live_outreach_sent_or_bounced_count": 12,
+        "live_outreach_queued_count": 7,
         "latest_mail_qa_decision": "PASS",
         "launch_readiness_state": "LIVE_OUTREACH_READY",
     }
@@ -628,6 +650,9 @@ def test_mailer_business_kpi_reports_active_canary_next_action(monkeypatch):
     monkeypatch.setattr(mailer_control_room_module, "fetch_one", fake_fetch_one)
     snapshot = mailer_control_room_module.mailer_business_kpi_snapshot()
     assert snapshot["next_safe_action"] == "continue_active_canary_under_post_send_observer_and_hard_spacing"
+    assert snapshot["live_outreach_sent_count"] == 11
+    assert snapshot["live_outreach_bounced_count"] == 1
+    assert snapshot["live_outreach_sent_or_bounced_count"] == 12
     assert snapshot["send_mail"] is False
     assert snapshot["live_outreach_allowed"] is False
 
