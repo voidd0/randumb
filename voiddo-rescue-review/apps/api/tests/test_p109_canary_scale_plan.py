@@ -21,11 +21,11 @@ def admin_headers() -> dict[str, str]:
 def _patch_clean_dependencies(monkeypatch, *, sent: int = 6, queued: int = 14, blocked: int = 0):
     def fake_count(query: str, params=()):
         normalized = " ".join(query.split()).lower()
-        if "status = 'sent'" in normalized:
+        if "status = 'sent'" in normalized or "status in ('sent', 'bounced')" in normalized:
             return sent
         if "status = 'queued'" in normalized:
             return queued
-        if "status in ('failed', 'blocked', 'transport_blocked')" in normalized:
+        if "status in ('failed', 'blocked', 'transport_blocked', 'bounced')" in normalized:
             return blocked
         if "status = 'preview'" in normalized:
             return 100

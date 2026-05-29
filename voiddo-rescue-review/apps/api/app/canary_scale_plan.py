@@ -38,10 +38,10 @@ def canary_scale_plan(canary_limit: int = 20, next_batch_limit: int = 40, store:
     compliance = mail_send_compliance_snapshot(24)
     scoreboard = launch_readiness_scoreboard(25)
 
-    sent = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'sent'")
+    sent = _count("SELECT count(*) AS count FROM outreach_messages WHERE status IN ('sent', 'bounced')")
     queued = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'queued'")
     blocked = _count(
-        "SELECT count(*) AS count FROM outreach_messages WHERE status IN ('failed', 'blocked', 'transport_blocked')"
+        "SELECT count(*) AS count FROM outreach_messages WHERE status IN ('failed', 'blocked', 'transport_blocked', 'bounced')"
     )
     preview = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'preview'")
     first_sent = fetch_one("SELECT min(sent_at) AS first_sent_at FROM outreach_messages WHERE status = 'sent'")
@@ -51,7 +51,7 @@ def canary_scale_plan(canary_limit: int = 20, next_batch_limit: int = 40, store:
         FROM inbox_threads it
         WHERE it.lead_id IN (
             SELECT lead_id FROM outreach_messages
-            WHERE status = 'sent'
+            WHERE status IN ('sent', 'bounced')
               AND lead_id IS NOT NULL
         )
           AND it.updated_at >= COALESCE((SELECT min(sent_at) FROM outreach_messages WHERE status = 'sent'), now())
@@ -62,7 +62,7 @@ def canary_scale_plan(canary_limit: int = 20, next_batch_limit: int = 40, store:
         SELECT count(*) AS count
         FROM email_events ee
         JOIN outreach_messages om ON om.id = ee.outreach_message_id
-        WHERE om.status = 'sent'
+        WHERE om.status IN ('sent', 'bounced')
           AND ee.event_type IN ('click', 'clicked', 'outreach_click')
           AND ee.created_at >= COALESCE((SELECT min(sent_at) FROM outreach_messages WHERE status = 'sent'), now())
         """

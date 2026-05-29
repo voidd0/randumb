@@ -16,8 +16,9 @@ Generated: 2026-05-29 13:46 IDT
 - DSN backfill enriched: `3`
 - Suppression upsert attempts: `3`
 - DSNs linked to original outreach message: `1`
+- Linked outreach rows marked bounced: `1`
 - DSNs still unlinked: `2`
-- Blocked outreach rows present: `1`
+- Blocked/bounced outreach rows present: `2`
 - Recovery decision: `KEEP_PAUSED_RECOVER_BOUNCES`
 - Canary scale decision: `PAUSE_AND_REVIEW_CANARY`
 - Provider output is bucketed as `other_external`; private recipient domains are not reported.
@@ -32,6 +33,8 @@ Generated: 2026-05-29 13:46 IDT
 - Added autonomous agents:
   - `canary_bounce_recovery_agent`
   - `bounce_dsn_backfill_agent`
+- Linked DSNs now mark matching `outreach_messages` and `leads` as `bounced`.
+- Canary scale treats `bounced` as part of the canary count and also as a stop/block state.
 - Added SAFE_AUTO owner command:
   - `SHOW CANARY BOUNCE RECOVERY`
 - Added tests in `apps/api/tests/test_p112_canary_bounce_recovery.py`

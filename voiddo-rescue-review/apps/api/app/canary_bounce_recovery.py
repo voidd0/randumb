@@ -193,6 +193,7 @@ def backfill_bounce_dsn_details(window_hours: int = 24, limit: int = 20, apply: 
     enriched = 0
     suppressed = 0
     linked = 0
+    outreach_marked_bounced = 0
     samples = []
     for row in rows:
         processed += 1
@@ -204,10 +205,10 @@ def backfill_bounce_dsn_details(window_hours: int = 24, limit: int = 20, apply: 
         outreach_row = None
         if details.get("original_message_id"):
             outreach_row = fetch_one(
-                "SELECT id FROM outreach_messages WHERE provider_message_id = %s LIMIT 1",
+                "SELECT id, lead_id FROM outreach_messages WHERE provider_message_id = %s LIMIT 1",
                 (details["original_message_id"],),
             )
-            linked += 1 if outreach_row else 0
+        linked += 1 if outreach_row else 0
         if apply:
             if details.get("bounced_recipient"):
                 execute(
@@ -269,6 +270,23 @@ def backfill_bounce_dsn_details(window_hours: int = 24, limit: int = 20, apply: 
                     row["message_id"],
                 ),
             )
+            if outreach_row:
+                updated = execute(
+                    """
+                    UPDATE outreach_messages
+                    SET status = 'bounced',
+                        bounced_at = COALESCE(bounced_at, now())
+                    WHERE id = %s
+                    RETURNING id
+                    """,
+                    (outreach_row["id"],),
+                )
+                outreach_marked_bounced += 1 if updated else 0
+                if outreach_row.get("lead_id"):
+                    execute(
+                        "UPDATE leads SET status = 'bounced', updated_at = now() WHERE id = %s",
+                        (outreach_row["lead_id"],),
+                    )
         samples.append(
             {
                 "mailbox": row["mailbox"],
@@ -289,6 +307,7 @@ def backfill_bounce_dsn_details(window_hours: int = 24, limit: int = 20, apply: 
             "enriched": enriched,
             "suppression_upsert_attempts": suppressed,
             "linked_outreach_count": linked,
+            "outreach_marked_bounced": outreach_marked_bounced,
             "apply": apply,
             "samples": samples[:10],
             **SAFE_FLAGS,
