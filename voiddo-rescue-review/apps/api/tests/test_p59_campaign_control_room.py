@@ -4,10 +4,12 @@ import os
 import uuid
 
 from fastapi.testclient import TestClient
+from psycopg.types.json import Jsonb
 
 from app.autonomous_agents import run_agent
 from app.campaign_control_room import campaign_control_room_snapshot, campaign_preview_rows, prepare_campaign_control_room, qualified_campaign_lead_candidates
 from app.campaign_preflight import campaign_preflight
+from app.campaign_preflight_status import PREFLIGHT_POLICY_VERSION
 from app.campaign_preview_reviews import auto_review_campaign_previews, latest_campaign_preview_reviews, review_campaign_preview
 from app.campaign_review_remediation import held_preview_remediation_candidates, remediate_held_preview_reviews
 from app.db import execute, fetch_one
@@ -191,11 +193,55 @@ def test_campaign_preview_rows_show_latest_no_send_preflight_decision():
             """,
             (campaign["id"],),
         )
-        run = campaign_preflight(str(campaign["id"]))
-        assert run["decision"] == "PASS_NO_SEND_PREFLIGHT"
+        execute(
+            """
+            INSERT INTO campaign_preflight_runs(
+              campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json,
+              send_mail, smtp_called, live_outreach_allowed, raw_recipient_addresses_included, secrets_included
+            )
+            VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s, false, false, false, false, false)
+            """,
+            (campaign["id"], Jsonb({"token": token, "policy_version": PREFLIGHT_POLICY_VERSION})),
+        )
         row = [item for item in campaign_preview_rows(100)["rows"] if item["domain"] == f"p59-{token}.clinic"][0]
         assert row["latest_preflight_status"] == "PASS_NO_SEND_PREFLIGHT"
+        assert row["latest_preflight_policy_current"] is True
         assert row["latest_readiness_status"] == "blocked"
+        assert row["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_preview_rows_mark_legacy_pass_as_stale_policy():
+    token = uuid.uuid4().hex[:8]
+    try:
+        _qualified_lead(token)
+        campaign = create_campaign(
+            {
+                "name": f"QA59 stale preflight policy {token}",
+                "country": f"QA59{token[:3].upper()}",
+                "language": "en",
+                "niche": "dentists",
+                "offer_key": "contact_form_repair",
+            }
+        )
+        prepare_campaign_gated(str(campaign["id"]), 70, 20)
+        campaign_lead = fetch_one("SELECT id FROM campaign_leads WHERE campaign_id = %s LIMIT 1", (campaign["id"],))
+        review_campaign_preview(str(campaign_lead["id"]), "approved", "QA59 stale policy approved")
+        execute(
+            """
+            INSERT INTO campaign_preflight_runs(
+              campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json,
+              send_mail, smtp_called, live_outreach_allowed, raw_recipient_addresses_included, secrets_included
+            )
+            VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s, false, false, false, false, false)
+            """,
+            (campaign["id"], Jsonb({"token": token, "policy_version": "legacy_before_mx_bounce_gate"})),
+        )
+        row = [item for item in campaign_preview_rows(100)["rows"] if item["domain"] == f"p59-{token}.clinic"][0]
+        assert row["latest_preflight_status"] == "PASS_STALE_POLICY"
+        assert row["latest_preflight_policy_current"] is False
+        assert row["required_preflight_policy_version"] == PREFLIGHT_POLICY_VERSION
         assert row["send_mail"] is False
     finally:
         _cleanup(token)

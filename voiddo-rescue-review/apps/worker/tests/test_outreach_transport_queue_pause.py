@@ -40,6 +40,17 @@ class FakeConnection:
         return None
 
 
+class PreflightCursor:
+    def __init__(self, row):
+        self.row = row
+
+    def execute(self, sql, params=None):
+        return None
+
+    def fetchone(self):
+        return self.row
+
+
 def test_outreach_queue_pause_state_blocks_on_runtime_pause(monkeypatch):
     monkeypatch.setenv("OUTREACH_DRY_RUN", "false")
     monkeypatch.setenv("OUTREACH_PAUSED", "false")
@@ -61,3 +72,24 @@ def test_process_outreach_queue_does_not_consume_rows_when_paused(monkeypatch):
     assert result["blocked"] == 0
     assert result["paused"] is True
     assert "runtime_pause_outreach" in result["blockers"]
+
+
+def test_latest_campaign_preflight_blocks_legacy_policy():
+    status = outreach_transport._latest_campaign_preflight(
+        PreflightCursor(
+            {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "decision": "PASS_NO_SEND_PREFLIGHT",
+                "checked_count": 1,
+                "ready_count": 1,
+                "blocker_count": 0,
+                "fresh": True,
+                "policy_version": "legacy_before_mx_bounce_gate",
+                "created_at": None,
+            }
+        ),
+        "00000000-0000-0000-0000-000000000002",
+    )
+    assert status["allowed"] is False
+    assert status["reason"] == "campaign_preflight_policy_stale"
+    assert status["required_policy_version"] == outreach_transport.PREFLIGHT_POLICY_VERSION

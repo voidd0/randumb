@@ -6,7 +6,7 @@ from psycopg.types.json import Jsonb
 
 from .campaign_preview_quality import campaign_preview_quality_pack
 from .campaign_preview_reviews import campaign_preview_review_summary
-from .campaign_preflight_status import PREFLIGHT_FRESH_MINUTES, latest_campaign_preflight_status
+from .campaign_preflight_status import PREFLIGHT_FRESH_MINUTES, PREFLIGHT_POLICY_VERSION, latest_campaign_preflight_status
 from .db import execute, fetch_all, fetch_one
 from .mailer_action_queue import process_mailer_action_queue
 from .mailer_control_room import mailer_digest_trend_guard, mailer_policy_score
@@ -151,6 +151,7 @@ def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
     result = json_safe(
         {
             "campaign_id": campaign_id,
+            "policy_version": PREFLIGHT_POLICY_VERSION,
             "status": "completed",
             "decision": decision,
             "checked_count": int(quality.get("checked_count") or 0),
@@ -214,7 +215,9 @@ def latest_campaign_preflight_runs(limit: int = 10) -> dict[str, Any]:
         """
         SELECT id, campaign_id, status, decision, checked_count, ready_count, blocker_count,
                send_mail, smtp_called, live_outreach_allowed,
-               raw_recipient_addresses_included, secrets_included, created_at
+               raw_recipient_addresses_included, secrets_included,
+               COALESCE(result_json->>'policy_version', '') AS policy_version,
+               created_at
         FROM campaign_preflight_runs
         ORDER BY created_at DESC
         LIMIT %s
@@ -237,6 +240,9 @@ def latest_campaign_preflight_runs(limit: int = 10) -> dict[str, Any]:
                 "live_outreach_allowed": bool(row["live_outreach_allowed"]),
                 "raw_recipient_addresses_included": bool(row["raw_recipient_addresses_included"]),
                 "secrets_included": bool(row["secrets_included"]),
+                "policy_version": row["policy_version"] or None,
+                "required_policy_version": PREFLIGHT_POLICY_VERSION,
+                "policy_current": row["policy_version"] == PREFLIGHT_POLICY_VERSION,
                 "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
             }
             for row in rows

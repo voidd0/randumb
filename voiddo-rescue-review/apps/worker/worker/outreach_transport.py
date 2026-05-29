@@ -14,6 +14,8 @@ from psycopg.types.json import Jsonb
 
 from .db import connect
 
+PREFLIGHT_POLICY_VERSION = "20260529_mx_bounce_v1"
+
 
 def _latest_decision(table: str) -> str:
     with connect() as conn:
@@ -165,6 +167,7 @@ def _latest_campaign_preflight(cur, campaign_id: str | None) -> dict:
     cur.execute(
         """
         SELECT id, decision, checked_count, ready_count, blocker_count, created_at,
+               COALESCE(result_json->>'policy_version', '') AS policy_version,
                created_at >= now() - interval '120 minutes' AS fresh
         FROM campaign_preflight_runs
         WHERE campaign_id = %s
@@ -176,16 +179,28 @@ def _latest_campaign_preflight(cur, campaign_id: str | None) -> dict:
     row = cur.fetchone()
     if not row:
         return {"allowed": False, "reason": "campaign_preflight_missing", "decision": "MISSING", "fresh": False}
-    allowed = row["decision"] == "PASS_NO_SEND_PREFLIGHT" and bool(row["fresh"])
+    policy_current = row["policy_version"] == PREFLIGHT_POLICY_VERSION
+    allowed = row["decision"] == "PASS_NO_SEND_PREFLIGHT" and bool(row["fresh"]) and policy_current
+    if allowed:
+        reason = "campaign_preflight_pass"
+    elif row["decision"] == "PASS_NO_SEND_PREFLIGHT" and not policy_current:
+        reason = "campaign_preflight_policy_stale"
+    elif row["decision"] == "PASS_NO_SEND_PREFLIGHT":
+        reason = "campaign_preflight_stale"
+    else:
+        reason = "campaign_preflight_not_pass"
     return {
         "allowed": allowed,
-        "reason": "campaign_preflight_pass" if allowed else ("campaign_preflight_stale" if row["decision"] == "PASS_NO_SEND_PREFLIGHT" else "campaign_preflight_not_pass"),
+        "reason": reason,
         "id": str(row["id"]),
         "decision": row["decision"],
         "checked_count": int(row["checked_count"] or 0),
         "ready_count": int(row["ready_count"] or 0),
         "blocker_count": int(row["blocker_count"] or 0),
         "fresh": bool(row["fresh"]),
+        "policy_version": row["policy_version"] or None,
+        "required_policy_version": PREFLIGHT_POLICY_VERSION,
+        "policy_current": policy_current,
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
     }
 

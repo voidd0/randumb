@@ -9,6 +9,7 @@ from psycopg.types.json import Jsonb
 
 from app.autonomous_agents import run_agent
 from app.campaign_preflight import campaign_preflight_batch, campaign_preflight_orphan_hygiene, latest_campaign_preflight_runs
+from app.campaign_preflight_status import PREFLIGHT_POLICY_VERSION, latest_campaign_preflight_status
 from app.campaign_preview_reviews import review_campaign_preview
 from app.db import execute, fetch_one
 from app.lead_scoring import score_lead
@@ -134,11 +135,41 @@ def test_campaign_preflight_passes_quality_and_policy_without_send(monkeypatch):
         assert result["passed_count"] == 1
         run = result["runs"][0]
         assert run["decision"] == "PASS_NO_SEND_PREFLIGHT"
+        assert run["policy_version"] == PREFLIGHT_POLICY_VERSION
         assert run["send_mail"] is False
         assert run["smtp_called"] is False
         assert run["live_outreach_allowed"] is False
         assert f"owner-{token}@" not in str(result)
         assert latest_campaign_preflight_runs(5)["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_preflight_status_blocks_stale_policy_even_when_time_fresh():
+    token = uuid.uuid4().hex[:8]
+    try:
+        campaign_id = _campaign(token)
+        row = execute(
+            """
+            INSERT INTO campaign_preflight_runs(
+              campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json,
+              send_mail, smtp_called, live_outreach_allowed, raw_recipient_addresses_included, secrets_included
+            )
+            VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s, false, false, false, false, false)
+            RETURNING id
+            """,
+            (
+                campaign_id,
+                Jsonb({"token": token, "policy_version": "legacy_before_mx_bounce_gate"}),
+            ),
+        )
+        status = latest_campaign_preflight_status(campaign_id)
+        assert status["id"] == str(row["id"])
+        assert status["fresh"] is True
+        assert status["policy_current"] is False
+        assert status["allowed"] is False
+        assert status["reason"] == "campaign_preflight_policy_stale"
+        assert status["required_policy_version"] == PREFLIGHT_POLICY_VERSION
     finally:
         _cleanup(token)
 

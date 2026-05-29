@@ -14,6 +14,7 @@ SAFE_PREFLIGHT_FLAGS = {
 }
 
 PREFLIGHT_FRESH_MINUTES = 120
+PREFLIGHT_POLICY_VERSION = "20260529_mx_bounce_v1"
 
 
 def latest_campaign_preflight_status(campaign_id: str | None, max_age_minutes: int = PREFLIGHT_FRESH_MINUTES) -> dict[str, Any]:
@@ -28,6 +29,7 @@ def latest_campaign_preflight_status(campaign_id: str | None, max_age_minutes: i
     row = fetch_one(
         """
         SELECT id, campaign_id, status, decision, checked_count, ready_count, blocker_count, created_at,
+               COALESCE(result_json->>'policy_version', '') AS policy_version,
                created_at >= now() - (%s || ' minutes')::interval AS fresh
         FROM campaign_preflight_runs
         WHERE campaign_id = %s
@@ -45,10 +47,16 @@ def latest_campaign_preflight_status(campaign_id: str | None, max_age_minutes: i
             "fresh": False,
             **SAFE_PREFLIGHT_FLAGS,
         }
-    allowed = row["decision"] == "PASS_NO_SEND_PREFLIGHT" and bool(row["fresh"])
-    reason = "campaign_preflight_pass" if allowed else (
-        "campaign_preflight_stale" if row["decision"] == "PASS_NO_SEND_PREFLIGHT" else "campaign_preflight_not_pass"
-    )
+    policy_current = row["policy_version"] == PREFLIGHT_POLICY_VERSION
+    allowed = row["decision"] == "PASS_NO_SEND_PREFLIGHT" and bool(row["fresh"]) and policy_current
+    if allowed:
+        reason = "campaign_preflight_pass"
+    elif row["decision"] == "PASS_NO_SEND_PREFLIGHT" and not policy_current:
+        reason = "campaign_preflight_policy_stale"
+    elif row["decision"] == "PASS_NO_SEND_PREFLIGHT":
+        reason = "campaign_preflight_stale"
+    else:
+        reason = "campaign_preflight_not_pass"
     return {
         "allowed": allowed,
         "reason": reason,
@@ -60,6 +68,9 @@ def latest_campaign_preflight_status(campaign_id: str | None, max_age_minutes: i
         "ready_count": int(row["ready_count"] or 0),
         "blocker_count": int(row["blocker_count"] or 0),
         "fresh": bool(row["fresh"]),
+        "policy_version": row["policy_version"] or None,
+        "required_policy_version": PREFLIGHT_POLICY_VERSION,
+        "policy_current": policy_current,
         "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
         **SAFE_PREFLIGHT_FLAGS,
     }
