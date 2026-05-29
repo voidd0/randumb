@@ -234,7 +234,7 @@ def _campaign_launch_evidence() -> dict[str, Any]:
     }
 
 
-def _safe_to_execute() -> tuple[bool, list[dict[str, Any]]]:
+def _safe_to_execute(allow_mail_blocked_no_send: bool = False) -> tuple[bool, list[dict[str, Any]]]:
     issues: list[dict[str, Any]] = []
     state = runtime_state_snapshot()
     signals = mail_signal_summary(24)
@@ -247,22 +247,22 @@ def _safe_to_execute() -> tuple[bool, list[dict[str, Any]]]:
         and int(signals.get("spam_signal_count", 0) or 0) == 0
         and int(signals.get("mail_auth_failure_count", 0) or 0) == 0
     )
-    if live_outreach_sent > 0 and not clean_active_canary:
+    if live_outreach_sent > 0 and not clean_active_canary and not allow_mail_blocked_no_send:
         issues.append({"code": "unsafe_live_outreach_state", "severity": "high"})
     if (
         signals.get("bounce_or_dsn_count")
         or signals.get("rate_limit_count")
         or signals.get("spam_signal_count")
         or signals.get("mail_auth_failure_count")
-    ):
+    ) and not allow_mail_blocked_no_send:
         issues.append({"code": "recent_mail_signal", "severity": "high", "signals": signals})
-    if state.get("latest_mail_qa_decision") != "PASS":
+    if state.get("latest_mail_qa_decision") != "PASS" and not allow_mail_blocked_no_send:
         issues.append({"code": "mail_qa_not_pass", "severity": "high", "decision": state.get("latest_mail_qa_decision")})
     return not issues, issues
 
 
 def _execute_safe_build_items(limit: int) -> dict[str, Any]:
-    allowed, blockers = _safe_to_execute()
+    allowed, blockers = _safe_to_execute(allow_mail_blocked_no_send=True)
     if not allowed:
         return {"executed": 0, "blocked": len(blockers), "blockers": blockers}
     rows = fetch_all(

@@ -79,7 +79,7 @@ def test_self_development_executes_safe_lead_supply_item_without_send(monkeypatc
             """,
             (f"Close revenue autonomy gap: approved preview stockpile below target {token}", Jsonb([token])),
         )
-        monkeypatch.setattr(dev_module, "_safe_to_execute", lambda: (True, []))
+        monkeypatch.setattr(dev_module, "_safe_to_execute", lambda allow_mail_blocked_no_send=False: (True, []))
         monkeypatch.setattr(
             dev_module,
             "lead_supply_buildout",
@@ -151,6 +151,9 @@ def test_self_development_safe_to_execute_blocks_unsafe_live_state(monkeypatch):
     allowed, blockers = dev_module._safe_to_execute()
     assert allowed is False
     assert {item["code"] for item in blockers} == {"unsafe_live_outreach_state", "recent_mail_signal"}
+    no_send_allowed, no_send_blockers = dev_module._safe_to_execute(allow_mail_blocked_no_send=True)
+    assert no_send_allowed is True
+    assert no_send_blockers == []
 
 
 def test_self_development_closes_resolved_campaign_readiness_items(monkeypatch):
