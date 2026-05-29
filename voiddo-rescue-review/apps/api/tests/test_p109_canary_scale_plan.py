@@ -8,6 +8,7 @@ import app.canary_scale_plan as scale_module
 from app.autonomous_agents import run_agent
 from app.canary_scale_plan import canary_scale_plan
 from app.main import app
+from app.p0 import execute_owner_command, parse_owner_command
 
 
 client = TestClient(app)
@@ -123,3 +124,23 @@ def test_canary_scale_plan_agent_is_no_send(monkeypatch):
     assert result["result_json"]["send_mail"] is False
     assert result["result_json"]["live_outreach_allowed"] is False
     assert result["result_json"]["decision"] == "READY_FOR_NEXT_BATCH_DRY_RUN"
+
+
+def test_owner_command_show_canary_scale_is_safe_auto_and_no_send(monkeypatch):
+    monkeypatch.setattr(
+        scale_module,
+        "canary_scale_plan",
+        lambda canary_limit=20, next_batch_limit=40, store=True: {
+            "decision": "CONTINUE_CURRENT_CANARY",
+            "send_mail": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+        },
+    )
+    parsed = parse_owner_command(os.environ.get("OWNER_COMMAND_EMAIL", "gkorner@gmail.com"), "SHOW CANARY SCALE", "")
+    assert parsed["risk_level"] == "SAFE_AUTO"
+    result = execute_owner_command(parsed)
+    assert result["ok"] is True
+    assert result["action"] == "canary_scale_status"
+    assert result["plan"]["send_mail"] is False
+    assert result["plan"]["live_outreach_allowed"] is False

@@ -987,6 +987,8 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "ПОКАЖИ ПЛАТЕЖИ": "SHOW PAYMENTS",
         "ПОКАЖИ РУЧНУЮ ПРОВЕРКУ": "SHOW HUMAN REVIEW",
         "ПОКАЖИ ЖИВУЮ ОЧЕРЕДЬ": "SHOW LIVE QUEUE",
+        "ПОКАЖИ КАНАРЕЙКУ": "SHOW CANARY SCALE",
+        "ПОКАЖИ КАНАРИ": "SHOW CANARY SCALE",
         "ПОКАЖИ ЗАПАС ЛИДОВ": "SHOW LEAD SUPPLY",
         "ПОКАЖИ SUPPLY": "SHOW LEAD SUPPLY",
         "ЗАПУСТИ ЗАПАС ЛИДОВ": "RUN LEAD SUPPLY BUILDOUT",
@@ -1019,7 +1021,7 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",
         "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
         "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE", "SHOW LAUNCH RUNBOOK", "ROLLBACK LIVE OUTREACH",
-        "SHOW LEAD SUPPLY",
+        "SHOW LEAD SUPPLY", "SHOW CANARY SCALE",
     }
     medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP", "RUN LEAD SUPPLY BUILDOUT"}
     medium.add("RUN LAUNCH REHEARSAL")
@@ -1882,6 +1884,14 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
             "action": "live_queue_status",
             "queue": live_outreach_queue_candidates(20),
             "history": latest_outreach_send_runs(10),
+        }
+    elif command == "SHOW CANARY SCALE":
+        from .canary_scale_plan import canary_scale_plan
+
+        result = {
+            "ok": True,
+            "action": "canary_scale_status",
+            "plan": canary_scale_plan(20, 40, store=True),
         }
     elif command == "SHOW LEAD SUPPLY":
         from .lead_discovery import quality_aware_regional_target_plan
