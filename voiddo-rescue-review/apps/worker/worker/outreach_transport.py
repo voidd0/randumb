@@ -246,6 +246,7 @@ def process_outreach_queue(limit: int = 1) -> dict:
                 SELECT id
                 FROM outreach_messages
                 WHERE status = 'queued'
+                  AND COALESCE(send_after, created_at) <= now()
                 ORDER BY created_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT %s

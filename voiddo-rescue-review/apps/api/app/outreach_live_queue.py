@@ -178,7 +178,16 @@ def stage_live_outreach_batch(limit: int = 20, dry_run: bool = True, requested_b
     decision = "STAGED_FOR_WORKER" if not blockers else "BLOCKED"
     if decision == "STAGED_FOR_WORKER":
         ids = [str(row["outreach_message_id"]) for row in candidates]
-        execute("UPDATE outreach_messages SET status = 'queued' WHERE id = ANY(%s::uuid[])", (ids,))
+        for index, message_id in enumerate(ids):
+            execute(
+                """
+                UPDATE outreach_messages
+                SET status = 'queued',
+                    send_after = now() + (%s::text || ' minutes')::interval
+                WHERE id = %s
+                """,
+                (index * 24, message_id),
+            )
         staged_ids = ids
 
     result = json_safe(
@@ -193,6 +202,7 @@ def stage_live_outreach_batch(limit: int = 20, dry_run: bool = True, requested_b
             "quota": quota,
             "readiness_decision": readiness.get("decision"),
             "candidate_ids": staged_ids if staged_ids else [],
+            "send_spacing_minutes": 24,
             "candidate_preview": [
                 {
                     "outreach_message_id": str(row["outreach_message_id"]),

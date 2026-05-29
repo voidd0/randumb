@@ -79,6 +79,43 @@ def test_live_outreach_queue_stage_dry_run_never_changes_preview_status():
     assert after_preview["count"] == before_preview["count"]
 
 
+def test_live_outreach_stage_assigns_24_minute_due_spacing(monkeypatch):
+    import app.outreach_live_queue as queue_module
+
+    class Settings:
+        daily_send_limit = 20
+        outreach_dry_run = False
+        outreach_paused = False
+        first_live_send_flag = True
+        allow_live_outreach_activation = True
+
+    updates: list[tuple[int, str]] = []
+    monkeypatch.setattr(queue_module, "get_settings", lambda: Settings())
+    monkeypatch.setattr(queue_module, "launch_activation_readiness", lambda _limit: {"decision": "READY_FOR_OPERATOR_ENV_ACTIVATION"})
+    monkeypatch.setattr(queue_module, "live_outreach_quota_status", lambda: {"allowed": True, "blockers": []})
+    monkeypatch.setattr(
+        queue_module,
+        "_candidate_rows",
+        lambda _limit: [
+            {"outreach_message_id": "00000000-0000-0000-0000-000000000001", "campaign_id": "c1", "domain": "one.example", "public_slug": "one", "recipient_domain": "one.example"},
+            {"outreach_message_id": "00000000-0000-0000-0000-000000000002", "campaign_id": "c1", "domain": "two.example", "public_slug": "two", "recipient_domain": "two.example"},
+            {"outreach_message_id": "00000000-0000-0000-0000-000000000003", "campaign_id": "c1", "domain": "three.example", "public_slug": "three", "recipient_domain": "three.example"},
+        ],
+    )
+
+    def fake_execute(sql, params=()):
+        if "send_after = now()" in sql:
+            updates.append((params[0], params[1]))
+            return None
+        return {"id": "run-id", "status": "queued", "decision": "STAGED_FOR_WORKER", "requested_by": "test", "dry_run": False, "requested_limit": 3, "candidate_count": 3, "staged_count": 3, "sent_count": 0, "blocked_count": 0, "created_at": "now"}
+
+    monkeypatch.setattr(queue_module, "execute", fake_execute)
+    result = queue_module.stage_live_outreach_batch(3, dry_run=False, requested_by="test")
+    assert result["result"]["decision"] == "STAGED_FOR_WORKER"
+    assert result["result"]["send_spacing_minutes"] == 24
+    assert [minute for minute, _message_id in updates] == [0, 24, 48]
+
+
 def test_live_outreach_queue_candidates_are_redacted():
     result = live_outreach_queue_candidates(5)
     assert result["send_mail"] is False
