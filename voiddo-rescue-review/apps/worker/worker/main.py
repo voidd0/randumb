@@ -2,6 +2,7 @@ import json
 import os
 import time
 from datetime import datetime, timezone
+from urllib import error, request
 
 from .inbox_engine import poll_all
 from .outreach_transport import process_outreach_queue
@@ -12,6 +13,44 @@ from .studio_mail_monitor import poll_studio_mailbox
 
 def log(event: str, **payload):
     print(json.dumps({"ts": datetime.now(timezone.utc).isoformat(), "event": event, **payload}, sort_keys=True), flush=True)
+
+
+def run_post_send_observer_after_outreach(sent_count: int) -> dict:
+    if sent_count <= 0:
+        return {"attempted": False, "reason": "no_sent_messages"}
+    token = os.environ.get("ADMIN_AUTH_TOKEN", "")
+    if not token:
+        return {"attempted": False, "reason": "admin_auth_token_missing"}
+    base_url = (
+        os.environ.get("RESCUE_API_INTERNAL_URL")
+        or os.environ.get("API_INTERNAL_URL")
+        or os.environ.get("API_INTERNAL_BASE_URL")
+        or "http://api:8080"
+    ).rstrip("/")
+    payload = json.dumps({"window_hours": 24, "apply_pause": True}).encode("utf-8")
+    req = request.Request(
+        f"{base_url}/admin/outreach/post-send-observer/run",
+        data=payload,
+        headers={"Content-Type": "application/json", "X-Admin-Token": token},
+        method="POST",
+    )
+    timeout = max(5, min(int(os.environ.get("POST_SEND_OBSERVER_TIMEOUT_SECONDS", "30") or "30"), 120))
+    try:
+        with request.urlopen(req, timeout=timeout) as response:
+            body = json.loads(response.read().decode("utf-8") or "{}")
+    except error.HTTPError as exc:
+        return {"attempted": True, "ok": False, "reason": "http_error", "status": exc.code}
+    except Exception as exc:
+        return {"attempted": True, "ok": False, "reason": type(exc).__name__}
+    observer = body.get("observer") or {}
+    result = observer.get("result") or {}
+    return {
+        "attempted": True,
+        "ok": bool(body.get("ok")),
+        "decision": result.get("decision") or observer.get("decision"),
+        "pause_outreach_applied": bool(result.get("pause_outreach_applied") or observer.get("pause_outreach_applied")),
+        "blocker_count": len(result.get("blockers") or observer.get("blockers") or []),
+    }
 
 
 def main():
@@ -55,6 +94,9 @@ def main():
                     result = process_outreach_queue(int(os.environ.get("OUTREACH_MESSAGES_PER_TICK", "1") or "1"))
                     if result.get("processed"):
                         log("outreach_queue_processed", **result)
+                    if int(result.get("sent") or 0) > 0:
+                        observer = run_post_send_observer_after_outreach(int(result.get("sent") or 0))
+                        log("outreach_post_send_observer_complete", **observer)
                 except Exception as exc:
                     log("outreach_queue_failed", error=type(exc).__name__)
         time.sleep(tick_seconds)
