@@ -48,16 +48,23 @@ def canary_scale_plan(canary_limit: int = 20, next_batch_limit: int = 40, store:
     reply_count = _count(
         """
         SELECT count(*) AS count
-        FROM inbox_threads
-        WHERE updated_at >= COALESCE((SELECT min(sent_at) FROM outreach_messages WHERE status = 'sent'), now())
+        FROM inbox_threads it
+        WHERE it.lead_id IN (
+            SELECT lead_id FROM outreach_messages
+            WHERE status = 'sent'
+              AND lead_id IS NOT NULL
+        )
+          AND it.updated_at >= COALESCE((SELECT min(sent_at) FROM outreach_messages WHERE status = 'sent'), now())
         """
     )
     click_count = _count(
         """
         SELECT count(*) AS count
-        FROM email_events
-        WHERE event_type IN ('click', 'clicked', 'outreach_click')
-          AND created_at >= COALESCE((SELECT min(sent_at) FROM outreach_messages WHERE status = 'sent'), now())
+        FROM email_events ee
+        JOIN outreach_messages om ON om.id = ee.outreach_message_id
+        WHERE om.status = 'sent'
+          AND ee.event_type IN ('click', 'clicked', 'outreach_click')
+          AND ee.created_at >= COALESCE((SELECT min(sent_at) FROM outreach_messages WHERE status = 'sent'), now())
         """
     )
     latest_sent = fetch_one(
