@@ -3,10 +3,12 @@ from __future__ import annotations
 from email.message import EmailMessage
 from email.utils import make_msgid
 import hashlib
+import json
 import os
 import re
 import smtplib
 import ssl
+from urllib import request, error
 
 from psycopg.types.json import Jsonb
 
@@ -171,6 +173,53 @@ def _latest_campaign_preflight(cur, campaign_id: str | None) -> dict:
     }
 
 
+def _refresh_campaign_preflight(campaign_id: str | None) -> dict:
+    if not campaign_id:
+        return {"attempted": False, "ok": False, "reason": "campaign_id_missing"}
+    admin_token = os.environ.get("ADMIN_AUTH_TOKEN", "")
+    if not admin_token:
+        return {"attempted": False, "ok": False, "reason": "admin_auth_token_missing"}
+    base_url = (
+        os.environ.get("RESCUE_API_INTERNAL_URL")
+        or os.environ.get("API_INTERNAL_URL")
+        or "http://api:8080"
+    ).rstrip("/")
+    payload = json.dumps({"campaign_id": campaign_id, "limit": 20}).encode("utf-8")
+    req = request.Request(
+        f"{base_url}/admin/campaign-preflight/run",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "X-Admin-Token": admin_token,
+        },
+        method="POST",
+    )
+    timeout = max(5, min(int(os.environ.get("CAMPAIGN_PREFLIGHT_REFRESH_TIMEOUT_SECONDS", "45") or "45"), 120))
+    try:
+        with request.urlopen(req, timeout=timeout) as response:
+            body = json.loads(response.read().decode("utf-8") or "{}")
+    except error.HTTPError as exc:
+        return {"attempted": True, "ok": False, "reason": "http_error", "status": exc.code}
+    except Exception as exc:
+        return {"attempted": True, "ok": False, "reason": type(exc).__name__}
+    preflight = body.get("preflight") or {}
+    runs = preflight.get("runs") or []
+    passed = int(preflight.get("passed_count") or 0)
+    failed = int(preflight.get("failed_count") or 0)
+    return {
+        "attempted": True,
+        "ok": bool(body.get("ok")) and passed > 0 and failed == 0,
+        "reason": "refreshed" if bool(body.get("ok")) else "api_not_ok",
+        "campaign_count": int(preflight.get("campaign_count") or 0),
+        "passed_count": passed,
+        "failed_count": failed,
+        "decisions": [str(item.get("decision") or "") for item in runs[:5]],
+        "send_mail": bool(body.get("send_mail", False) or preflight.get("send_mail", False)),
+        "smtp_called": bool(body.get("smtp_called", False) or preflight.get("smtp_called", False)),
+        "live_outreach_allowed": bool(body.get("live_outreach_allowed", False) or preflight.get("live_outreach_allowed", False)),
+    }
+
+
 def _live_quota(cur, email: str) -> dict:
     domain = (email or "").strip().lower().rsplit("@", 1)[-1] if "@" in (email or "") else ""
     daily_limit = max(1, int(os.environ.get("DAILY_SEND_LIMIT", "20") or "20"))
@@ -240,6 +289,19 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None, html_b
             checks["warmup_maturity"] = _warmup_maturity(cur)
             checks["live_quota"] = _live_quota(cur, email)
             checks["runtime_outreach_paused"] = _runtime_control_enabled(cur, "pause_outreach", "pause_all_workers", "pause_workers")
+    live_flags_armed = (
+        checks["outreach_dry_run"] is False
+        and checks["outreach_paused"] is False
+        and checks["runtime_outreach_paused"] is False
+        and checks["first_live_send_flag"] is True
+    )
+    if campaign_id and live_flags_armed and not checks["campaign_preflight"]["allowed"]:
+        refresh = _refresh_campaign_preflight(campaign_id)
+        checks["campaign_preflight_refresh"] = refresh
+        if refresh.get("ok"):
+            with connect() as conn:
+                with conn.cursor() as cur:
+                    checks["campaign_preflight"] = _latest_campaign_preflight(cur, campaign_id)
     if checks["outreach_dry_run"]:
         return False, "outreach_dry_run_enabled", checks
     if checks["outreach_paused"] or checks["runtime_outreach_paused"] or not checks["first_live_send_flag"]:
