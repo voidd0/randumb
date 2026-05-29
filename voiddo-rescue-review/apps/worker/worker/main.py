@@ -4,11 +4,14 @@ import time
 from datetime import datetime, timezone
 from urllib import error, request
 
+from psycopg.types.json import Jsonb
+
 from .inbox_engine import poll_all
 from .outreach_transport import process_outreach_queue
 from .pipeline import process_scanner_jobs
 from .scouts import process_one_scout_run
 from .studio_mail_monitor import poll_studio_mailbox
+from .db import connect
 
 
 def log(event: str, **payload):
@@ -51,6 +54,28 @@ def run_post_send_observer_after_outreach(sent_count: int) -> dict:
         "pause_outreach_applied": bool(result.get("pause_outreach_applied") or observer.get("pause_outreach_applied")),
         "blocker_count": len(result.get("blockers") or observer.get("blockers") or []),
     }
+
+
+def pause_outreach_after_observer_failure(reason: str) -> dict:
+    safe_reason = (reason or "observer_failed")[:120]
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO runtime_controls(key, value, source, updated_at)
+                VALUES ('pause_outreach', true, 'worker_post_send_observer', now())
+                ON CONFLICT (key) DO UPDATE
+                SET value = EXCLUDED.value,
+                    source = EXCLUDED.source,
+                    updated_at = now()
+                """
+            )
+            cur.execute(
+                "INSERT INTO system_events(type, severity, message, payload_json) VALUES ('outreach.post_send_observer_failed_pause', 'critical', %s, %s)",
+                (safe_reason, Jsonb({"reason": safe_reason, "raw_private_addresses_included": False, "secrets_included": False})),
+            )
+        conn.commit()
+    return {"paused": True, "reason": safe_reason}
 
 
 def main():
@@ -97,6 +122,9 @@ def main():
                     if int(result.get("sent") or 0) > 0:
                         observer = run_post_send_observer_after_outreach(int(result.get("sent") or 0))
                         log("outreach_post_send_observer_complete", **observer)
+                        if observer.get("attempted") and not observer.get("ok"):
+                            pause = pause_outreach_after_observer_failure(str(observer.get("reason") or "observer_not_ok"))
+                            log("outreach_paused_after_observer_failure", **pause)
                 except Exception as exc:
                     log("outreach_queue_failed", error=type(exc).__name__)
         time.sleep(tick_seconds)

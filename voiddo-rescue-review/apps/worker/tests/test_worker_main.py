@@ -54,3 +54,36 @@ def test_post_send_observer_posts_to_protected_api(monkeypatch):
     assert calls[0]["url"] == "http://api:8080/admin/outreach/post-send-observer/run"
     assert calls[0]["headers"]["X-admin-token"] == "test-token"
     assert json.loads(calls[0]["data"].decode("utf-8")) == {"window_hours": 24, "apply_pause": True}
+
+
+def test_observer_failure_pause_sets_runtime_control(monkeypatch):
+    queries: list[tuple[str, object]] = []
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, sql, params=None):
+            queries.append((sql, params))
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def cursor(self):
+            return FakeCursor()
+
+        def commit(self):
+            queries.append(("COMMIT", None))
+
+    monkeypatch.setattr(worker_main, "connect", lambda: FakeConnection())
+    result = worker_main.pause_outreach_after_observer_failure("ReadTimeout")
+    assert result == {"paused": True, "reason": "ReadTimeout"}
+    assert any("INSERT INTO runtime_controls" in sql for sql, _params in queries)
+    assert any("outreach.post_send_observer_failed_pause" in sql for sql, _params in queries)
