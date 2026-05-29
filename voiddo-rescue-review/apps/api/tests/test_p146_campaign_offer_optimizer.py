@@ -75,7 +75,7 @@ def test_campaign_offer_optimizer_applies_contact_offer_without_send():
         assert recommendation["recommended_offer_key"] == "contact_form_repair"
         assert recommendation["send_mail"] is False
 
-        result = optimize_campaign_offers(limit=20, apply=True)
+        result = optimize_campaign_offers(limit=200, apply=True)
 
         assert result["send_mail"] is False
         assert result["live_outreach_allowed"] is False

@@ -81,7 +81,7 @@ from .revenue_simulation import run_synthetic_lead_simulation
 from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
 from .revenue_autonomy_gap import create_revenue_autonomy_gap_actions, revenue_autonomy_gap_snapshot
 from .source_campaign_operator import advance_source_to_campaign, source_campaign_operator_snapshot
-from .language_gate import check_no_ai_public_language
+from .language_gate import check_no_ai_public_language, check_public_copy_quality
 from .scout_run_recovery import recover_stale_scout_runs, stale_scout_run_recovery_snapshot
 from .scanner_ops import recover_stale_running_scanner_jobs, retry_transient_scanner_failures, scanner_queue_health_snapshot, scanner_stale_running_snapshot
 from .scanner_queue_hygiene import archive_scanner_queue_artifacts, scanner_queue_hygiene_snapshot
@@ -610,6 +610,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "warmup_spacing_apply_gate_agent": lambda: apply_provider_spacing_when_safe(50),
         "warmup_post_send_observer_agent": lambda: observe_warmup_post_send(int(payload.get("limit", 10)), pause_on_blocker=True),
         "public_language_gate_agent": lambda: check_no_ai_public_language(),
+        "public_copy_gate_agent": lambda: check_public_copy_quality(limit=int(payload.get("limit", 100))),
     }
     if agent not in agents:
         raise ValueError("unknown_agent")
@@ -723,6 +724,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("campaign_geo_hygiene_agent", {"limit": 500, "apply": True}),
         ("campaign_preflight_orphan_hygiene_agent", {"limit": 100, "apply": True}),
         ("campaign_offer_optimizer_agent", {"limit": 50, "apply": True}),
+        ("public_copy_gate_agent", {"limit": 100}),
         ("campaign_preflight_agent", {"limit": 20}),
         ("scout_campaign_quality_summary_agent", {}),
         ("scout_campaign_quality_regression_guard_agent", {}),
