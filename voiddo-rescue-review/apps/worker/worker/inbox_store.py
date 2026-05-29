@@ -8,6 +8,13 @@ from psycopg.types.json import Jsonb
 
 from .db import connect
 
+BOUNCE_REASON_PATTERNS = {
+    "mailbox_unavailable": ["mailbox unavailable", "user unknown", "recipient address rejected", "no such user", "address not found", "does not exist"],
+    "domain_not_found": ["domain not found", "host or domain name not found", "no mx", "dns error", "unrouteable address"],
+    "blocked_policy": ["blocked", "spam", "policy", "reputation", "blacklist", "denied", "rejected due to"],
+    "temporary_defer": ["rate", "temporarily", "try again later", "greylist", "deferred"],
+}
+
 
 def _recipient_hash(email: str) -> str:
     return hashlib.sha256((email or "").strip().lower().encode("utf-8")).hexdigest()
@@ -28,6 +35,29 @@ def _email_provider(email: str) -> str:
     if domain == "yahoo.com":
         return "yahoo"
     return domain or "unknown"
+
+
+def _bounce_reason(subject: str, body: str) -> str:
+    text = f"{subject}\n{body}".lower()
+    for reason, markers in BOUNCE_REASON_PATTERNS.items():
+        if any(marker in text for marker in markers):
+            return reason
+    return "unknown"
+
+
+def _extract_bounced_recipient(body: str) -> str:
+    import re
+
+    patterns = [
+        r"Final-Recipient:\s*rfc822;\s*([^\s<>;,]+@[^\s<>;,]+)",
+        r"Original-Recipient:\s*rfc822;\s*([^\s<>;,]+@[^\s<>;,]+)",
+        r"X-Failed-Recipients:\s*([^\s<>;,]+@[^\s<>;,]+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, body or "", flags=re.IGNORECASE)
+        if match:
+            return match.group(1).strip().lower()
+    return ""
 
 
 def persist_message(item: Any) -> bool:
@@ -80,6 +110,21 @@ def persist_message(item: Any) -> bool:
                     """,
                     (sender, sender),
                 )
+            bounce_reason = _bounce_reason(item.subject, item.body) if item.classification == "bounce" else ""
+            bounced_recipient = _extract_bounced_recipient(item.body) if item.classification == "bounce" else ""
+            if item.classification == "bounce" and bounced_recipient:
+                cur.execute(
+                    """
+                    INSERT INTO suppression_list(email, reason, source)
+                    SELECT %s, %s, 'inbox_bounce'
+                    WHERE NOT EXISTS (
+                      SELECT 1 FROM suppression_list
+                      WHERE lower(email) = lower(%s)
+                        AND source = 'inbox_bounce'
+                    )
+                    """,
+                    (bounced_recipient, f"bounce_{bounce_reason}", bounced_recipient),
+                )
             if item.classification in {"bounce", "auto_reply", "out_of_office", "interested", "ask_price", "ask_details"}:
                 cur.execute(
                     """
@@ -93,7 +138,7 @@ def persist_message(item: Any) -> bool:
                         sender_hash,
                         sender_provider,
                         message_id,
-                        f"classified:{item.classification}",
+                        f"classified:{item.classification}" + (f":{bounce_reason}" if bounce_reason else ""),
                     ),
                 )
             if item.classification in {"legal_threat", "security_accusation", "angry"}:
