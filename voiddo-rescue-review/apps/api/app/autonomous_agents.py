@@ -52,6 +52,7 @@ from .campaign_actions import run_campaign_operator_cycle
 from .canary_batch_quality import canary_batch_quality
 from .canary_checkout_simulation import run_canary_checkout_simulation
 from .canary_operator_packet import build_canary_operator_packet
+from .canary_scale_plan import canary_scale_plan
 from .canary_send_window_plan import build_canary_send_window_plan
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
@@ -471,6 +472,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "canary_checkout_simulation_agent": lambda: run_canary_checkout_simulation(cleanup_after=bool(payload.get("cleanup_after", True))),
         "canary_operator_packet_agent": lambda: build_canary_operator_packet(int(payload.get("limit", 20)), store=True, run_checkout_simulation=bool(payload.get("run_checkout_simulation", False))),
         "canary_send_window_plan_agent": lambda: build_canary_send_window_plan(int(payload.get("limit", 20)), store=True),
+        "canary_scale_plan_agent": lambda: canary_scale_plan(
+            int(payload.get("canary_limit", 20)),
+            int(payload.get("next_batch_limit", 40)),
+            store=True,
+        ),
         "outreach_post_send_observer_agent": lambda: outreach_post_send_observer(int(payload.get("window_hours", 24)), apply_pause=bool(payload.get("apply_pause", True))),
         "outreach_post_send_observer_history_agent": lambda: latest_outreach_post_send_observer_runs(int(payload.get("limit", 10))),
         "launch_repair_plan_agent": lambda: launch_repair_plan(int(payload.get("limit", 25))),
@@ -627,6 +633,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("warmup_block_recovery_snapshot_agent", {"limit": 50}),
         ("warmup_post_send_observer_agent", {"limit": 10}),
         ("outreach_post_send_observer_agent", {"window_hours": 24, "apply_pause": True}),
+        ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),
         ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),
         ("scanner_completion_watch_agent", {"limit": 100, "min_new_completed": 1, "dry_run": False}),
         ("lead_quality_diagnostics_agent", {"limit": 500}),

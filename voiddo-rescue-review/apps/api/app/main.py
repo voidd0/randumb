@@ -107,6 +107,7 @@ from .canary_batch_quality import canary_batch_quality
 from .canary_checkout_simulation import run_canary_checkout_simulation
 from .canary_operator_packet import build_canary_operator_packet, latest_canary_operator_packet
 from .canary_send_window_plan import build_canary_send_window_plan, latest_canary_send_window_plan
+from .canary_scale_plan import canary_scale_plan
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
@@ -604,6 +605,24 @@ async def outreach_live_queue_send_window_plan_post(request: Request):
 @app.get("/admin/outreach/live-queue/send-window-plan", dependencies=[Depends(require_admin)])
 def outreach_live_queue_send_window_plan_get(limit: int = 20):
     return {"ok": True, "plan": latest_canary_send_window_plan()}
+
+
+@app.get("/admin/outreach/live-queue/scale-plan", dependencies=[Depends(require_admin)])
+def outreach_live_queue_scale_plan_get(canary_limit: int = 20, next_batch_limit: int = 40):
+    return {"ok": True, "plan": canary_scale_plan(canary_limit, next_batch_limit, store=True)}
+
+
+@app.post("/admin/outreach/live-queue/scale-plan", dependencies=[Depends(require_admin)])
+async def outreach_live_queue_scale_plan_post(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "plan": canary_scale_plan(
+            int(payload.get("canary_limit", 20)),
+            int(payload.get("next_batch_limit", 40)),
+            store=True,
+        ),
+    }
 
 
 @app.post("/admin/outreach/live-queue/stage", dependencies=[Depends(require_admin)])
