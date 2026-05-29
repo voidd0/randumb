@@ -45,7 +45,7 @@ from .scanner_priority import latest_scanner_priority_runs, prioritize_guided_sc
 from .source_scanner_queue import latest_source_scanner_queue_runs, queue_source_scanner_jobs, source_scanner_backlog
 from .security import verify_paddle_signature
 from .visual_quality import check_visual_publish_gate
-from .autonomous_agents import run_agent, run_daily_loop
+from .autonomous_agents import run_agent, run_daily_loop, run_heavy_loop
 from .email_templates import render_email_template, qa_email_template, render_all_samples
 from .lead_scoring import backfill_post_scan_lead_scores, score_lead
 from .lead_quality_diagnostics import apply_scout_source_feedback, latest_lead_quality_diagnostics_history, latest_scout_source_performance, lead_quality_diagnostics_snapshot, record_lead_quality_diagnostics, scout_source_performance
@@ -1005,6 +1005,11 @@ async def agent_run(agent: str, request: Request):
 @app.post("/admin/daily-loop/run", dependencies=[Depends(require_admin)])
 def daily_loop_run():
     return {"ok": True, "loop": run_daily_loop()}
+
+
+@app.post("/admin/heavy-loop/run", dependencies=[Depends(require_admin)])
+def heavy_loop_run():
+    return {"ok": True, "loop": run_heavy_loop()}
 
 
 @app.post("/admin/economics/audit", dependencies=[Depends(require_admin)])

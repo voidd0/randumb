@@ -763,6 +763,30 @@ def test_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
     ]
 
 
+def runtime_heavy_loop_plan() -> list[tuple[str, dict[str, Any]]]:
+    """Bounded heavier work kept out of the core safety loop."""
+    return [
+        (
+            "lead_supply_buildout_agent",
+            {
+                "target_preview_count": 140,
+                "canary_count": 20,
+                "limit": 120,
+                "max_cycles": 1,
+                "max_seconds": 90,
+                "enrichment_limit": 1,
+                "apply": True,
+            },
+        ),
+        ("scanner_stale_recovery_agent", {"limit": 25, "older_than_minutes": 15, "dry_run": False}),
+        ("scanner_completion_watch_agent", {"limit": 150, "min_new_completed": 1, "dry_run": False}),
+        ("post_scan_campaign_cycle_agent", {"limit": 150, "dry_run": False}),
+        ("campaign_preflight_agent", {"limit": 25}),
+        ("visual_qa_agent", {}),
+        ("self_development_executor_agent", {"limit": 2, "execute_safe_auto": True}),
+    ]
+
+
 def _run_daily_loop_unlocked() -> dict[str, Any]:
     if os.environ.get("PYTEST_CURRENT_TEST"):
         selected = test_daily_loop_plan()
@@ -793,3 +817,8 @@ def run_daily_loop() -> dict[str, Any]:
         finally:
             with conn.cursor() as cur:
                 cur.execute("SELECT pg_advisory_unlock(%s)", (DAILY_LOOP_ADVISORY_LOCK_KEY,))
+
+
+def run_heavy_loop() -> dict[str, Any]:
+    runs = [run_agent(agent, payload) for agent, payload in runtime_heavy_loop_plan()]
+    return {"status": "completed", "agents": len(runs), "runs": runs, "live_outreach": False, "lock_acquired": True}
