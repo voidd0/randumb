@@ -18,6 +18,7 @@ DEFAULT_LOCK = Path("/tmp/voiddo-rescue-autonomous-loop.lock")
 CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("mail_throttle_agent", {}),
     ("mail_qa_agent", {}),
+    ("mail_send_compliance_agent", {"window_hours": 24}),
     ("mailer_status_agent", {}),
     ("mail_signal_learning_agent", {}),
     ("studio_mail_monitor_health_agent", {"max_age_minutes": 15}),

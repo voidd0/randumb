@@ -25,6 +25,7 @@ from .mailer_autonomy import mailer_status_snapshot, record_mail_signal_lessons,
 from .mailer_closed_loop import run_mailer_closed_loop
 from .mailer_ops_actions import cleanup_mailer_ops_synthetic_history, write_mailer_ops_retention_agent_report
 from .mail_recovery import check_mail_clean_window
+from .mail_send_compliance import run_mail_send_compliance_agent
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
 from .reply_safety_rehearsal import run_reply_safety_rehearsal
@@ -336,6 +337,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "studio_mail_monitor_health_agent": lambda: studio_mail_monitor_health(int(payload.get("max_age_minutes", 15))),
         "visual_qa_agent": lambda: visual_qa_evidence_snapshot(),
         "mail_qa_agent": lambda: {"mail_qa": run_mail_qa()},
+        "mail_send_compliance_agent": lambda: run_mail_send_compliance_agent(int(payload.get("window_hours", 24))),
         "deliverability_agent": lambda: {"dry_run": True, "signals": mail_signal_summary()},
         "warmup_agent": lambda: run_warmup_calendar_due(limit=2),
         "warmup_block_recovery_agent": lambda: recover_blocked_warmup_slots(
@@ -615,6 +617,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
     return [
         ("mail_throttle_agent", {}),
         ("mail_qa_agent", {}),
+        ("mail_send_compliance_agent", {"window_hours": 24}),
         ("mailer_status_agent", {}),
         ("mail_signal_learning_agent", {}),
         ("studio_mail_monitor_health_agent", {"max_age_minutes": 15}),
@@ -673,6 +676,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
 def test_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
     return [
         ("mail_throttle_agent", {}),
+        ("mail_send_compliance_agent", {"window_hours": 24}),
         ("email_template_agent", {}),
         ("visual_qa_agent", {}),
         ("deliverability_agent", {}),
