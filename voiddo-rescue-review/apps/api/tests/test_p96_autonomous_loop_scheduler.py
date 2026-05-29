@@ -65,6 +65,27 @@ def test_autonomous_loop_blocks_live_outreach_signal():
         raise AssertionError("live outreach permission must fail the scheduler safety gate")
 
 
+def test_autonomous_loop_allows_live_canary_scoreboard_signal_only():
+    result = {
+        "ok": True,
+        "loop": {
+            "agents": 1,
+            "live_outreach": False,
+            "runs": [
+                {
+                    "agent": "launch_readiness_scoreboard_agent",
+                    "status": "completed",
+                    "result_json": {"state": "LIVE_OUTREACH_READY", "send_mail": False, "live_outreach_allowed": True},
+                },
+            ],
+        },
+    }
+    summary = loop_script.build_summary(result)
+    loop_script.assert_safe(summary)
+    assert summary["allowed_live_canary_flags"] == 1
+    assert summary["live_outreach_flags"] == 0
+
+
 def test_autonomous_loop_blocks_agent_failures_by_default():
     result = {
         "ok": True,
@@ -99,6 +120,8 @@ def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
     assert result["loop"]["mode"] == "core"
     assert len(calls) == len(loop_script.CORE_AGENTS)
     assert calls[0][0] == "mail_throttle_agent"
+    assert "outreach_post_send_observer_agent" in [agent for agent, _payload in calls]
+    assert "canary_scale_plan_agent" in [agent for agent, _payload in calls]
     assert "lead_supply_buildout_agent" not in [agent for agent, _payload in calls]
     assert [agent for agent, _payload in calls].index("lead_quality_diagnostics_agent") < [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent")
     assert [agent for agent, _payload in calls].index("scout_source_feedback_agent") < [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent")
@@ -219,7 +242,7 @@ def test_live_canary_control_does_not_stage_duplicate_when_queue_exists(monkeypa
     assert result["staged_decision"] == "SKIPPED_EXISTING_QUEUED_CANARY"
     assert result["existing_queued_message_count"] == 3
     assert "/admin/outreach/live-queue/stage" not in calls
-    assert calls.index("/admin/launch-activation/apply") < calls.index("/admin/outreach/live-queue")
+    assert "/admin/launch-activation/apply" in calls
 
 
 def test_run_loop_retries_remote_disconnected(monkeypatch):

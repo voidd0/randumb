@@ -27,6 +27,8 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("post_window_recheck_agent", {}),
     ("warmup_block_recovery_snapshot_agent", {"limit": 50}),
     ("warmup_post_send_observer_agent", {"limit": 10}),
+    ("outreach_post_send_observer_agent", {"window_hours": 24, "apply_pause": True}),
+    ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),
     ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),
     ("scanner_completion_watch_agent", {"limit": 100, "min_new_completed": 1, "dry_run": False}),
     ("lead_quality_diagnostics_agent", {"limit": 500}),
@@ -112,6 +114,7 @@ def build_summary(result: dict) -> dict:
     warmup_sent = 0
     send_mail_flags = 0
     live_flags = 0
+    allowed_live_flags = 0
     failed_agents: list[str] = []
     for row in runs:
         if row.get("status") == "failed":
@@ -119,7 +122,13 @@ def build_summary(result: dict) -> dict:
         payload = _result_json(row)
         if payload.get("send_mail") is True:
             send_mail_flags += 1
-        if payload.get("live_outreach_allowed") is True:
+        if (
+            payload.get("live_outreach_allowed") is True
+            and row.get("agent") == "launch_readiness_scoreboard_agent"
+            and payload.get("state") == "LIVE_OUTREACH_READY"
+        ):
+            allowed_live_flags += 1
+        elif payload.get("live_outreach_allowed") is True:
             live_flags += 1
         if row.get("agent") == "warmup_agent":
             warmup_sent += int(payload.get("sent", 0) or 0)
@@ -134,6 +143,7 @@ def build_summary(result: dict) -> dict:
         "send_mail_flags": send_mail_flags,
         "live_outreach": live_outreach,
         "live_outreach_flags": live_flags,
+        "allowed_live_canary_flags": allowed_live_flags,
         "live_outreach_allowed": False,
     }
 
