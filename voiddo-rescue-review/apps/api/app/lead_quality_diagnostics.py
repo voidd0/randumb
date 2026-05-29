@@ -36,6 +36,7 @@ def _lead_rows(limit: int) -> list[dict[str, Any]]:
         SELECT
           l.id AS lead_id,
           l.source AS lead_source,
+          l.status AS lead_status,
           l.country,
           l.city,
           l.niche,
@@ -50,12 +51,19 @@ def _lead_rows(limit: int) -> list[dict[str, Any]]:
           COALESCE(issue_stats.issue_count, 0) AS issue_count,
           COALESCE(issue_stats.critical_high_count, 0) AS critical_high_count,
           COALESCE(issue_stats.contact_signal_count, 0) AS contact_signal_count,
+          COALESCE(bounce_stats.bounced_count, 0) AS bounced_count,
           source_link.source_id,
           source_link.source_name,
           source_link.source_type,
           source_link.scout_run_id
         FROM leads l
         JOIN businesses b ON b.id = l.business_id
+        LEFT JOIN LATERAL (
+          SELECT count(*) AS bounced_count
+          FROM outreach_messages om
+          WHERE om.lead_id = l.id
+            AND (om.status = 'bounced' OR om.bounced_at IS NOT NULL)
+        ) bounce_stats ON true
         LEFT JOIN LATERAL (
           SELECT *
           FROM audits a
@@ -117,6 +125,8 @@ def _low_score_reasons(row: dict[str, Any]) -> list[str]:
         reasons.append("no_contact_or_cta_signal")
     if int(row.get("deliverability_score") or 0) < 60:
         reasons.append("weak_deliverability_signal")
+    if row.get("lead_status") == "bounced" or int(row.get("bounced_count") or 0) > 0:
+        reasons.append("bounced_or_dsn_observed")
     if domain.endswith(".example.test") or domain == "example.com" or domain == "localhost":
         reasons.append("test_or_placeholder_domain")
     if not row.get("source_id") and row.get("lead_source") == "scout_agent":
@@ -138,7 +148,7 @@ def lead_quality_diagnostics(limit: int = 500, store: bool = True) -> dict[str, 
     segment_buckets: dict[str, dict[str, Any]] = {}
     for row in rows:
         low_reasons = _low_score_reasons(row)
-        if int(row.get("final_score") or 0) < 70:
+        if int(row.get("final_score") or 0) < 70 or "bounced_or_dsn_observed" in low_reasons:
             reason_counts.update(low_reasons)
         source_key = str(row.get("source_id") or row.get("lead_source") or "unknown")
         bucket = source_buckets.setdefault(
@@ -156,7 +166,7 @@ def lead_quality_diagnostics(limit: int = 500, store: bool = True) -> dict[str, 
         bucket["sampled_count"] += 1
         bucket["qualified_count"] += 1 if int(row.get("final_score") or 0) >= 70 else 0
         bucket["scores"].append(int(row.get("final_score") or 0))
-        if int(row.get("final_score") or 0) < 70:
+        if int(row.get("final_score") or 0) < 70 or "bounced_or_dsn_observed" in low_reasons:
             bucket["low_score_reasons"].update(low_reasons)
 
         segment_key = f"{row.get('country') or 'missing'}:{row.get('niche') or 'missing'}"
@@ -338,6 +348,14 @@ def scout_source_performance(limit: int = 100, store: bool = True) -> dict[str, 
           count(DISTINCT a.id) FILTER (WHERE a.status = 'completed') AS scanned_count,
           count(DISTINCT l.id) FILTER (WHERE ls.final_score IS NOT NULL) AS scored_count,
           count(DISTINCT l.id) FILTER (WHERE COALESCE(ls.final_score, l.score, 0) >= 70) AS qualified_count,
+          count(DISTINCT l.id) FILTER (
+            WHERE l.status = 'bounced'
+               OR EXISTS (
+                 SELECT 1 FROM outreach_messages om
+                 WHERE om.lead_id = l.id
+                   AND (om.status = 'bounced' OR om.bounced_at IS NOT NULL)
+               )
+          ) AS bounced_count,
           COALESCE(avg(COALESCE(ls.final_score, l.score, 0)), 0) AS average_final_score,
           count(DISTINCT a.id) FILTER (
             WHERE EXISTS (
@@ -378,13 +396,18 @@ def scout_source_performance(limit: int = 100, store: bool = True) -> dict[str, 
         scanned_count = int(row["scanned_count"] or 0)
         scored_count = int(row["scored_count"] or 0)
         qualified_count = int(row["qualified_count"] or 0)
+        bounced_count = int(row["bounced_count"] or 0)
         avg_score = round(float(row["average_final_score"] or 0), 2)
         email_coverage = _pct(int(row["email_count"] or 0), lead_count)
         issue_signal_rate = _pct(int(row["high_signal_audit_count"] or 0), scanned_count)
         qualified_rate = _pct(qualified_count, scored_count or lead_count)
+        bounce_rate = _pct(bounced_count, lead_count)
         if scanned_count < 3:
             status = "NEEDS_MORE_DATA_NO_SEND"
             recommendation = "KEEP_TESTING"
+        elif bounced_count >= 1 and bounce_rate >= 0.2:
+            status = "BOUNCE_RISK_REVIEW_NO_SEND"
+            recommendation = "PAUSE_SOURCE_UNTIL_REVIEW"
         elif qualified_rate >= 0.2 and avg_score >= 55 and email_coverage >= 0.4:
             status = "PASS_SOURCE_PERFORMANCE_NO_SEND"
             recommendation = "PROMOTE_SOURCE_FOR_MORE_SCOUTING"
@@ -403,6 +426,8 @@ def scout_source_performance(limit: int = 100, store: bool = True) -> dict[str, 
             "scanned_count": scanned_count,
             "scored_count": scored_count,
             "qualified_count": qualified_count,
+            "bounced_count": bounced_count,
+            "bounce_rate": bounce_rate,
             "qualified_rate": qualified_rate,
             "average_final_score": avg_score,
             "email_coverage": email_coverage,
@@ -417,6 +442,8 @@ def scout_source_performance(limit: int = 100, store: bool = True) -> dict[str, 
             "scanned_count": scanned_count,
             "scored_count": scored_count,
             "qualified_count": qualified_count,
+            "bounced_count": bounced_count,
+            "bounce_rate": bounce_rate,
             "qualified_rate": qualified_rate,
             "average_final_score": avg_score,
             "email_coverage": email_coverage,
@@ -534,6 +561,7 @@ def apply_scout_source_feedback(limit: int = 100, dry_run: bool = True) -> dict[
                                     "recommendation": item["recommendation"],
                                     "status": item["status"],
                                     "qualified_rate": item["qualified_rate"],
+                                    "bounce_rate": item.get("bounce_rate", 0),
                                     "average_final_score": item["average_final_score"],
                                 }
                             }
@@ -578,6 +606,7 @@ def apply_scout_source_feedback(limit: int = 100, dry_run: bool = True) -> dict[
                     "applied_action": action,
                     "qualified_count": item["qualified_count"],
                     "qualified_rate": item["qualified_rate"],
+                    "bounce_rate": item.get("bounce_rate", 0),
                     "average_final_score": item["average_final_score"],
                 }
             )

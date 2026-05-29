@@ -193,6 +193,21 @@ def test_apply_scout_source_feedback_deprioritizes_low_yield_source_only_when_ex
         _cleanup(token)
 
 
+def test_scout_source_feedback_deprioritizes_bounce_risk_source():
+    token = uuid.uuid4().hex[:8]
+    try:
+        source_id = _seed_source(token, count=5, final_score=88, with_high_issue=True)
+        lead = fetch_one("SELECT id FROM leads WHERE email LIKE %s ORDER BY created_at LIMIT 1", (f"%{token}%",))
+        execute("UPDATE leads SET status = 'bounced' WHERE id = %s", (lead["id"],))
+        result = run_agent("scout_source_feedback_agent", {"limit": 100, "dry_run": False})
+        assert result["status"] == "completed"
+        assert any(item["source_id"] == source_id and item["applied_action"] == "deprioritized" for item in result["result_json"]["applied"])
+        assert fetch_one("SELECT status FROM scout_sources WHERE id = %s", (source_id,))["status"] == "quality_deprioritized"
+        assert "@" not in str(result["result_json"])
+    finally:
+        _cleanup(token)
+
+
 def test_lead_quality_feedback_endpoints_and_agents_are_admin_gated_no_send():
     token = uuid.uuid4().hex[:8]
     try:
