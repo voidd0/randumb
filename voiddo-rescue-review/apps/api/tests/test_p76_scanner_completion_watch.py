@@ -170,6 +170,7 @@ def test_scanner_completion_watch_triggers_post_scan_refresh_only_on_new_complet
         assert dry["status"] == "dry_run_ready"
         assert dry["priority_run_id"] == priority_run_id
         assert dry["completed_count"] == 1
+        assert dry["global_queued_count"] >= 1
         assert dry["send_mail"] is False
         assert f"owner-{token}@" not in str(dry)
 
@@ -184,8 +185,9 @@ def test_scanner_completion_watch_triggers_post_scan_refresh_only_on_new_complet
         assert result["live_outreach_allowed"] is False
 
         again = scanner_completion_watch(100, 1, dry_run=False)
-        assert again["status"] == "idle_no_new_completions"
+        assert again["status"] in {"idle_no_new_completions", "global_queue_active_waiting_for_worker"}
         assert again["trigger_ready"] is False
+        assert again["global_queued_count"] >= 0
         assert latest_scanner_completion_watches(5)["send_mail"] is False
     finally:
         _cleanup(token)

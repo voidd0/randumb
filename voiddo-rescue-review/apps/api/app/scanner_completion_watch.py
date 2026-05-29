@@ -67,6 +67,23 @@ def _status_counts(job_ids: list[str]) -> dict[str, int]:
     return counts
 
 
+def _global_status_counts() -> dict[str, int]:
+    rows = fetch_all(
+        """
+        SELECT status, count(*) AS count
+        FROM scanner_jobs
+        WHERE status IN ('queued', 'running', 'completed', 'failed')
+        GROUP BY status
+        """
+    )
+    counts = {"queued": 0, "running": 0, "completed": 0, "failed": 0}
+    for row in rows:
+        status = str(row["status"] or "")
+        if status in counts:
+            counts[status] = int(row["count"] or 0)
+    return counts
+
+
 def _last_watch(priority_run_id: str) -> dict[str, Any] | None:
     return fetch_one(
         """
@@ -101,6 +118,7 @@ def scanner_completion_watch(limit: int = 100, min_new_completed: int = 1, dry_r
     priority_run_id = str(priority_run["id"])
     tracked_job_ids = _job_ids_from_priority_run(priority_run)[:safe_limit]
     counts = _status_counts(tracked_job_ids)
+    global_counts = _global_status_counts()
     previous = _last_watch(priority_run_id)
     previous_completed = int(previous["completed_count"] or 0) if previous else 0
     new_completed = max(0, counts["completed"] - previous_completed)
@@ -110,8 +128,14 @@ def scanner_completion_watch(limit: int = 100, min_new_completed: int = 1, dry_r
     status = "dry_run_ready" if should_trigger else "idle_waiting_for_completions"
     if previous and counts["completed"] <= previous_completed:
         status = "idle_no_new_completions"
+    if status in {"idle_no_new_completions", "idle_waiting_for_completions"} and (
+        global_counts["queued"] > 0 or global_counts["running"] > 0
+    ):
+        status = "global_queue_active_waiting_for_worker"
     if not tracked_job_ids:
         status = "idle_no_tracked_jobs"
+        if global_counts["queued"] > 0 or global_counts["running"] > 0:
+            status = "global_queue_active_waiting_for_worker"
     if should_trigger and not dry_run:
         cycle = post_scan_campaign_cycle(safe_limit, dry_run=False)
         status = "refreshed_no_send" if cycle.get("status") == "completed_no_send" else "refresh_failed_or_blocked"
@@ -126,6 +150,10 @@ def scanner_completion_watch(limit: int = 100, min_new_completed: int = 1, dry_r
             "running_count": counts["running"],
             "completed_count": counts["completed"],
             "failed_count": counts["failed"],
+            "global_queued_count": global_counts["queued"],
+            "global_running_count": global_counts["running"],
+            "global_completed_count": global_counts["completed"],
+            "global_failed_count": global_counts["failed"],
             "previous_completed_count": previous_completed,
             "new_completed_count": new_completed,
             "min_new_completed": threshold,
