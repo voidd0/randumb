@@ -112,6 +112,7 @@ from .canary_send_window_plan import build_canary_send_window_plan, latest_canar
 from .canary_scale_plan import canary_scale_plan
 from .canary_resume_plan import canary_resume_plan, latest_canary_resume_plan_runs
 from .canary_bounce_recovery import backfill_bounce_dsn_details, canary_bounce_recovery, latest_canary_bounce_recovery_runs
+from .canary_clean_window_forecast import canary_clean_window_forecast
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
 from .launch_repair_cycle import run_launch_repair_cycle
@@ -649,6 +650,11 @@ async def outreach_live_queue_resume_plan_post(request: Request):
             store=True,
         ),
     }
+
+
+@app.get("/admin/outreach/live-queue/clean-window", dependencies=[Depends(require_admin)])
+def outreach_live_queue_clean_window_get(window_hours: int = 24):
+    return {"ok": True, "forecast": canary_clean_window_forecast(window_hours, store=True)}
 
 
 @app.post("/admin/outreach/live-queue/suppression-hygiene", dependencies=[Depends(require_admin)])
