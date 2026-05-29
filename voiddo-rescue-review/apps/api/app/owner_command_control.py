@@ -15,6 +15,7 @@ def owner_command_control_summary(limit: int = 20) -> dict[str, Any]:
         """
         SELECT id, mailbox, sender, reply_to, command, risk_level, status, result_json, created_at, executed_at
         FROM owner_commands
+        WHERE COALESCE(result_json->>'action', '') <> 'reclassified_platform_alert'
         ORDER BY created_at DESC
         LIMIT %s
         """,
@@ -38,8 +39,18 @@ def owner_command_control_summary(limit: int = 20) -> dict[str, Any]:
                 "executed_at": row["executed_at"],
             }
         )
-    risk_counts = {row["risk_level"]: int(row["count"]) for row in fetch_all("SELECT risk_level, count(*) AS count FROM owner_commands GROUP BY risk_level")}
-    status_counts = {row["status"]: int(row["count"]) for row in fetch_all("SELECT status, count(*) AS count FROM owner_commands GROUP BY status")}
+    risk_counts = {
+        row["risk_level"]: int(row["count"])
+        for row in fetch_all(
+            "SELECT risk_level, count(*) AS count FROM owner_commands WHERE COALESCE(result_json->>'action', '') <> 'reclassified_platform_alert' GROUP BY risk_level"
+        )
+    }
+    status_counts = {
+        row["status"]: int(row["count"])
+        for row in fetch_all(
+            "SELECT status, count(*) AS count FROM owner_commands WHERE COALESCE(result_json->>'action', '') <> 'reclassified_platform_alert' GROUP BY status"
+        )
+    }
     review_tasks = fetch_all(
         """
         SELECT priority, status, count(*) AS count

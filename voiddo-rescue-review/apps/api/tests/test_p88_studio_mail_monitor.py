@@ -111,6 +111,22 @@ def test_owner_command_show_studio_mail_is_safe_auto_and_redacted(monkeypatch):
         get_settings.cache_clear()
 
 
+def test_owner_command_summary_hides_reclassified_platform_alert():
+    token = uuid.uuid4().hex[:8]
+    try:
+        execute(
+            """
+            INSERT INTO owner_commands(mailbox, uid, message_id, sender, body, command, risk_level, status, result_json)
+            VALUES ('studio:voiddo', %s, %s, 'owner@example.test', 'body', 'FWD: Search Console', 'HIGH_RISK', 'reclassified', '{"action":"reclassified_platform_alert"}'::jsonb)
+            """,
+            (f"uid-{token}", f"<msg-{token}@example.test>"),
+        )
+        summary = owner_command_control_summary(20)
+        assert all(command["command"] != "FWD: Search Console" for command in summary["commands"])
+    finally:
+        _cleanup(token)
+
+
 def test_forwarded_search_console_alert_is_not_owner_command(monkeypatch):
     token = uuid.uuid4().hex[:8]
     owner = f"owner-{token}@example.test"
