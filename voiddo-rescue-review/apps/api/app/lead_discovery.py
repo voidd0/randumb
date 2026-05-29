@@ -20,6 +20,7 @@ OVERPASS_URLS = [
 ]
 
 APOLLO_ORGANIZATION_SEARCH_URL = "https://api.apollo.io/api/v1/mixed_companies/search"
+DEFAULT_DISCOVERY_HTTP_TIMEOUT_SECONDS = 12
 APOLLO_DISCOVERY_KEYWORDS = {
     "dentists": ["dentist", "dental clinic"],
     "clinics": ["clinic", "health clinic"],
@@ -697,10 +698,11 @@ out center tags {max(1, min(int(limit or 50), 100))};
 def _fetch_overpass(query: str) -> dict[str, Any]:
     body = f"data={quote(query)}".encode("utf-8")
     last_error: Exception | None = None
+    timeout = max(5, min(int(os.environ.get("DISCOVERY_HTTP_TIMEOUT_SECONDS", DEFAULT_DISCOVERY_HTTP_TIMEOUT_SECONDS) or DEFAULT_DISCOVERY_HTTP_TIMEOUT_SECONDS), 25))
     for url in OVERPASS_URLS:
         request = Request(url, data=body, headers={"Content-Type": "application/x-www-form-urlencoded", "User-Agent": "VoiddoRescue/1.0 public-safe-lead-discovery"})
         try:
-            with urlopen(request, timeout=35) as response:
+            with urlopen(request, timeout=timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
         except Exception as exc:
             last_error = exc
@@ -721,7 +723,8 @@ def _fetch_apollo_organizations(params: dict[str, Any], api_key: str) -> dict[st
         },
         method="POST",
     )
-    with urlopen(request, timeout=35) as response:
+    timeout = max(5, min(int(os.environ.get("DISCOVERY_HTTP_TIMEOUT_SECONDS", DEFAULT_DISCOVERY_HTTP_TIMEOUT_SECONDS) or DEFAULT_DISCOVERY_HTTP_TIMEOUT_SECONDS), 25))
+    with urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
 

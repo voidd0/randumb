@@ -146,8 +146,9 @@ def _extract_contact_links(html: str, base_url: str, domain: str, max_links: int
     return links
 
 
-def fetch_public_contact_page(url: str) -> tuple[int, str, str]:
-    with httpx.Client(timeout=12.0, follow_redirects=True, headers=PUBLIC_CONTACT_HEADERS) as client:
+def fetch_public_contact_page(url: str, timeout_seconds: float = 8.0) -> tuple[int, str, str]:
+    timeout = max(3.0, min(float(timeout_seconds or 8.0), 12.0))
+    with httpx.Client(timeout=timeout, follow_redirects=True, headers=PUBLIC_CONTACT_HEADERS) as client:
         response = client.get(url)
     content_type = response.headers.get("content-type", "")
     if "text/html" not in content_type and "application/xhtml" not in content_type and response.status_code < 400:
@@ -499,7 +500,11 @@ def run_public_contact_page_enrichment(
                 page_results.append({"path_hash": _hash(url), "status": "time_budget_exhausted"})
                 break
             try:
-                status_code, html, final_url = fetch_public_contact_page(url)
+                remaining = max(3.0, safe_max_seconds - (time.monotonic() - started))
+                try:
+                    status_code, html, final_url = fetch_public_contact_page(url, min(8.0, remaining))
+                except TypeError:
+                    status_code, html, final_url = fetch_public_contact_page(url)
             except Exception as exc:
                 page_results.append({"path_hash": _hash(url), "status": "fetch_error", "error": type(exc).__name__})
                 continue

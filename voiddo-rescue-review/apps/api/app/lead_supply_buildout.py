@@ -102,6 +102,10 @@ def _first_ready_source_id(result: dict[str, Any]) -> str | None:
     return None
 
 
+def _remaining_seconds(started: float, budget_seconds: int) -> int:
+    return max(0, int(budget_seconds - (time.monotonic() - started)))
+
+
 def _wait_for_scanner_worker_progress(
     target: int,
     canary: int,
@@ -195,14 +199,17 @@ def lead_supply_buildout(
         actions: list[dict[str, Any]] = []
         new_source_hint = False
         source_hint_id: str | None = None
-        if safe_enrichment_limit > 0:
+        if _remaining_seconds(started, seconds) <= 8:
+            stop_reason = "time_budget_exhausted"
+            break
+        if safe_enrichment_limit > 0 and _remaining_seconds(started, seconds) > 15:
             autopilot = lead_supply_autopilot(
                 target,
                 canary,
                 safe_limit,
                 apply=True,
                 enrichment_limit=safe_enrichment_limit,
-                enrichment_seconds=min(60, max(15, seconds // max(1, cycles))),
+                enrichment_seconds=min(20, max(8, _remaining_seconds(started, seconds) // 3)),
             )
             actions.append(
                 {
@@ -221,12 +228,15 @@ def lead_supply_buildout(
             and int(current.get("approved_preview_count") or 0) >= canary
             and int(current.get("source_candidate_count") or 0) == 0
         ):
-            remaining_seconds = max(20, int(seconds - (time.monotonic() - started)))
+            remaining_seconds = _remaining_seconds(started, seconds)
+            if remaining_seconds <= 15:
+                stop_reason = "time_budget_exhausted"
+                break
             expansion = stockpile_expansion_discovery_cycle(
                 limit_targets=1,
                 per_target_limit=20,
                 dry_run=False,
-                max_seconds=min(60, remaining_seconds),
+                max_seconds=min(25, remaining_seconds),
             )
             expansion_summary = _action_summary({"name": "stockpile_expansion_discovery_cycle", **expansion})
             actions.append(expansion_summary)
@@ -243,6 +253,7 @@ def lead_supply_buildout(
             int(current.get("approved_preview_count") or 0) < target
             and int(current.get("source_candidate_count") or 0) == 0
             and not new_source_hint
+            and _remaining_seconds(started, seconds) > 28
         ):
             discovery = regional_lead_discovery_cycle(limit_targets=1, per_target_limit=15, dry_run=False)
             discovery_summary = _action_summary({"name": "regional_lead_discovery_cycle", **discovery})
@@ -259,6 +270,7 @@ def lead_supply_buildout(
         if (
             (int(refreshed.get("source_candidate_count") or 0) > 0 or new_source_hint)
             and int(refreshed.get("scanner_active_count") or 0) <= 3
+            and _remaining_seconds(started, seconds) > 10
         ):
             advance = advance_source_to_campaign(
                 source_hint_id,
@@ -269,12 +281,13 @@ def lead_supply_buildout(
             )
             actions.append(_action_summary({"name": "advance_source_to_campaign", **advance}))
 
-        watch = scanner_completion_watch(safe_limit, min_new_completed=1, dry_run=False)
-        actions.append(_action_summary({"name": "scanner_completion_watch", **watch}))
+        if _remaining_seconds(started, seconds) > 8:
+            watch = scanner_completion_watch(safe_limit, min_new_completed=1, dry_run=False)
+            actions.append(_action_summary({"name": "scanner_completion_watch", **watch}))
 
         refreshed = lead_stockpile_health_snapshot(target, canary, safe_limit)
-        if int(refreshed.get("scanner_active_count") or 0) > 0 and time.monotonic() - started < seconds - 15:
-            wait = _wait_for_scanner_worker_progress(target, canary, safe_limit, min(60, int(seconds - (time.monotonic() - started) - 10)))
+        if int(refreshed.get("scanner_active_count") or 0) > 0 and _remaining_seconds(started, seconds) > 15:
+            wait = _wait_for_scanner_worker_progress(target, canary, safe_limit, min(20, _remaining_seconds(started, seconds) - 8))
             actions.append(wait)
             refreshed = lead_stockpile_health_snapshot(target, canary, safe_limit)
         if int(refreshed.get("ready_candidate_count") or 0) > int(refreshed.get("active_preview_count") or 0):

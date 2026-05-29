@@ -108,7 +108,7 @@ def lead_supply_autopilot(
             enrichment = run_public_contact_page_enrichment(
                 safe_enrichment_limit,
                 dry_run=False,
-                max_pages_per_domain=6,
+                max_pages_per_domain=2,
                 max_seconds=safe_enrichment_seconds,
             )
             actions.append({"name": "public_contact_page_enrichment", "result": _enrichment_summary(enrichment), **SAFE_FLAGS})
