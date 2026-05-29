@@ -105,6 +105,7 @@ def _warmup_maturity(cur) -> dict:
     recent_bounce = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type IN ('bounce','dsn') AND created_at >= now() - interval '24 hours'")
     recent_rate = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'smtp_rate_limit' AND created_at >= now() - interval '24 hours'")
     recent_spam = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'spam_signal' AND created_at >= now() - interval '24 hours'")
+    recent_auth_failure = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type IN ('auth_failure','tls_failure','dkim_failure','dmarc_failure') AND created_at >= now() - interval '24 hours'")
     blockers = []
     if verified_warmup_sent < min_clean:
         blockers.append("warmup_clean_send_count_below_threshold")
@@ -114,6 +115,8 @@ def _warmup_maturity(cur) -> dict:
         blockers.append("recent_rate_limit")
     if recent_spam:
         blockers.append("recent_spam_signal")
+    if recent_auth_failure:
+        blockers.append("recent_mail_auth_failure_signal")
     return {
         "allowed": not blockers,
         "warmup_sent_count": verified_warmup_sent,
@@ -125,6 +128,7 @@ def _warmup_maturity(cur) -> dict:
         "recent_bounce_count": recent_bounce,
         "recent_rate_limit_count": recent_rate,
         "recent_spam_signal_count": recent_spam,
+        "recent_mail_auth_failure_count": recent_auth_failure,
         "blockers": blockers,
     }
 

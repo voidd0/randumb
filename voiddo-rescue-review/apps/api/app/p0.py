@@ -1089,6 +1089,7 @@ def warmup_domain_maturity_status(settings: Settings | None = None) -> dict[str,
     recent_bounce = recent_mail_signal_count(["bounce", "dsn"], 24)
     recent_rate_limit = recent_mail_signal_count(["smtp_rate_limit"], 24)
     recent_spam = recent_mail_signal_count(["spam_signal"], 24)
+    recent_auth_failure = recent_mail_signal_count(["auth_failure", "tls_failure", "dkim_failure", "dmarc_failure"], 24)
     latest_mail = latest_mail_qa_decision()
     blockers: list[str] = []
     if verified_warmup_sent < min_clean:
@@ -1099,6 +1100,8 @@ def warmup_domain_maturity_status(settings: Settings | None = None) -> dict[str,
         blockers.append("recent_rate_limit")
     if recent_spam:
         blockers.append("recent_spam_signal")
+    if recent_auth_failure:
+        blockers.append("recent_mail_auth_failure_signal")
     if latest_mail != "PASS":
         blockers.append("mail_qa_not_pass")
     return {
@@ -1112,6 +1115,7 @@ def warmup_domain_maturity_status(settings: Settings | None = None) -> dict[str,
         "recent_bounce_count": recent_bounce,
         "recent_rate_limit_count": recent_rate_limit,
         "recent_spam_signal_count": recent_spam,
+        "recent_mail_auth_failure_count": recent_auth_failure,
         "latest_mail_qa_decision": latest_mail,
         "blockers": blockers,
     }

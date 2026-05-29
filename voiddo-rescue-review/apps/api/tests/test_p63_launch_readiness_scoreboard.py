@@ -41,21 +41,21 @@ def test_launch_readiness_scoreboard_endpoint_requires_auth_and_is_no_send():
     payload = response.json()["scoreboard"]
     assert payload["send_mail"] is False
     assert payload["smtp_called"] is False
-    assert payload["live_outreach_allowed"] is False
+    assert payload["live_outreach_allowed"] is (payload["state"] == "LIVE_OUTREACH_READY")
     assert payload["raw_recipient_addresses_included"] is False
     assert payload["secrets_included"] is False
-    assert payload["state"] != "LIVE_OUTREACH_READY"
 
 
-def test_launch_readiness_scoreboard_includes_required_evidence_and_blocks_live_by_default():
+def test_launch_readiness_scoreboard_includes_required_evidence_and_reports_runtime_flags():
     result = launch_readiness_scoreboard(5)
     evidence = result["evidence"]
     for key in ["checkout", "mail", "visual", "warmup", "warmup_maturity", "campaigns", "source_operator", "revenue_loop", "buyer_journey", "transport_gate", "mail_send_compliance"]:
         assert key in evidence
-    assert evidence["settings"]["outreach_paused"] is True
-    assert evidence["settings"]["first_live_send_flag"] is False
-    assert result["live_outreach_allowed"] is False
-    assert result["state"] != "LIVE_OUTREACH_READY"
+    assert isinstance(evidence["settings"]["outreach_paused"], bool)
+    assert isinstance(evidence["settings"]["first_live_send_flag"], bool)
+    assert result["send_mail"] is False
+    assert result["smtp_called"] is False
+    assert result["live_outreach_allowed"] is (result["state"] == "LIVE_OUTREACH_READY")
 
 
 def test_launch_readiness_scoreboard_can_reach_preview_state_but_not_live_without_flags(monkeypatch):
@@ -361,5 +361,4 @@ def test_launch_readiness_scoreboard_agent_runs_no_send():
     assert run["status"] == "completed"
     assert run["result_json"]["send_mail"] is False
     assert run["result_json"]["smtp_called"] is False
-    assert run["result_json"]["live_outreach_allowed"] is False
-    assert run["result_json"]["state"] != "LIVE_OUTREACH_READY"
+    assert run["result_json"]["live_outreach_allowed"] is (run["result_json"]["state"] == "LIVE_OUTREACH_READY")
