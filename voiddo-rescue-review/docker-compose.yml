@@ -87,6 +87,7 @@ services:
     env_file: .env
     environment:
       SCANNER_JOBS_PER_TICK: ${SCANNER_JOBS_PER_TICK:-5}
+      SCANNER_JOB_TIMEOUT_SECONDS: ${SCANNER_JOB_TIMEOUT_SECONDS:-75}
       WORKER_TICK_SECONDS: ${WORKER_TICK_SECONDS:-20}
     volumes:
       - voiddo_rescue_storage:/app/storage
