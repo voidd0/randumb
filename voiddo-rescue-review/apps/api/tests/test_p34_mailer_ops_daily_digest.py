@@ -23,7 +23,7 @@ def test_owner_report_draft_uses_no_send_action_queue():
     report = write_owner_status_report(send_if_safe=False)
     action = report["owner_report_action"]
     assert action["action_type"] == "owner_report"
-    assert action["status"] == "queued"
+    assert action["status"] == "prepared"
     row = fetch_one("SELECT payload_json FROM mailer_action_queue WHERE id = %s", (action["id"],))
     assert row is not None
     assert row["payload_json"]["payload_json"]["source"] == "daily_digest_hook"

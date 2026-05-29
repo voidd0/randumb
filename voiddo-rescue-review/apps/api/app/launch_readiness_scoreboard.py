@@ -56,14 +56,18 @@ def _state(score: int, blockers: list[dict[str, Any]], evidence: dict[str, Any])
         if evidence["checkout"]["ready"] and evidence["mail"]["mail_qa_decision"] == "PASS":
             return "CHECKOUT_READY_NOT_WARMED"
         return "NOT_LAUNCH_READY"
-    if not evidence["warmup_maturity"].get("allowed") and int(evidence["warmup"].get("scheduled_total", 0) or 0) > 0:
-        return "WARMUP_SCHEDULED_NO_OUTREACH"
     if (
         score >= 95
         and live_flags_armed
         and evidence["transport_gate"].get("allowed") is True
+        and (
+            evidence["warmup_maturity"].get("allowed")
+            or evidence.get("active_canary_evidence_ready", False) is True
+        )
     ):
         return "LIVE_OUTREACH_READY"
+    if not evidence["warmup_maturity"].get("allowed") and int(evidence["warmup"].get("scheduled_total", 0) or 0) > 0:
+        return "WARMUP_SCHEDULED_NO_OUTREACH"
     if int(evidence["campaigns"].get("ready_candidate_count", 0) or 0) > 0:
         return "PREVIEW_PIPELINE_READY_NO_OUTREACH"
     return "CHECKOUT_READY_NOT_WARMED" if evidence["checkout"]["ready"] else "NOT_LAUNCH_READY"
@@ -91,6 +95,8 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
         or settings.outreach_paused is not True
         or settings.first_live_send_flag is not False
     ) and not live_flags_armed
+    live_outreach_sent_count = _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'")
+    live_outreach_queued_count = _count("SELECT count(*) FROM outreach_messages WHERE status = 'queued'")
     settings_evidence = {
         "global_kill_switch": settings.global_kill_switch,
         "scanning_paused": settings.scanning_paused,
@@ -112,6 +118,17 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
         "policy_score": policy_score,
         "policy_history_latest_decision": policy_history.get("latest_decision"),
     }
+    active_canary_evidence_ready = (
+        live_flags_armed
+        and (live_outreach_sent_count > 0 or live_outreach_queued_count > 0)
+        and mail["mail_qa_decision"] == "PASS"
+        and mail["signals"]["bounce_or_dsn_count"] == 0
+        and mail["signals"]["rate_limit_count"] == 0
+        and mail["signals"]["spam_signal_count"] == 0
+        and mail["signals"]["mail_auth_failure_count"] == 0
+        and send_compliance.get("decision") == "PASS"
+        and transport.get("allowed") is True
+    )
 
     blockers: list[dict[str, Any]] = []
     score = 100
@@ -148,7 +165,7 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
     if int(warmup.get("scheduled_total", 0) or 0) <= 0:
         _add_blocker(blockers, "warmup_schedule_missing", "medium")
         score -= 5
-    if not warmup_maturity.get("allowed"):
+    if not warmup_maturity.get("allowed") and not active_canary_evidence_ready:
         _add_blocker(blockers, "warmup_maturity_not_verified", "medium", warmup_maturity.get("blockers", []))
         score -= 10
     if int(buyer_journey.get("campaign_preview_count", 0) or 0) <= 0:
@@ -202,6 +219,7 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
         },
         "buyer_journey": buyer_journey,
         "transport_gate": transport,
+        "active_canary_evidence_ready": active_canary_evidence_ready,
         "mail_send_compliance": {
             "decision": send_compliance.get("decision"),
             "status": send_compliance.get("status"),
@@ -210,7 +228,8 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
             "outgoing_totals": send_compliance.get("outgoing_totals", {}),
         },
         "counts": {
-            "live_outreach_sent": _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'"),
+            "live_outreach_sent": live_outreach_sent_count,
+            "live_outreach_queued": live_outreach_queued_count,
             "warmup_sent": _count("SELECT count(*) FROM warmup_schedule WHERE status = 'sent'"),
             "legacy_warmup_event_count": _count("SELECT count(*) FROM email_events WHERE event_type = 'warmup_sent'"),
             "mailer_action_queue": _count("SELECT count(*) FROM mailer_action_queue"),

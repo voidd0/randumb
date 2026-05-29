@@ -1276,6 +1276,21 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
             },
         }
     )
+    if not (send_if_safe and not blocked):
+        draft = execute(
+            """
+            UPDATE mailer_action_queue
+            SET status = 'prepared',
+                updated_at = now()
+            WHERE id = %s
+              AND status = 'queued'
+            RETURNING id, action_type, risk_level, status, mailbox, recipient_hash,
+                      template_key, idempotency_key, send_after, attempt_count,
+                      created_at, updated_at
+            """,
+            (draft["id"],),
+        ) or draft
+        draft = json_safe(dict(draft))
     send_result = {"processed": 0, "send_mail": False, "smtp_called": False}
     if send_if_safe and not blocked:
         process_mailer_action_queue(20)

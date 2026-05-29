@@ -49,8 +49,9 @@ def test_digest_owner_report_draft_stays_no_send():
     digest = mailer_digest_summary()
     assert report["email_sent"] is False
     assert digest["email_sent"] is False
-    assert digest["latest_owner_report_action"]["status"] == "queued"
-    assert digest["latest_owner_report_action"]["recipient_hash"] == ""
+    assert digest["latest_owner_report_action"]["status"] == "prepared"
+    assert digest["latest_owner_report_action"]["recipient_hash"]
+    assert "@" not in digest["latest_owner_report_action"]["recipient_hash"]
     execute("DELETE FROM mailer_action_queue WHERE id = %s", (report["owner_report_action"]["id"],))
 
 
