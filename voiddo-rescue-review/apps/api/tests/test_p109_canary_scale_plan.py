@@ -137,7 +137,7 @@ def test_owner_command_show_canary_scale_is_safe_auto_and_no_send(monkeypatch):
             "raw_recipient_addresses_included": False,
         },
     )
-    parsed = parse_owner_command(os.environ.get("OWNER_COMMAND_EMAIL", "gkorner@gmail.com"), "SHOW CANARY SCALE", "")
+    parsed = parse_owner_command(os.environ.get("OWNER_COMMAND_EMAIL", "owner@example.test"), "SHOW CANARY SCALE", "")
     assert parsed["risk_level"] == "SAFE_AUTO"
     result = execute_owner_command(parsed)
     assert result["ok"] is True
