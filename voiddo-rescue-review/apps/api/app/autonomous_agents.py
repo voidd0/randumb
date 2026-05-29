@@ -58,6 +58,7 @@ from .canary_resume_plan import canary_resume_plan
 from .canary_next_batch_preparer import prepare_next_canary_batch_if_ready
 from .canary_clean_window_forecast import canary_clean_window_forecast
 from .canary_send_window_plan import build_canary_send_window_plan
+from .post_clean_activation_packet import build_post_clean_activation_packet
 from .canary_bounce_recovery import backfill_bounce_dsn_details, canary_bounce_recovery, latest_canary_bounce_recovery_runs
 from .outreach_queue_suppression_hygiene import outreach_queue_suppression_hygiene
 from .outreach_transport_block_hygiene import outreach_transport_block_hygiene
@@ -493,6 +494,7 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("window_hours", 24)),
             store=True,
         ),
+        "post_clean_activation_packet_agent": lambda: build_post_clean_activation_packet(int(payload.get("limit", 20)), store=False),
         "canary_next_batch_preparer_agent": lambda: prepare_next_canary_batch_if_ready(
             int(payload.get("canary_limit", 20)),
             int(payload.get("next_batch_limit", 40)),
@@ -681,6 +683,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("outreach_transport_block_hygiene_agent", {"limit": 100, "apply": True}),
         ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),
         ("canary_clean_window_forecast_agent", {"window_hours": 24}),
+        ("post_clean_activation_packet_agent", {"limit": 20}),
         ("canary_resume_plan_agent", {"window_hours": 24, "apply": True}),
         ("canary_next_batch_preparer_agent", {"canary_limit": 20, "next_batch_limit": 40}),
         ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),

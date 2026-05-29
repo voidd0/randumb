@@ -34,6 +34,7 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("outreach_transport_block_hygiene_agent", {"limit": 100, "apply": True}),
     ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),
     ("canary_clean_window_forecast_agent", {"window_hours": 24}),
+    ("post_clean_activation_packet_agent", {"limit": 20}),
     ("canary_resume_plan_agent", {"window_hours": 24, "apply": True}),
     ("canary_next_batch_preparer_agent", {"canary_limit": 20, "next_batch_limit": 40}),
     ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),
