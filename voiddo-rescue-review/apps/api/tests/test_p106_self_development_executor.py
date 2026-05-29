@@ -99,6 +99,61 @@ def test_self_development_executes_safe_lead_supply_item_without_send(monkeypatc
         cleanup(token)
 
 
+def test_self_development_closes_resolved_campaign_readiness_items(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        build = execute(
+            "INSERT INTO self_build_queue(module, priority, title, acceptance_json) VALUES ('campaign_readiness', 'P1', %s, %s) RETURNING id",
+            (f"Prevent recurring campaign economics blocked {token}", Jsonb([token])),
+        )
+        fix = execute(
+            "INSERT INTO self_fix_tasks(type, priority, title, evidence_json) VALUES ('closed_loop_finding', 'P1', %s, %s) RETURNING id",
+            (f"Resolve scout quality not pass {token}", Jsonb({"token": token})),
+        )
+        monkeypatch.setattr(
+            dev_module,
+            "_campaign_launch_evidence",
+            lambda: {
+                "resolved": True,
+                "reason": "current_canary_launch_gates_pass",
+                "activation_decision": "READY_FOR_OPERATOR_ENV_ACTIVATION",
+                "canary_quality_decision": "PASS_CANARY_BATCH_QUALITY",
+                "send_mail": False,
+                "live_outreach_allowed": False,
+            },
+        )
+
+        result = run_self_development_cycle(limit=1, execute_safe_auto=False)
+
+        assert result["resolved"]["campaign_readiness_build_items_closed"] >= 1
+        assert result["resolved"]["campaign_readiness_fix_tasks_closed"] >= 1
+        build_row = fetch_one("SELECT status, acceptance_json FROM self_build_queue WHERE id = %s", (build["id"],))
+        fix_row = fetch_one("SELECT status, evidence_json FROM self_fix_tasks WHERE id = %s", (fix["id"],))
+        assert build_row["status"] == "resolved_current_state"
+        assert fix_row["status"] == "resolved_current_state"
+        assert build_row["acceptance_json"]["self_development_resolution"]["live_outreach_allowed"] is False
+        assert fix_row["evidence_json"]["self_development_resolution"]["send_mail"] is False
+    finally:
+        cleanup(token)
+
+
+def test_self_development_closes_agent_failure_build_items_when_recovered(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        build = execute(
+            "INSERT INTO self_build_queue(module, priority, title, acceptance_json) VALUES ('agent_runs', 'P1', %s, %s) RETURNING id",
+            (f"Prevent recurring unrecovered agent failure {token}", Jsonb([token])),
+        )
+        monkeypatch.setattr(dev_module, "_count_unrecovered_agent_failures", lambda: 0)
+        result = run_self_development_cycle(limit=1, execute_safe_auto=False)
+        assert result["resolved"]["agent_failure_build_items_closed"] >= 1
+        build_row = fetch_one("SELECT status, acceptance_json FROM self_build_queue WHERE id = %s", (build["id"],))
+        assert build_row["status"] == "resolved_current_state"
+        assert build_row["acceptance_json"]["self_development_resolution"]["send_mail"] is False
+    finally:
+        cleanup(token)
+
+
 def test_self_development_endpoint_and_agent_are_admin_gated(monkeypatch):
     token = uuid.uuid4().hex[:8]
     monkeypatch.setattr(

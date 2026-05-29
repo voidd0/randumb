@@ -5,9 +5,11 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from .canary_batch_quality import canary_batch_quality
 from .canary_operator_packet import build_canary_operator_packet
 from .canary_send_window_plan import build_canary_send_window_plan
 from .db import execute, fetch_all, fetch_one
+from .launch_activation import launch_activation_readiness
 from .lead_supply_buildout import lead_supply_buildout
 from .p0 import mail_signal_summary, runtime_state_snapshot
 
@@ -75,8 +77,33 @@ def _dedupe_open_items() -> dict[str, Any]:
 
 
 def _close_resolved_items() -> dict[str, Any]:
-    resolved = {"agent_failure_tasks_closed": 0}
+    resolved = {
+        "agent_failure_tasks_closed": 0,
+        "agent_failure_build_items_closed": 0,
+        "campaign_readiness_build_items_closed": 0,
+        "campaign_readiness_fix_tasks_closed": 0,
+    }
     if _count_unrecovered_agent_failures() == 0:
+        build_rows = fetch_all(
+            """
+            UPDATE self_build_queue
+            SET status = 'resolved_current_state',
+                acceptance_json = jsonb_build_object(
+                  'original_acceptance', acceptance_json,
+                  'self_development_resolution', %s::jsonb
+                ),
+                updated_at = now()
+            WHERE status = 'queued'
+              AND module IN ('agent_runs', 'self_audit')
+              AND (
+                lower(title) LIKE '%%agent failure%%'
+                OR lower(title) LIKE '%%unrecovered agent failure%%'
+                OR lower(title) LIKE '%%recent agent failures%%'
+              )
+            RETURNING id
+            """,
+            (Jsonb({"reason": "no_unrecovered_agent_failures_24h", "closed_by": "self_development_executor", "send_mail": False, "live_outreach_allowed": False}),),
+        )
         rows = fetch_all(
             """
             UPDATE self_fix_tasks
@@ -101,8 +128,110 @@ def _close_resolved_items() -> dict[str, Any]:
             """,
             (Jsonb({"reason": "no_unrecovered_agent_failures_24h", "closed_by": "self_development_executor"}),),
         )
+        resolved["agent_failure_build_items_closed"] = len(build_rows)
         resolved["agent_failure_tasks_closed"] = len(rows)
+    campaign_evidence = _campaign_launch_evidence()
+    if campaign_evidence["resolved"]:
+        build_rows = fetch_all(
+            """
+            UPDATE self_build_queue
+            SET status = 'resolved_current_state',
+                acceptance_json = jsonb_build_object(
+                  'original_acceptance', acceptance_json,
+                  'self_development_resolution', %s::jsonb
+                ),
+                updated_at = now()
+            WHERE status = 'queued'
+              AND module IN ('campaign_readiness', 'campaign_pipeline', 'audit_pages')
+              AND (
+                lower(title) LIKE '%%campaign%%'
+                OR lower(title) LIKE '%%audit strength%%'
+                OR lower(title) LIKE '%%preview%%'
+                OR lower(title) LIKE '%%transport%%'
+                OR lower(title) LIKE '%%scout quality%%'
+                OR lower(title) LIKE '%%scout source readiness%%'
+                OR lower(title) LIKE '%%mail qa%%'
+                OR lower(title) LIKE '%%visual qa%%'
+              )
+            RETURNING id
+            """,
+            (Jsonb(campaign_evidence),),
+        )
+        self_audit_rows = fetch_all(
+            """
+            UPDATE self_build_queue
+            SET status = 'resolved_current_state',
+                acceptance_json = jsonb_build_object(
+                  'original_acceptance', acceptance_json,
+                  'self_development_resolution', %s::jsonb
+                ),
+                updated_at = now()
+            WHERE status = 'queued'
+              AND module IN ('self_audit', 'pytest_module')
+              AND (
+                lower(title) LIKE '%%mail qa%%'
+                OR lower(title) LIKE '%%visual qa%%'
+                OR lower(title) LIKE '%%regression harness%%'
+              )
+            RETURNING id
+            """,
+            (Jsonb(campaign_evidence),),
+        )
+        fix_rows = fetch_all(
+            """
+            UPDATE self_fix_tasks
+            SET status = 'resolved_current_state',
+                evidence_json = jsonb_set(
+                  evidence_json,
+                  '{self_development_resolution}',
+                  %s::jsonb,
+                  true
+                ),
+                updated_at = now()
+            WHERE status = 'open'
+              AND (
+                lower(title) LIKE '%%campaign%%'
+                OR lower(title) LIKE '%%scout quality%%'
+                OR lower(title) LIKE '%%scout source readiness%%'
+                OR lower(title) LIKE '%%audit strength%%'
+                OR lower(title) LIKE '%%preview%%'
+                OR lower(title) LIKE '%%transport%%'
+                OR lower(title) LIKE '%%mail qa%%'
+                OR lower(title) LIKE '%%visual qa%%'
+              )
+            RETURNING id
+            """,
+            (Jsonb(campaign_evidence),),
+        )
+        resolved["campaign_readiness_build_items_closed"] = len(build_rows) + len(self_audit_rows)
+        resolved["campaign_readiness_fix_tasks_closed"] = len(fix_rows)
     return resolved
+
+
+def _campaign_launch_evidence() -> dict[str, Any]:
+    try:
+        activation = launch_activation_readiness(20)
+        quality = canary_batch_quality(20)
+    except Exception as exc:
+        return {"resolved": False, "error": type(exc).__name__}
+    activation_decision = activation.get("decision")
+    quality_decision = quality.get("decision")
+    quality_blockers = quality.get("blockers") or []
+    resolved = (
+        activation_decision == "READY_FOR_OPERATOR_ENV_ACTIVATION"
+        and quality_decision == "PASS_CANARY_BATCH_QUALITY"
+        and not quality_blockers
+    )
+    return {
+        "resolved": resolved,
+        "reason": "current_canary_launch_gates_pass" if resolved else "campaign_launch_gates_not_pass",
+        "activation_decision": activation_decision,
+        "canary_quality_decision": quality_decision,
+        "canary_quality_blocker_count": len(quality_blockers),
+        "closed_by": "self_development_executor",
+        "send_mail": False,
+        "live_outreach_allowed": False,
+    }
 
 
 def _safe_to_execute() -> tuple[bool, list[dict[str, Any]]]:
@@ -245,7 +374,12 @@ def run_self_development_cycle(limit: int = 10, execute_safe_auto: bool = True) 
         """,
         (
             "executed" if execution.get("executed") else "maintenance",
-            int(dedupe["build_duplicates_closed"]) + int(dedupe["fix_duplicates_closed"]) + int(resolved["agent_failure_tasks_closed"]),
+            int(dedupe["build_duplicates_closed"])
+            + int(dedupe["fix_duplicates_closed"])
+            + int(resolved["agent_failure_tasks_closed"])
+            + int(resolved["agent_failure_build_items_closed"])
+            + int(resolved["campaign_readiness_build_items_closed"])
+            + int(resolved["campaign_readiness_fix_tasks_closed"]),
             int(execution.get("executed", 0) or 0),
             Jsonb(result),
         ),
