@@ -983,6 +983,8 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "ПОКАЖИ ПРОГРЕВ": "SHOW WARMUP",
         "ПОКАЖИ КАЛЕНДАРЬ ПРОГРЕВА": "SHOW WARMUP CALENDAR",
         "ПОКАЖИ СИГНАЛЫ ПОЧТЫ": "SHOW MAIL SIGNALS",
+        "ПОКАЖИ СТУДИО ПОЧТУ": "SHOW STUDIO MAIL",
+        "ПОКАЖИ ОСНОВНУЮ ПОЧТУ": "SHOW STUDIO MAIL",
         "ПОКАЖИ ОТВЕТЫ": "SHOW REPLIES",
         "ПОКАЖИ ПЛАТЕЖИ": "SHOW PAYMENTS",
         "ПОКАЖИ РУЧНУЮ ПРОВЕРКУ": "SHOW HUMAN REVIEW",
@@ -1021,7 +1023,7 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",
         "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
         "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE", "SHOW LAUNCH RUNBOOK", "ROLLBACK LIVE OUTREACH",
-        "SHOW LEAD SUPPLY", "SHOW CANARY SCALE",
+        "SHOW LEAD SUPPLY", "SHOW CANARY SCALE", "SHOW STUDIO MAIL",
     }
     medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP", "RUN LEAD SUPPLY BUILDOUT"}
     medium.add("RUN LAUNCH REHEARSAL")
@@ -1893,6 +1895,16 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
         result = {"ok": True, "action": "warmup_calendar", "calendar": warmup_calendar_health()}
     elif command == "SHOW MAIL SIGNALS":
         result = {"ok": True, "action": "mail_signals", "signals": mail_signal_summary()}
+    elif command == "SHOW STUDIO MAIL":
+        from .studio_mail_monitor import latest_studio_mail_messages, latest_studio_mail_runs, studio_mail_monitor_health
+
+        result = {
+            "ok": True,
+            "action": "studio_mail_status",
+            "health": studio_mail_monitor_health(15),
+            "latest_messages": latest_studio_mail_messages(10),
+            "latest_runs": latest_studio_mail_runs(5),
+        }
     elif command == "SHOW LIVE QUEUE":
         from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates
 

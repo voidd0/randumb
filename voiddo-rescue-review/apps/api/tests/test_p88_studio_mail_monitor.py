@@ -10,6 +10,7 @@ from app.db import execute, fetch_one
 from app.main import app
 from app.autonomous_agents import run_agent
 from app.owner_command_control import owner_command_control_summary
+from app.p0 import execute_owner_command, parse_owner_command
 from app.studio_mail_monitor import classify_studio_mail, ingest_studio_mail_messages, latest_studio_mail_messages, studio_mail_monitor_health
 
 
@@ -89,6 +90,24 @@ def test_studio_mail_owner_command_accepts_russian_alias(monkeypatch):
         assert command["status"] == "executed"
     finally:
         _cleanup(token)
+        get_settings.cache_clear()
+
+
+def test_owner_command_show_studio_mail_is_safe_auto_and_redacted(monkeypatch):
+    owner = "owner-studio-mail@example.test"
+    monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)
+    get_settings.cache_clear()
+    try:
+        parsed = parse_owner_command(owner, "SHOW STUDIO MAIL", "")
+        assert parsed["risk_level"] == "SAFE_AUTO"
+        assert parsed["status"] == "executed"
+        result = execute_owner_command(parsed)
+        assert result["ok"] is True
+        assert result["action"] == "studio_mail_status"
+        assert result["health"]["send_mail"] is False
+        assert result["latest_messages"]["raw_private_addresses_included"] is False
+        assert owner not in str(result)
+    finally:
         get_settings.cache_clear()
 
 
