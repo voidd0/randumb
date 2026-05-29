@@ -23,7 +23,14 @@ Follow-up bounded buildout change:
 - Regional discovery is skipped unless enough time remains for its public fetch timeout.
 - Scanner wait is capped to a short wait inside the overall buildout budget.
 - Public contact enrichment now checks at most two pages per domain from buildout and caps each page fetch to the remaining enrichment budget.
-- The daily loop now uses the fast buildout path (`enrichment_limit=0`, `max_seconds=35`) so the core autonomous loop cannot be monopolized by public contact-page enrichment.
+- The daily loop now uses a snapshot-only buildout check (`apply=false`, `enrichment_limit=0`, `max_seconds=15`) so the core autonomous loop cannot be monopolized by sourcing/contact-page enrichment. Heavy buildout remains available as a separate bounded agent.
+
+## Runtime Verification
+
+- Focused autonomy/lead supply tests: `14 passed`, `1 skipped`.
+- Focused contact/lead supply tests: `31 passed`, `1 skipped`.
+- Lead discovery tests: `26 passed`.
+- Bounded daily loop smoke completed with `52` agents, `0` failures, `send_mail_flags=0`, `live_flags=0`.
 
 ## Reason
 
