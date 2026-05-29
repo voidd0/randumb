@@ -73,6 +73,7 @@ FULL_EXTRA_AGENTS: tuple[tuple[str, dict], ...] = (
     ("self_fix_agent", {}),
     ("self_learning_agent", {}),
     ("self_building_agent", {}),
+    ("self_development_executor_agent", {"limit": 3, "execute_safe_auto": True}),
 )
 
 

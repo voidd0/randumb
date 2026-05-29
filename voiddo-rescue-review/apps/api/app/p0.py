@@ -2361,6 +2361,26 @@ def run_deliverability_diagnostics(settings: Settings, recipients: list[str], sm
                             )
                             cur.execute(
                                 """
+                                INSERT INTO email_events(event_type, payload_json, mailbox, message_id)
+                                VALUES ('deliverability_diagnostic_sent', %s, %s, %s)
+                                """,
+                                (
+                                    Jsonb(
+                                        {
+                                            "recipient_hash": recipient_hash(email),
+                                            "provider": email_provider(email),
+                                            "message_id": message_id,
+                                            "smtp_result": "accepted" if not smtp_result else "partial_or_rejected",
+                                            "policy": "neutral_diagnostic_no_sales_no_tracking",
+                                            "raw_recipient_included": False,
+                                        }
+                                    ),
+                                    settings.smtp_from_default,
+                                    message_id,
+                                ),
+                            )
+                            cur.execute(
+                                """
                                 UPDATE test_inboxes
                                 SET last_test_at = now(), result_json = %s
                                 WHERE lower(email) = lower(%s)
@@ -2507,13 +2527,14 @@ def run_warmup_day(day_number: int = 1, warmup_run_id: str | None = None) -> dic
                     (
                         Jsonb(
                             {
-                                "recipient": email,
+                                "recipient_hash": recipient_hash(email),
                                 "day_number": day_number,
                                 "daily_cap": cap,
                                 "warmup_run_id": str(warmup_run_id or ""),
                                 "policy": "neutral_owner_approved_warmup_no_sales_no_tracking",
                                 "smtp_result": "accepted",
                                 "bounce_result": "pending_inbox_poll",
+                                "raw_recipient_included": False,
                             }
                         ),
                         settings.smtp_from_default,
@@ -2635,6 +2656,54 @@ def latest_production_visual_qa_decision() -> str:
     return row["decision"] if row else "MISSING"
 
 
+def visual_design_send_gate_status() -> dict[str, Any]:
+    from .quality_plugins import latest_quality_summary
+
+    required_tools = {"huanshu", "axe-core-playwright", "pa11y", "lighthouse-ci", "pixelmatch"}
+    summary = latest_quality_summary()
+    latest_visual = fetch_one(
+        """
+        SELECT decision, huanshu_status, target_url, score, created_at
+        FROM visual_qa_runs
+        WHERE COALESCE(target_url, '') NOT LIKE %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        ("inline:test%",),
+    )
+    tool_status = {
+        str(row.get("tool")): str(row.get("status"))
+        for row in (summary.get("runs") or [])
+        if row.get("tool")
+    }
+    missing = sorted(required_tools - set(tool_status))
+    failing = sorted(
+        tool
+        for tool, status in tool_status.items()
+        if tool in required_tools and status not in {"PASS", "PASS_WITH_WARNINGS"}
+    )
+    huanshu_status = tool_status.get("huanshu") or (latest_visual.get("huanshu_status") if latest_visual else "MISSING")
+    blockers: list[str] = []
+    if not latest_visual or latest_visual.get("decision") != "PASS":
+        blockers.append("visual_qa_not_pass")
+    if huanshu_status != "PASS":
+        blockers.append("huanshu_not_pass")
+    if missing:
+        blockers.append("quality_plugins_missing")
+    if failing:
+        blockers.append("quality_plugins_not_pass")
+    return {
+        "allowed": not blockers,
+        "blockers": blockers,
+        "visual_qa_decision": latest_visual.get("decision") if latest_visual else "MISSING",
+        "huanshu_status": huanshu_status,
+        "required_tools": sorted(required_tools),
+        "tool_status": tool_status,
+        "missing_tools": missing,
+        "failing_tools": failing,
+    }
+
+
 def live_outreach_quota_status(email: str = "") -> dict[str, Any]:
     settings = get_settings()
     normalized = (email or "").strip().lower()
@@ -2689,12 +2758,14 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
     html_body = payload.get("html_body") or ""
     unsubscribe_url = one_click_unsubscribe_url_from_body(body)
     quota = live_outreach_quota_status(email)
+    visual_design = visual_design_send_gate_status()
     checks = {
         "outreach_dry_run": settings.outreach_dry_run,
         "outreach_paused": effective_pause_state("outreach", settings.outreach_paused),
         "first_live_send_flag": settings.first_live_send_flag,
         "mail_qa_decision": latest_decision("mail_qa_runs"),
-        "visual_qa_decision": latest_production_visual_qa_decision(),
+        "visual_qa_decision": visual_design["visual_qa_decision"],
+        "visual_design_gate": visual_design,
         "has_unsubscribe": bool(unsubscribe_url),
         "unsubscribe_one_click_ready": bool(unsubscribe_url),
         "html_body_ready": bool(str(html_body).strip().lower().startswith("<!doctype html>")),
@@ -2712,6 +2783,8 @@ def transport_gate_status(payload: dict[str, Any] | None = None) -> dict[str, An
         return {"allowed": False, "reason": "mail_qa_not_passed", "checks": checks}
     if checks["visual_qa_decision"] != "PASS":
         return {"allowed": False, "reason": "visual_qa_not_passed", "checks": checks}
+    if not visual_design["allowed"]:
+        return {"allowed": False, "reason": ",".join(visual_design["blockers"]), "checks": checks}
     if checks["suppressed"]:
         return {"allowed": False, "reason": "recipient_suppressed", "checks": checks}
     if not checks["has_unsubscribe"]:

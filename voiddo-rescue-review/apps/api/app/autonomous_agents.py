@@ -95,6 +95,7 @@ from .scouts import cleanup_scout_source_readiness_checks, process_queued_scout_
 from .scout_quality import cleanup_scout_campaign_quality_history, latest_scout_quality_gate, record_scout_campaign_quality_history, run_scout_quality_gate, scout_campaign_quality_regression_guard, scout_campaign_quality_summary
 from .self_operating import run_self_audit, self_operating_summary
 from .self_closed_loop import run_self_operating_closed_loop
+from .self_development import run_self_development_cycle
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
 from .warmup_block_recovery import recover_blocked_warmup_slots, warmup_block_recovery_snapshot
 from .warmup_post_send import observe_warmup_post_send
@@ -494,6 +495,10 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "self_fix_agent": lambda: run_self_operating_closed_loop("self_fix_agent", int(payload.get("limit", 25))),
         "self_learning_agent": lambda: run_self_operating_closed_loop("self_learning_agent", int(payload.get("limit", 25))),
         "self_building_agent": lambda: run_self_operating_closed_loop("self_building_agent", int(payload.get("limit", 25))),
+        "self_development_executor_agent": lambda: run_self_development_cycle(
+            int(payload.get("limit", 10)),
+            execute_safe_auto=bool(payload.get("execute_safe_auto", True)),
+        ),
         "autonomous_mailer_agent": lambda: run_autonomous_mailer_cycle(),
         "autonomous_mailer_executor_agent": lambda: run_mailer_closed_loop(int(payload.get("limit", 10))),
         "customer_mail_simulation_agent": lambda: run_customer_mail_simulation(True),
@@ -661,6 +666,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("self_fix_agent", {}),
         ("self_learning_agent", {}),
         ("self_building_agent", {}),
+        ("self_development_executor_agent", {"limit": 3, "execute_safe_auto": True}),
     ]
 
 
@@ -697,6 +703,7 @@ def test_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("self_fix_agent", {}),
         ("self_learning_agent", {}),
         ("self_building_agent", {}),
+        ("self_development_executor_agent", {"limit": 1, "execute_safe_auto": False}),
     ]
 
 

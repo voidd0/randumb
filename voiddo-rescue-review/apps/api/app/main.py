@@ -132,6 +132,7 @@ from .self_operating import (
     self_operating_summary,
 )
 from .self_closed_loop import latest_self_operating_cycles, run_self_operating_closed_loop
+from .self_development import run_self_development_cycle
 
 app = FastAPI(title="Vøiddo Rescue API", version="0.1.0")
 settings = get_settings()
@@ -953,6 +954,18 @@ async def self_closed_loop_run(request: Request):
 @app.get("/admin/self/closed-loop", dependencies=[Depends(require_admin)])
 def self_closed_loop_get(limit: int = 10):
     return {"ok": True, **latest_self_operating_cycles(limit)}
+
+
+@app.post("/admin/self/development/run", dependencies=[Depends(require_admin)])
+async def self_development_run(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "cycle": run_self_development_cycle(
+            int(payload.get("limit", 10)),
+            execute_safe_auto=bool(payload.get("execute_safe_auto", True)),
+        ),
+    }
 
 
 @app.post("/admin/self/fix-tasks", dependencies=[Depends(require_admin)])

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from email.message import EmailMessage
+from email.utils import make_msgid
+import hashlib
 import os
 import re
 import smtplib
@@ -17,6 +19,58 @@ def _latest_decision(table: str) -> str:
             cur.execute(f"SELECT decision FROM {table} ORDER BY created_at DESC LIMIT 1")
             row = cur.fetchone()
             return row["decision"] if row else "MISSING"
+
+
+def _recipient_hash(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24] if normalized else ""
+
+
+def _visual_design_gate() -> dict:
+    required = {"huanshu", "axe-core-playwright", "pa11y", "lighthouse-ci", "pixelmatch"}
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT decision, huanshu_status, target_url, score, created_at
+                FROM visual_qa_runs
+                WHERE COALESCE(target_url, '') NOT LIKE 'inline:test%%'
+                ORDER BY created_at DESC
+                LIMIT 1
+                """
+            )
+            visual = cur.fetchone()
+            cur.execute(
+                """
+                SELECT DISTINCT ON (tool) tool, status, score, target, created_at
+                FROM quality_plugin_runs
+                ORDER BY tool, created_at DESC
+                """
+            )
+            tools = [dict(row) for row in cur.fetchall()]
+    tool_status = {str(row["tool"]): str(row["status"]) for row in tools}
+    missing = sorted(required - set(tool_status))
+    failing = sorted(tool for tool, status in tool_status.items() if tool in required and status not in {"PASS", "PASS_WITH_WARNINGS"})
+    huanshu_status = tool_status.get("huanshu") or (visual["huanshu_status"] if visual else "MISSING")
+    blockers = []
+    if not visual or visual.get("decision") != "PASS":
+        blockers.append("visual_qa_not_pass")
+    if huanshu_status != "PASS":
+        blockers.append("huanshu_not_pass")
+    if missing:
+        blockers.append("quality_plugins_missing")
+    if failing:
+        blockers.append("quality_plugins_not_pass")
+    return {
+        "allowed": not blockers,
+        "blockers": blockers,
+        "visual_qa_decision": visual["decision"] if visual else "MISSING",
+        "huanshu_status": huanshu_status,
+        "required_tools": sorted(required),
+        "tool_status": tool_status,
+        "missing_tools": missing,
+        "failing_tools": failing,
+    }
 
 
 def _count(cur, sql: str, params: tuple = ()) -> int:
@@ -134,12 +188,14 @@ def _live_quota(cur, email: str) -> dict:
 
 def transport_gate(email: str, body: str, campaign_id: str | None = None, html_body: str = "") -> tuple[bool, str, dict]:
     unsubscribe_url = unsubscribe_url_from_body(body)
+    visual_design = _visual_design_gate()
     checks = {
         "outreach_dry_run": os.environ.get("OUTREACH_DRY_RUN", "true").lower() == "true",
         "outreach_paused": os.environ.get("OUTREACH_PAUSED", "true").lower() == "true",
         "first_live_send_flag": os.environ.get("FIRST_LIVE_SEND_FLAG", "false").lower() == "true",
         "mail_qa_decision": _latest_decision("mail_qa_runs"),
-        "visual_qa_decision": _latest_decision("visual_qa_runs"),
+        "visual_qa_decision": visual_design["visual_qa_decision"],
+        "visual_design_gate": visual_design,
         "has_unsubscribe": bool(unsubscribe_url),
         "unsubscribe_one_click_ready": bool(unsubscribe_url),
         "html_body_ready": bool(str(html_body or "").strip().lower().startswith("<!doctype html>")),
@@ -163,6 +219,8 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None, html_b
         return False, "mail_qa_not_passed", checks
     if checks["visual_qa_decision"] != "PASS":
         return False, "visual_qa_not_passed", checks
+    if not visual_design["allowed"]:
+        return False, ",".join(visual_design["blockers"]), checks
     if not checks["campaign_preflight"]["allowed"]:
         return False, checks["campaign_preflight"]["reason"], checks
     if not checks["warmup_maturity"]["allowed"]:
@@ -221,6 +279,8 @@ def send_message_if_allowed(message_id: str) -> dict:
     if unsubscribe_url:
         msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+    provider_message_id = make_msgid(domain="voiddorescue.com")
+    msg["Message-ID"] = provider_message_id
     msg.set_content(message["body"])
     if message.get("html_body"):
         msg.add_alternative(message["html_body"], subtype="html")
@@ -232,9 +292,35 @@ def send_message_if_allowed(message_id: str) -> dict:
         smtp.send_message(msg)
     with connect() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE outreach_messages SET status = 'sent', sent_at = now() WHERE id = %s", (message_id,))
+            cur.execute(
+                "UPDATE outreach_messages SET status = 'sent', sent_at = now(), provider_message_id = %s WHERE id = %s",
+                (provider_message_id, message_id),
+            )
+            cur.execute(
+                """
+                INSERT INTO email_events(outreach_message_id, event_type, payload_json, mailbox, message_id)
+                VALUES (%s, 'outreach_sent', %s, %s, %s)
+                """,
+                (
+                    message_id,
+                    Jsonb(
+                        {
+                            "recipient_hash": _recipient_hash(email),
+                            "recipient_domain_hash": _recipient_hash(email.rsplit("@", 1)[-1] if "@" in email else ""),
+                            "campaign_id": campaign_id or "",
+                            "unsubscribe_one_click_ready": bool(unsubscribe_url),
+                            "list_unsubscribe_header": bool(unsubscribe_url),
+                            "smtp_result": "accepted",
+                            "policy": "proof_based_outreach_with_one_click_unsubscribe",
+                            "raw_recipient_included": False,
+                        }
+                    ),
+                    message["mailbox"],
+                    provider_message_id,
+                ),
+            )
         conn.commit()
-    return {"sent": True, "reason": "sent"}
+    return {"sent": True, "reason": "sent", "message_id": provider_message_id}
 
 
 def process_outreach_queue(limit: int = 1) -> dict:
