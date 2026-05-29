@@ -115,6 +115,48 @@ def _create_studio_mail_task(classified: dict[str, Any], message: dict[str, Any]
     return {"codex_task_id": str(row["id"]), "task_type": task_type, "task_priority": priority}
 
 
+def _billing_sale_signal(message: dict[str, Any], classified: dict[str, Any]) -> bool:
+    if classified["classification"] != "billing":
+        return False
+    text = f"{message.get('subject') or ''}\n{message.get('body') or ''}".lower()
+    markers = [
+        "transaction paid",
+        "transaction.paid",
+        "payment received",
+        "payment successful",
+        "subscription activated",
+        "subscription.created",
+        "subscription created",
+        "new sale",
+        "paid",
+        "checkout completed",
+    ]
+    return any(marker in text for marker in markers)
+
+
+def _queue_billing_sale_notification(classified: dict[str, Any], message: dict[str, Any], message_id: str) -> dict[str, Any] | None:
+    if not _billing_sale_signal(message, classified):
+        return None
+    from .mailer_action_queue import enqueue_mailer_action
+
+    payload = {
+        "action_type": "owner_sale_notification",
+        "risk_level": "SAFE_AUTO",
+        "mailbox": "support@voiddorescue.com",
+        "template_key": "owner_sale_notification",
+        "source_event": "studio_billing_mail",
+        "product_key": "studio_billing_signal",
+        "amount": 0,
+        "currency": "USD",
+        "customer_hash": classified.get("sender_hash", ""),
+        "paddle_transaction_id": _message_hash(message_id),
+        "message_hash": _message_hash(message_id),
+        "raw_private_addresses_included": False,
+        "secrets_included": False,
+    }
+    return enqueue_mailer_action(payload)
+
+
 def classify_studio_mail(message: dict[str, Any]) -> dict[str, Any]:
     sender = parseaddr(str(message.get("sender") or ""))[1].lower()
     reply_to = parseaddr(str(message.get("reply_to") or ""))[1].lower()
@@ -202,6 +244,7 @@ def store_studio_mail_message(message: dict[str, Any]) -> dict[str, Any]:
     owner_result: dict[str, Any] | None = None
     mail_signal: dict[str, Any] | None = None
     triage_task: dict[str, Any] | None = None
+    sale_notification: dict[str, Any] | None = None
 
     existing = fetch_all(
         """
@@ -238,6 +281,7 @@ def store_studio_mail_message(message: dict[str, Any]) -> dict[str, Any]:
         owner_command_id = owner_result.get("id")
     mail_signal = _record_mail_signal(classified, message, message_id)
     triage_task = _create_studio_mail_task(classified, message, message_id)
+    sale_notification = _queue_billing_sale_notification(classified, message, message_id)
 
     result_json = json_safe(
         {
@@ -248,6 +292,7 @@ def store_studio_mail_message(message: dict[str, Any]) -> dict[str, Any]:
             "owner_command_id": owner_command_id,
             "mail_signal": mail_signal,
             "triage_task": triage_task,
+            "sale_notification": sale_notification,
             "owner_command": {
                 "command": owner_result.get("command") if owner_result else None,
                 "risk_level": owner_result.get("risk_level") if owner_result else None,
@@ -292,6 +337,7 @@ def store_studio_mail_message(message: dict[str, Any]) -> dict[str, Any]:
                     "sender_hash": classified["sender_hash"],
                     "alias": classified["alias"],
                     "priority": classified["priority"],
+                    "sale_notification_queued": bool(sale_notification),
                     **SAFE_FLAGS,
                 }
             ),
@@ -337,6 +383,7 @@ def store_studio_mail_message(message: dict[str, Any]) -> dict[str, Any]:
         "owner_command_id": owner_command_id,
         "mail_signal": mail_signal,
         "triage_task": triage_task,
+        "sale_notification": sale_notification,
         **SAFE_FLAGS,
     }
 

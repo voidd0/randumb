@@ -30,6 +30,7 @@ def _cleanup(token: str) -> None:
     execute("DELETE FROM system_events WHERE payload_json::text LIKE %s", (f"%{token}%",))
     execute("DELETE FROM mail_signals WHERE message_id LIKE %s OR raw_summary LIKE %s", (f"%{token}%", f"%{token}%"))
     execute("DELETE FROM codex_tasks WHERE input_json::text LIKE %s OR title LIKE %s", (f"%{token}%", f"%{token}%"))
+    execute("DELETE FROM mailer_action_queue WHERE payload_json::text LIKE %s", (f"%{token}%",))
 
 
 def _message(token: str, sender: str, subject: str, body: str, to: str = "support@voiddo.com") -> dict:
@@ -268,6 +269,46 @@ def test_studio_mail_dmarc_report_is_informational_not_failure_signal():
         assert signal["severity"] == "info"
         assert sender not in signal["raw_summary"]
         assert signal["recipient_hash"] != sender
+    finally:
+        _cleanup(token)
+
+
+def test_studio_billing_sale_signal_queues_redacted_owner_notification():
+    token = uuid.uuid4().hex[:8]
+    sender = f"noreply-{token}@paddle.com"
+    try:
+        result = ingest_studio_mail_messages([
+            _message(token, sender, "Transaction paid", f"Payment received for checkout {token}", "billing@voiddo.com")
+        ])
+        assert result["stored_count"] == 1
+        item = result["results"][0]
+        assert item["classification"] == "billing"
+        assert item["sale_notification"]["action_type"] == "owner_sale_notification"
+        assert item["sale_notification"]["risk_level"] == "SAFE_AUTO"
+        action = fetch_one("SELECT action_type, recipient_hash, payload_json FROM mailer_action_queue WHERE id = %s", (item["sale_notification"]["id"],))
+        assert action["action_type"] == "owner_sale_notification"
+        assert action["recipient_hash"]
+        assert sender not in str(action["payload_json"])
+        assert token not in str(action["payload_json"])
+        assert action["payload_json"]["source_event"] == "studio_billing_mail"
+        assert action["payload_json"]["raw_private_addresses_included"] is False
+        execute("DELETE FROM mailer_action_queue WHERE id = %s", (item["sale_notification"]["id"],))
+    finally:
+        _cleanup(token)
+
+
+def test_studio_billing_non_sale_does_not_queue_sale_notification():
+    token = uuid.uuid4().hex[:8]
+    sender = f"noreply-{token}@paddle.com"
+    try:
+        result = ingest_studio_mail_messages([
+            _message(token, sender, "Paddle account notice", f"Monthly billing settings notice {token}", "billing@voiddo.com")
+        ])
+        assert result["stored_count"] == 1
+        assert result["results"][0]["classification"] == "billing"
+        assert result["results"][0]["sale_notification"] is None
+        queued = fetch_one("SELECT count(*) AS count FROM mailer_action_queue WHERE payload_json::text LIKE %s", (f"%{token}%",))
+        assert int(queued["count"]) == 0
     finally:
         _cleanup(token)
 
