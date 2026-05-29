@@ -626,6 +626,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("post_window_recheck_agent", {}),
         ("warmup_block_recovery_snapshot_agent", {"limit": 50}),
         ("warmup_post_send_observer_agent", {"limit": 10}),
+        ("outreach_post_send_observer_agent", {"window_hours": 24, "apply_pause": True}),
         ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),
         ("scanner_completion_watch_agent", {"limit": 100, "min_new_completed": 1, "dry_run": False}),
         ("lead_quality_diagnostics_agent", {"limit": 500}),

@@ -16,7 +16,16 @@ SAFE_FLAGS = {
     "secrets_included": False,
 }
 
-BLOCKING_SIGNALS = ("bounce", "dsn", "smtp_rate_limit", "spam_signal")
+BLOCKING_SIGNALS = (
+    "bounce",
+    "dsn",
+    "smtp_rate_limit",
+    "spam_signal",
+    "auth_failure",
+    "tls_failure",
+    "dkim_failure",
+    "dmarc_failure",
+)
 
 
 def _count(query: str, params: tuple[Any, ...] = ()) -> int:
@@ -62,6 +71,11 @@ def outreach_post_send_observer(window_hours: int = 24, apply_pause: bool = True
     bounce_count = sum(1 for row in signals if row["signal_type"] in {"bounce", "dsn"})
     rate_count = sum(1 for row in signals if row["signal_type"] == "smtp_rate_limit")
     spam_count = sum(1 for row in signals if row["signal_type"] == "spam_signal")
+    mail_auth_failure_count = sum(
+        1
+        for row in signals
+        if row["signal_type"] in {"auth_failure", "tls_failure", "dkim_failure", "dmarc_failure"}
+    )
     blockers = []
     if bounce_count:
         blockers.append("recent_bounce_or_dsn_after_send")
@@ -69,6 +83,8 @@ def outreach_post_send_observer(window_hours: int = 24, apply_pause: bool = True
         blockers.append("recent_rate_limit_after_send")
     if spam_count:
         blockers.append("recent_spam_signal_after_send")
+    if mail_auth_failure_count:
+        blockers.append("recent_mail_auth_failure_after_send")
 
     pause_applied = False
     if blockers and apply_pause:
@@ -87,6 +103,7 @@ def outreach_post_send_observer(window_hours: int = 24, apply_pause: bool = True
             "bounce_or_dsn_count": bounce_count,
             "rate_limit_count": rate_count,
             "spam_signal_count": spam_count,
+            "mail_auth_failure_count": mail_auth_failure_count,
             "pause_outreach_applied": pause_applied,
             "blockers": blockers,
             "sent_message_sample": [
