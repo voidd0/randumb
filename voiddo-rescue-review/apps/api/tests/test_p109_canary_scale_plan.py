@@ -18,14 +18,16 @@ def admin_headers() -> dict[str, str]:
     return {"X-Admin-Token": os.environ["ADMIN_AUTH_TOKEN"]}
 
 
-def _patch_clean_dependencies(monkeypatch, *, sent: int = 6, queued: int = 14, blocked: int = 0):
+def _patch_clean_dependencies(monkeypatch, *, sent: int = 6, bounced: int = 0, queued: int = 14, blocked: int = 0):
     def fake_count(query: str, params=()):
         normalized = " ".join(query.split()).lower()
-        if "status = 'sent'" in normalized or "status in ('sent', 'bounced')" in normalized:
+        if "status = 'sent'" in normalized:
             return sent
+        if "status = 'bounced'" in normalized:
+            return bounced
         if "status = 'queued'" in normalized:
             return queued
-        if "status in ('failed', 'blocked', 'transport_blocked', 'bounced')" in normalized:
+        if "status in ('failed', 'blocked', 'transport_blocked')" in normalized:
             return blocked
         if "status = 'preview'" in normalized:
             return 100
@@ -61,12 +63,17 @@ def _patch_clean_dependencies(monkeypatch, *, sent: int = 6, queued: int = 14, b
 
 
 def test_canary_scale_plan_continues_existing_queued_canary(monkeypatch):
-    _patch_clean_dependencies(monkeypatch, sent=6, queued=14)
+    _patch_clean_dependencies(monkeypatch, sent=6, bounced=1, queued=14)
     result = canary_scale_plan(20, 40, store=False)
     assert result["decision"] == "CONTINUE_CURRENT_CANARY"
     assert result["send_mail"] is False
     assert result["live_outreach_allowed"] is False
     assert result["queued_count"] == 14
+    assert result["smtp_sent_count"] == 6
+    assert result["bounced_count"] == 1
+    assert result["sent_or_bounced_count"] == 7
+    assert result["sent_count"] == 7
+    assert result["blocked_count"] == 0
     assert "@" not in str(result)
 
 
@@ -89,9 +96,12 @@ def test_canary_scale_plan_blocks_on_mail_auth_failure(monkeypatch):
 
 
 def test_canary_scale_plan_ready_for_next_batch_only_after_clean_completion(monkeypatch):
-    _patch_clean_dependencies(monkeypatch, sent=20, queued=0)
+    _patch_clean_dependencies(monkeypatch, sent=19, bounced=1, queued=0)
     result = canary_scale_plan(20, 40, store=False)
     assert result["decision"] == "READY_FOR_NEXT_BATCH_DRY_RUN"
+    assert result["smtp_sent_count"] == 19
+    assert result["bounced_count"] == 1
+    assert result["sent_or_bounced_count"] == 20
     assert result["recommended_next_batch_limit"] == 40
     assert result["next_action"] == "prepare_next_batch_preview_and_preflight_only_no_send"
 

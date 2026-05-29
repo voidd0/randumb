@@ -39,6 +39,9 @@ def _patch_clean(monkeypatch, *, paused: bool = True):
             "decision": "CONTINUE_CURRENT_CANARY",
             "queued_count": 7,
             "sent_count": 12,
+            "sent_or_bounced_count": 12,
+            "smtp_sent_count": 11,
+            "bounced_count": 1,
             "blocked_count": 0,
             "blockers": [],
             "send_mail": False,
@@ -82,6 +85,9 @@ def test_canary_resume_plan_blocks_recent_bounce_without_clearing_pause(monkeypa
     assert calls == []
     assert result["send_mail"] is False
     assert result["live_outreach_allowed"] is False
+    assert result["sent_or_bounced_count"] == 12
+    assert result["smtp_sent_count"] == 11
+    assert result["bounced_count"] == 1
 
 
 def test_canary_resume_plan_clears_pause_only_when_all_gates_pass(monkeypatch):

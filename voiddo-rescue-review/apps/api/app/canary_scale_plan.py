@@ -38,10 +38,12 @@ def canary_scale_plan(canary_limit: int = 20, next_batch_limit: int = 40, store:
     compliance = mail_send_compliance_snapshot(24)
     scoreboard = launch_readiness_scoreboard(25)
 
-    sent = _count("SELECT count(*) AS count FROM outreach_messages WHERE status IN ('sent', 'bounced')")
+    smtp_sent = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'sent'")
+    bounced = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'bounced'")
+    sent_or_bounced = smtp_sent + bounced
     queued = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'queued'")
     blocked = _count(
-        "SELECT count(*) AS count FROM outreach_messages WHERE status IN ('failed', 'blocked', 'transport_blocked', 'bounced')"
+        "SELECT count(*) AS count FROM outreach_messages WHERE status IN ('failed', 'blocked', 'transport_blocked')"
     )
     preview = _count("SELECT count(*) AS count FROM outreach_messages WHERE status = 'preview'")
     first_sent = fetch_one("SELECT min(sent_at) AS first_sent_at FROM outreach_messages WHERE status = 'sent'")
@@ -102,7 +104,7 @@ def canary_scale_plan(canary_limit: int = 20, next_batch_limit: int = 40, store:
     elif queued > 0:
         decision = "CONTINUE_CURRENT_CANARY"
         next_action = "let_worker_continue_existing_queued_canary_under_post_send_observer"
-    elif sent < safe_canary_limit:
+    elif sent_or_bounced < safe_canary_limit:
         decision = "WAIT_INSUFFICIENT_CANARY_VOLUME"
         next_action = "prepare_more_candidates_in_dry_run_before_any_scale_up"
     else:
@@ -115,7 +117,10 @@ def canary_scale_plan(canary_limit: int = 20, next_batch_limit: int = 40, store:
             "next_action": next_action,
             "canary_limit": safe_canary_limit,
             "recommended_next_batch_limit": safe_next_limit if decision == "READY_FOR_NEXT_BATCH_DRY_RUN" else 0,
-            "sent_count": sent,
+            "sent_count": sent_or_bounced,
+            "sent_or_bounced_count": sent_or_bounced,
+            "smtp_sent_count": smtp_sent,
+            "bounced_count": bounced,
             "queued_count": queued,
             "blocked_count": blocked,
             "preview_count": preview,
