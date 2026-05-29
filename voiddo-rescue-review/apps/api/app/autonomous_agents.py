@@ -28,6 +28,7 @@ from .mail_recovery import check_mail_clean_window
 from .mail_send_compliance import run_mail_send_compliance_agent
 from .mailer_throttle import throttle_decision
 from .reply_actions import plan_reply_action
+from .inbox_control_hygiene import inbox_control_signal_hygiene
 from .reply_safety_rehearsal import run_reply_safety_rehearsal
 from .inbox_integrity_gate import run_inbox_integrity_gate
 from .customer_journey import customer_journey_snapshot
@@ -523,6 +524,10 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "launch_operating_lane_agent": lambda: launch_operating_lane_snapshot(int(payload.get("limit", 25))),
         "launch_operating_lane_advance_agent": lambda: advance_launch_operating_lane(int(payload.get("limit", 25)), execute_safe_auto=False),
         "inbox_agent": lambda: {"dry_run": True, "status": "worker_polls_when_enabled"},
+        "inbox_control_signal_hygiene_agent": lambda: inbox_control_signal_hygiene(
+            int(payload.get("limit", 100)),
+            apply=bool(payload.get("apply", True)),
+        ),
         "reply_safety_rehearsal_agent": lambda: run_reply_safety_rehearsal(),
         "inbox_integrity_gate_agent": lambda: run_inbox_integrity_gate(int(payload.get("window_hours", 24))),
         "owner_command_agent": lambda: owner_command_control_summary(int(payload.get("limit", 20))),

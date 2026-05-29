@@ -148,6 +148,7 @@ def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
     assert result["loop"]["mode"] == "core"
     assert len(calls) == len(loop_script.CORE_AGENTS)
     assert calls[0][0] == "mail_throttle_agent"
+    assert "inbox_control_signal_hygiene_agent" in [agent for agent, _payload in calls]
     assert "outreach_post_send_observer_agent" in [agent for agent, _payload in calls]
     assert "canary_bounce_recovery_agent" in [agent for agent, _payload in calls]
     assert "outreach_transport_block_hygiene_agent" in [agent for agent, _payload in calls]

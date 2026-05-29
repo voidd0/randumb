@@ -23,6 +23,7 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("mail_signal_learning_agent", {}),
     ("studio_mail_monitor_health_agent", {"max_age_minutes": 15}),
     ("studio_mail_monitor_agent", {"limit": 20}),
+    ("inbox_control_signal_hygiene_agent", {"limit": 100, "apply": True}),
     ("clean_window_recheck_agent", {}),
     ("post_window_recheck_agent", {}),
     ("warmup_block_recovery_snapshot_agent", {"limit": 50}),
