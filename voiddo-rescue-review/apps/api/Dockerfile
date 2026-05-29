@@ -17,4 +17,4 @@ COPY tests ./tests
 COPY migrations ./migrations
 
 EXPOSE 8080
-CMD ["sh", "-c", "python -m app.db && exec uvicorn app.main:app --host 0.0.0.0 --port 8080 --proxy-headers"]
+CMD ["sh", "-c", "python -m app.db && exec uvicorn app.main:app --host 0.0.0.0 --port 8080 --proxy-headers --workers ${API_WORKERS:-2}"]

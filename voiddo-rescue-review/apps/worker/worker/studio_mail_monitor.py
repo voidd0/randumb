@@ -81,8 +81,6 @@ def _message_payload(mailbox: str, uid: str, raw: bytes) -> dict[str, Any]:
 
 
 def _submit_messages(messages: list[dict[str, Any]]) -> dict[str, Any]:
-    if not messages:
-        return {"stored_count": 0, "owner_command_count": 0}
     api_base = os.environ.get("API_INTERNAL_BASE_URL", "http://api:8080").rstrip("/")
     token = os.environ.get("ADMIN_AUTH_TOKEN", "")
     if not token:
@@ -95,6 +93,13 @@ def _submit_messages(messages: list[dict[str, Any]]) -> dict[str, Any]:
         )
         response.raise_for_status()
         return response.json().get("ingest", {})
+
+
+def _submit_messages_safely(messages: list[dict[str, Any]]) -> tuple[dict[str, Any], str]:
+    try:
+        return _submit_messages(messages), ""
+    except (httpx.HTTPError, RuntimeError) as exc:
+        return {}, f"api_submit_failed:{type(exc).__name__}"
 
 
 def poll_studio_mailbox(limit: int = 20) -> dict[str, Any]:
@@ -125,7 +130,18 @@ def poll_studio_mailbox(limit: int = 20) -> dict[str, Any]:
             uid = uid_b.decode("ascii", errors="replace")
             payloads.append(_message_payload(username, uid, fetched[0][1]))
             uids.append(uid_b)
-        ingest = _submit_messages(payloads)
+        ingest, submit_error = _submit_messages_safely(payloads)
+        if submit_error:
+            imap.logout()
+            return StudioMailPollResult(
+                enabled=True,
+                scanned=len(payloads),
+                submitted=0,
+                stored=0,
+                owner_commands=0,
+                marked_seen=0,
+                error=submit_error,
+            ).__dict__
         for uid_b in uids:
             imap.uid("store", uid_b, "+FLAGS.SILENT", "\\Seen")
         imap.logout()
