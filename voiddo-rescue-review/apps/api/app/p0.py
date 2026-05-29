@@ -66,6 +66,7 @@ WARMUP_SENDER_ROTATION = [
     "fix@voiddorescue.com",
 ]
 MAIL_SIGNAL_RECENT_BLOCKING_TYPES = {"bounce", "dsn", "smtp_rate_limit"}
+MAIL_AUTH_BLOCKING_SIGNAL_TYPES = {"auth_failure", "tls_failure", "dkim_failure", "dmarc_failure"}
 DIAGNOSTIC_DAILY_CAP = 5
 DIAGNOSTIC_MINUTE_CAP = 1
 
@@ -1056,6 +1057,7 @@ def mail_signal_summary(hours: int = 24) -> dict[str, Any]:
         "bounce_or_dsn_count": recent_mail_signal_count(["bounce", "dsn"], hours),
         "rate_limit_count": recent_mail_signal_count(["smtp_rate_limit"], hours),
         "spam_signal_count": recent_mail_signal_count(["spam_signal"], hours),
+        "mail_auth_failure_count": recent_mail_signal_count(MAIL_AUTH_BLOCKING_SIGNAL_TYPES, hours),
     }
 
 
@@ -1994,6 +1996,8 @@ def warmup_pre_send_gate(row: dict[str, Any], settings: Settings | None = None) 
         "spf_dkim_dmarc_latest": "PASS" if mail_qa == "PASS" else "UNKNOWN",
         "recent_bounce_or_dsn_count_24h": recent_mail_signal_count(["bounce", "dsn"], 24),
         "recent_rate_limit_count_24h": recent_mail_signal_count(["smtp_rate_limit"], 24),
+        "recent_spam_signal_count_24h": recent_mail_signal_count(["spam_signal"], 24),
+        "recent_mail_auth_failure_count_24h": recent_mail_signal_count(MAIL_AUTH_BLOCKING_SIGNAL_TYPES, 24),
         "recipient_suppressed": is_recipient_suppressed(recipient),
         "sender_credentials_available": bool(username and password),
         "daily_cap": warmup_daily_cap(),
@@ -2012,6 +2016,10 @@ def warmup_pre_send_gate(row: dict[str, Any], settings: Settings | None = None) 
         return {"allowed": False, "status": "blocked_recent_bounce", "checks": checks}
     if checks["recent_rate_limit_count_24h"] > 0:
         return {"allowed": False, "status": "blocked_recent_rate_limit", "checks": checks}
+    if checks["recent_spam_signal_count_24h"] > 0:
+        return {"allowed": False, "status": "blocked_recent_spam_signal", "checks": checks}
+    if checks["recent_mail_auth_failure_count_24h"] > 0:
+        return {"allowed": False, "status": "blocked_mail_auth_signal", "checks": checks}
     if checks["latest_mail_qa_decision"] != "PASS":
         return {"allowed": False, "status": "blocked_mail_qa", "checks": checks}
     if checks["recipient_suppressed"]:

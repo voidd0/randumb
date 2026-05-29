@@ -77,6 +77,36 @@ def test_warmup_blocked_if_recent_rate_limit_exists(monkeypatch):
         _cleanup(schedule["id"])
 
 
+def test_warmup_blocked_if_recent_mail_auth_signal_exists(monkeypatch):
+    schedule = _due_schedule()
+    try:
+        monkeypatch.setattr("app.p0.latest_mail_qa_decision", lambda: "PASS")
+        monkeypatch.setattr("app.p0.effective_pause_state", lambda area, configured=False: False)
+        monkeypatch.setattr("app.p0.recent_mail_signal_count", lambda types, hours=24: 1 if "dmarc_failure" in types else 0)
+        monkeypatch.setattr("app.p0.warmup_daily_cap", lambda: 999)
+        result = run_warmup_calendar_due(limit=1)
+        row = fetch_one("SELECT status FROM warmup_schedule WHERE id = %s", (schedule["id"],))
+        assert result["sent"] == 0
+        assert row["status"] == "blocked_mail_auth_signal"
+    finally:
+        _cleanup(schedule["id"])
+
+
+def test_warmup_blocked_if_recent_spam_signal_exists(monkeypatch):
+    schedule = _due_schedule()
+    try:
+        monkeypatch.setattr("app.p0.latest_mail_qa_decision", lambda: "PASS")
+        monkeypatch.setattr("app.p0.effective_pause_state", lambda area, configured=False: False)
+        monkeypatch.setattr("app.p0.recent_mail_signal_count", lambda types, hours=24: 1 if "spam_signal" in types else 0)
+        monkeypatch.setattr("app.p0.warmup_daily_cap", lambda: 999)
+        result = run_warmup_calendar_due(limit=1)
+        row = fetch_one("SELECT status FROM warmup_schedule WHERE id = %s", (schedule["id"],))
+        assert result["sent"] == 0
+        assert row["status"] == "blocked_recent_spam_signal"
+    finally:
+        _cleanup(schedule["id"])
+
+
 def test_warmup_skipped_if_recipient_suppressed(monkeypatch):
     email = f"p5-suppressed-{uuid.uuid4().hex[:8]}@example.test"
     schedule = _due_schedule(email)

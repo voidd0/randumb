@@ -106,6 +106,7 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
             "bounce_or_dsn_count": int(signals.get("bounce_or_dsn_count", 0) or 0),
             "rate_limit_count": int(signals.get("rate_limit_count", 0) or 0),
             "spam_signal_count": int(signals.get("spam_signal_count", 0) or 0),
+            "mail_auth_failure_count": int(signals.get("mail_auth_failure_count", 0) or 0),
             "window_hours": signals.get("window_hours", 24),
         },
         "policy_score": policy_score,
@@ -131,6 +132,9 @@ def launch_readiness_scoreboard(limit: int = 25) -> dict[str, Any]:
         score -= 15
     if mail["signals"]["spam_signal_count"] > 0:
         _add_blocker(blockers, "recent_spam_signal", "critical", mail["signals"]["spam_signal_count"])
+        score -= 25
+    if mail["signals"]["mail_auth_failure_count"] > 0:
+        _add_blocker(blockers, "recent_mail_auth_failure_signal", "critical", mail["signals"]["mail_auth_failure_count"])
         score -= 25
     if visual["visual_qa_decision"] != "PASS":
         _add_blocker(blockers, "visual_qa_not_pass", "high", visual["visual_qa_decision"])

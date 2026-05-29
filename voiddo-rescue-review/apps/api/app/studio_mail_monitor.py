@@ -49,7 +49,7 @@ def _message_hash(message_id: str) -> str:
 def _record_mail_signal(classified: dict[str, Any], message: dict[str, Any], message_id: str) -> dict[str, Any] | None:
     signal_map = {
         "bounce": ("bounce", "warning", "studio_mail_monitor", "studio mailbox delivery failure"),
-        "dmarc_report": ("dmarc_failure", "info", "studio_mail_monitor", "studio mailbox DMARC report received"),
+        "dmarc_report": ("dmarc_report", "info", "studio_mail_monitor", "studio mailbox DMARC report received"),
     }
     if classified["classification"] not in signal_map:
         return None

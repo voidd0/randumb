@@ -195,6 +195,23 @@ def test_studio_mail_bounce_records_mail_signal_without_raw_address():
         _cleanup(token)
 
 
+def test_studio_mail_dmarc_report_is_informational_not_failure_signal():
+    token = uuid.uuid4().hex[:8]
+    sender = f"reports-{token}@reports.example.test"
+    try:
+        result = ingest_studio_mail_messages([_message(token, sender, "Report domain: voiddo.com", f"DMARC aggregate report {token}", "dmarc@voiddo.com")])
+        assert result["stored_count"] == 1
+        assert result["results"][0]["classification"] == "dmarc_report"
+        assert result["results"][0]["mail_signal"]["signal_type"] == "dmarc_report"
+        signal = fetch_one("SELECT signal_type, severity, raw_summary, recipient_hash FROM mail_signals WHERE message_id = %s", (f"<msg-{token}@example.test>",))
+        assert signal["signal_type"] == "dmarc_report"
+        assert signal["severity"] == "info"
+        assert sender not in signal["raw_summary"]
+        assert signal["recipient_hash"] != sender
+    finally:
+        _cleanup(token)
+
+
 def test_studio_mail_support_is_autonomous_triage_and_redacted_in_listing():
     token = uuid.uuid4().hex[:8]
     sender = f"person-{token}@example.test"
