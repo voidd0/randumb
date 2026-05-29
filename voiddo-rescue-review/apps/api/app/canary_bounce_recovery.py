@@ -357,7 +357,7 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
             FROM outreach_messages om
             LEFT JOIN leads l ON l.id = om.lead_id
             LEFT JOIN audits a ON a.id = om.audit_id
-            WHERE om.status = 'sent'
+            WHERE om.status IN ('sent', 'bounced')
               AND om.provider_message_id = ANY(%s)
             ORDER BY om.sent_at DESC NULLS LAST
             LIMIT 100
@@ -370,7 +370,7 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
                lower(split_part(COALESCE(l.email, ''), '@', 2)) AS recipient_domain
         FROM outreach_messages om
         LEFT JOIN leads l ON l.id = om.lead_id
-        WHERE om.status IN ('failed', 'blocked', 'transport_blocked')
+        WHERE om.status IN ('failed', 'blocked', 'transport_blocked', 'bounced')
         ORDER BY om.created_at DESC
         LIMIT 50
         """
@@ -391,7 +391,11 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
     for row in signals:
         summary = str(row.get("raw_summary") or "")
         parts = summary.split(":")
-        reason = parts[-1] if len(parts) >= 3 and parts[-2] == "bounce" else "unknown"
+        reason = "unknown"
+        if "bounce" in parts:
+            index = parts.index("bounce")
+            if index + 1 < len(parts):
+                reason = parts[index + 1] or "unknown"
         reason_counts[reason or "unknown"] += 1
         provider_counts[_safe_provider_label(row.get("provider"))] += 1
 
