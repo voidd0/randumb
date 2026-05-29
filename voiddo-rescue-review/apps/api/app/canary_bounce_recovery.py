@@ -387,8 +387,19 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
                lower(split_part(COALESCE(l.email, ''), '@', 2)) AS recipient_domain
         FROM outreach_messages om
         LEFT JOIN leads l ON l.id = om.lead_id
-        WHERE om.status IN ('failed', 'blocked', 'transport_blocked', 'bounced')
+        WHERE om.status IN ('failed', 'blocked', 'transport_blocked')
         ORDER BY om.created_at DESC
+        LIMIT 50
+        """
+    )]
+    bounced_rows = [dict(row) for row in fetch_all(
+        """
+        SELECT om.id, om.status, om.created_at, om.bounced_at,
+               lower(split_part(COALESCE(l.email, ''), '@', 2)) AS recipient_domain
+        FROM outreach_messages om
+        LEFT JOIN leads l ON l.id = om.lead_id
+        WHERE om.status = 'bounced'
+        ORDER BY COALESCE(om.bounced_at, om.created_at) DESC
         LIMIT 50
         """
     )]
@@ -448,6 +459,7 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
             "linked_sent_message_count": len(linked_rows),
             "unlinked_signal_count": max(0, len(signal_keys) - len(linked_rows)),
             "blocked_outreach_row_count": len(blocked_rows),
+            "bounced_outreach_row_count": len(bounced_rows),
             "inbox_bounce_suppression_count": inbox_bounce_suppression_count,
             "reason_counts": dict(reason_counts),
             "provider_counts": dict(provider_counts),
@@ -489,6 +501,16 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
                 }
                 for row in blocked_rows[:10]
             ],
+            "bounced_outreach_sample": [
+                {
+                    "outreach_message_id": str(row["id"]),
+                    "status": row["status"],
+                    "created_at": row["created_at"],
+                    "bounced_at": row.get("bounced_at"),
+                    "recipient_domain_hash": recipient_hash(row.get("recipient_domain") or ""),
+                }
+                for row in bounced_rows[:10]
+            ],
             **SAFE_FLAGS,
         }
     )
@@ -511,6 +533,7 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
                         "blockers": blockers,
                         "bounce_or_dsn_signal_count": len(signals),
                         "blocked_outreach_row_count": len(blocked_rows),
+                        "bounced_outreach_row_count": len(bounced_rows),
                         "send_mail": False,
                     }
                 ),

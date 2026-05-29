@@ -46,6 +46,34 @@ def test_canary_bounce_recovery_blocks_and_redacts_raw_addresses():
         set_runtime_control("pause_outreach", previous_pause, "p112_test_cleanup", "restore")
 
 
+def test_canary_bounce_recovery_does_not_count_bounced_rows_as_active_blocked():
+    token = uuid.uuid4().hex
+    lead_id = execute(
+        """
+        INSERT INTO leads(email, status, score, source)
+        VALUES (%s, 'bounced', 90, 'p112_bounced_metric_test')
+        RETURNING id
+        """,
+        (f"lead-{token}@hygiene-{token}.com",),
+    )["id"]
+    message_id = execute(
+        """
+        INSERT INTO outreach_messages(lead_id, mailbox, subject, body, status, provider_message_id, bounced_at)
+        VALUES (%s, 'audit@voiddorescue.com', 'Diagnostic', 'body', 'bounced', %s, now())
+        RETURNING id
+        """,
+        (lead_id, f"<msg-{token}@voiddorescue.com>"),
+    )["id"]
+    try:
+        result = canary_bounce_recovery(1, apply_pause=False, store=False)
+        assert result["blocked_outreach_row_count"] == 0
+        assert result["bounced_outreach_row_count"] >= 1
+        assert "blocked_outreach_rows_present" not in result["blockers"]
+    finally:
+        execute("DELETE FROM outreach_messages WHERE id = %s", (message_id,))
+        execute("DELETE FROM leads WHERE id = %s", (lead_id,))
+
+
 def test_canary_bounce_recovery_endpoint_requires_admin():
     assert client.get("/admin/outreach/bounce-recovery").status_code == 401
     response = client.get("/admin/outreach/bounce-recovery", headers=admin_headers())
