@@ -87,7 +87,10 @@ def _campaign(token: str, weak: bool = False) -> str:
     return str(campaign["id"])
 
 
-def test_campaign_preview_quality_passes_strong_preview_without_raw_email():
+def test_campaign_preview_quality_passes_strong_preview_without_raw_email(monkeypatch):
+    import app.campaign_preview_quality as quality_module
+
+    monkeypatch.setattr(quality_module, "_email_domain_delivery_status", lambda _email: {"status": "pass", "reason": "mx_found", "domain_hash": "hash", "mx_count": 1})
     token = uuid.uuid4().hex[:8]
     try:
         campaign_id = _campaign(token)
@@ -105,7 +108,10 @@ def test_campaign_preview_quality_passes_strong_preview_without_raw_email():
         _cleanup(token)
 
 
-def test_campaign_preview_quality_blocks_weak_audit_evidence():
+def test_campaign_preview_quality_blocks_weak_audit_evidence(monkeypatch):
+    import app.campaign_preview_quality as quality_module
+
+    monkeypatch.setattr(quality_module, "_email_domain_delivery_status", lambda _email: {"status": "pass", "reason": "mx_found", "domain_hash": "hash", "mx_count": 1})
     token = uuid.uuid4().hex[:8]
     try:
         campaign_id = _campaign(token, weak=True)
@@ -117,7 +123,10 @@ def test_campaign_preview_quality_blocks_weak_audit_evidence():
         _cleanup(token)
 
 
-def test_campaign_preview_quality_admin_and_agent():
+def test_campaign_preview_quality_admin_and_agent(monkeypatch):
+    import app.campaign_preview_quality as quality_module
+
+    monkeypatch.setattr(quality_module, "_email_domain_delivery_status", lambda _email: {"status": "pass", "reason": "mx_found", "domain_hash": "hash", "mx_count": 1})
     token = uuid.uuid4().hex[:8]
     try:
         campaign_id = _campaign(token)
@@ -128,5 +137,20 @@ def test_campaign_preview_quality_admin_and_agent():
         agent = run_agent("campaign_preview_quality_agent", {"campaign_id": campaign_id, "limit": 5})
         assert agent["status"] == "completed"
         assert agent["result_json"]["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_preview_quality_blocks_reserved_email_domain():
+    token = uuid.uuid4().hex[:8]
+    try:
+        campaign_id = _campaign(token)
+        execute("UPDATE leads SET email = %s WHERE email LIKE %s", (f"owner-{token}@invalid.test", f"%{token}%"))
+        result = campaign_preview_quality_pack(campaign_id, 5)
+        assert result["status"] == "REVIEW_REQUIRED"
+        assert "email_domain_not_deliverable" in result["blockers_by_code"]
+        assert result["items"][0]["email_domain_status"] == "fail"
+        assert result["items"][0]["email_domain_reason"] == "reserved_test_email_domain"
+        assert f"owner-{token}@" not in str(result)
     finally:
         _cleanup(token)

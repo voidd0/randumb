@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import dns.resolver
+
 from .audit_strength import score_audit_strength
 from .billing import checkout_config_status, PRODUCTS
 from .config import get_settings
@@ -9,7 +11,7 @@ from .db import execute, fetch_all, fetch_one
 from .email_templates import qa_email_template, render_email_template
 from .language_gate import check_no_ai_public_language
 from .mailer_control import evaluate_outbound_message
-from .p0 import json_safe, signed_unsubscribe_url_for_lead
+from .p0 import json_safe, recipient_hash, signed_unsubscribe_url_for_lead
 
 
 OUTREACH_GATE_EXPECTED_BLOCKERS = {
@@ -45,7 +47,7 @@ def _preview_rows(campaign_id: str, limit: int) -> list[dict[str, Any]]:
             """
             SELECT cl.id AS campaign_lead_id, cl.lead_id, cl.audit_id, cl.score AS campaign_score,
                    c.id AS campaign_id, c.language AS campaign_language, c.offer_key,
-                   l.language AS lead_language, l.contact_name,
+                   l.language AS lead_language, l.contact_name, l.email,
                    b.name AS business_name, b.domain,
                    latest_review.action AS latest_review_action,
                    a.public_slug, a.summary
@@ -70,6 +72,27 @@ def _preview_rows(campaign_id: str, limit: int) -> list[dict[str, Any]]:
             (campaign_id, max(1, min(int(limit or 20), 100))),
         )
     ]
+
+
+def _email_domain_delivery_status(email: str) -> dict[str, Any]:
+    domain = (email or "").rsplit("@", 1)[-1].strip().lower() if "@" in (email or "") else ""
+    if not domain:
+        return {"status": "fail", "reason": "missing_email_domain", "domain_hash": ""}
+    if domain.endswith(".test") or domain.endswith(".invalid") or domain.endswith(".localhost"):
+        return {"status": "fail", "reason": "reserved_test_email_domain", "domain_hash": recipient_hash(domain)}
+    try:
+        answers = dns.resolver.resolve(domain, "MX", lifetime=6)
+        mx_count = len(list(answers))
+        return {
+            "status": "pass" if mx_count > 0 else "fail",
+            "reason": "mx_found" if mx_count > 0 else "mx_missing",
+            "domain_hash": recipient_hash(domain),
+            "mx_count": mx_count,
+        }
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+        return {"status": "fail", "reason": "mx_missing_or_domain_not_found", "domain_hash": recipient_hash(domain)}
+    except Exception as exc:
+        return {"status": "fail", "reason": f"mx_check_error:{type(exc).__name__}", "domain_hash": recipient_hash(domain)}
 
 
 def _latest_or_score_audit_strength(audit_id: str) -> dict[str, Any]:
@@ -103,6 +126,9 @@ def campaign_preview_quality_pack(campaign_id: str, limit: int = 20) -> dict[str
             audit_strength = _latest_or_score_audit_strength(str(row["audit_id"]))
         if int(audit_strength.get("final_score") or 0) < 70:
             blockers.append("audit_strength_below_70")
+        email_domain = _email_domain_delivery_status(row.get("email") or "")
+        if email_domain["status"] != "pass":
+            blockers.append("email_domain_not_deliverable")
         if not row.get("public_slug"):
             blockers.append("missing_public_audit_slug")
         if not checkout["ready"]:
@@ -160,6 +186,9 @@ def campaign_preview_quality_pack(campaign_id: str, limit: int = 20) -> dict[str
                 "template_score": int(template_qa.get("score") or 0),
                 "language_gate_status": language_gate["status"],
                 "checkout_ready": bool(checkout["ready"]),
+                "email_domain_status": email_domain["status"],
+                "email_domain_reason": email_domain["reason"],
+                "email_domain_hash": email_domain["domain_hash"],
                 "audit_url_ready": bool(row.get("public_slug")),
                 "unsubscribe_ready": True,
                 "legal_note_ready": "public non-invasive" in rendered["text"].lower() or "בדיקת אתר ציבורית" in rendered["text"] or "mitteinvasiivne" in rendered["text"].lower(),

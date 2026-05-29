@@ -4,6 +4,7 @@ import os
 import uuid
 
 from fastapi.testclient import TestClient
+import pytest
 from psycopg.types.json import Jsonb
 
 from app.autonomous_agents import run_agent
@@ -16,6 +17,17 @@ from app.scouts import create_campaign, prepare_campaign
 
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _mx_gate_pass(monkeypatch):
+    import app.campaign_preview_quality as quality_module
+
+    monkeypatch.setattr(
+        quality_module,
+        "_email_domain_delivery_status",
+        lambda _email: {"status": "pass", "reason": "mx_found", "domain_hash": "hash", "mx_count": 1},
+    )
 
 
 def admin_headers() -> dict[str, str]:
