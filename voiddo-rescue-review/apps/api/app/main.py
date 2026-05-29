@@ -103,6 +103,7 @@ from .lead_stockpile_health import latest_lead_stockpile_health_runs, lead_stock
 from .lead_supply_autopilot import lead_supply_autopilot
 from .lead_supply_buildout import lead_supply_buildout
 from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates, stage_live_outreach_batch
+from .outreach_queue_suppression_hygiene import outreach_queue_suppression_hygiene
 from .canary_batch_quality import canary_batch_quality
 from .canary_checkout_simulation import run_canary_checkout_simulation
 from .canary_operator_packet import build_canary_operator_packet, latest_canary_operator_packet
@@ -645,6 +646,18 @@ async def outreach_live_queue_resume_plan_post(request: Request):
             int(payload.get("window_hours", 24)),
             apply=bool(payload.get("apply", False)),
             store=True,
+        ),
+    }
+
+
+@app.post("/admin/outreach/live-queue/suppression-hygiene", dependencies=[Depends(require_admin)])
+async def outreach_live_queue_suppression_hygiene_post(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "hygiene": outreach_queue_suppression_hygiene(
+            int(payload.get("limit", 100)),
+            apply=bool(payload.get("apply", False)),
         ),
     }
 
