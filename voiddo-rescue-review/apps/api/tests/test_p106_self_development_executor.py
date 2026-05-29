@@ -72,7 +72,11 @@ def test_self_development_executes_safe_lead_supply_item_without_send(monkeypatc
     token = uuid.uuid4().hex[:8]
     try:
         item = execute(
-            "INSERT INTO self_build_queue(module, priority, title, acceptance_json) VALUES ('lead_supply', 'P0', %s, %s) RETURNING id",
+            """
+            INSERT INTO self_build_queue(module, priority, title, acceptance_json, created_at)
+            VALUES ('lead_supply', 'P0', %s, %s, now() - interval '100 years')
+            RETURNING id
+            """,
             (f"Close revenue autonomy gap: approved preview stockpile below target {token}", Jsonb([token])),
         )
         monkeypatch.setattr(dev_module, "_safe_to_execute", lambda: (True, []))
@@ -97,6 +101,56 @@ def test_self_development_executes_safe_lead_supply_item_without_send(monkeypatc
         assert row["acceptance_json"]["self_development_execution"]["live_outreach_allowed"] is False
     finally:
         cleanup(token)
+
+
+def test_self_development_safe_to_execute_allows_clean_active_canary(monkeypatch):
+    monkeypatch.setattr(
+        dev_module,
+        "runtime_state_snapshot",
+        lambda: {
+            "live_outreach_sent_count": 8,
+            "launch_readiness_state": "LIVE_OUTREACH_READY",
+            "latest_mail_qa_decision": "PASS",
+        },
+    )
+    monkeypatch.setattr(
+        dev_module,
+        "mail_signal_summary",
+        lambda _hours: {
+            "bounce_or_dsn_count": 0,
+            "rate_limit_count": 0,
+            "spam_signal_count": 0,
+            "mail_auth_failure_count": 0,
+        },
+    )
+    allowed, blockers = dev_module._safe_to_execute()
+    assert allowed is True
+    assert blockers == []
+
+
+def test_self_development_safe_to_execute_blocks_unsafe_live_state(monkeypatch):
+    monkeypatch.setattr(
+        dev_module,
+        "runtime_state_snapshot",
+        lambda: {
+            "live_outreach_sent_count": 8,
+            "launch_readiness_state": "LIVE_OUTREACH_READY",
+            "latest_mail_qa_decision": "PASS",
+        },
+    )
+    monkeypatch.setattr(
+        dev_module,
+        "mail_signal_summary",
+        lambda _hours: {
+            "bounce_or_dsn_count": 0,
+            "rate_limit_count": 0,
+            "spam_signal_count": 0,
+            "mail_auth_failure_count": 1,
+        },
+    )
+    allowed, blockers = dev_module._safe_to_execute()
+    assert allowed is False
+    assert {item["code"] for item in blockers} == {"unsafe_live_outreach_state", "recent_mail_signal"}
 
 
 def test_self_development_closes_resolved_campaign_readiness_items(monkeypatch):

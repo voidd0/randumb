@@ -238,9 +238,23 @@ def _safe_to_execute() -> tuple[bool, list[dict[str, Any]]]:
     issues: list[dict[str, Any]] = []
     state = runtime_state_snapshot()
     signals = mail_signal_summary(24)
-    if int(state.get("live_outreach_sent_count", 0) or 0) > 0:
-        issues.append({"code": "live_outreach_already_sent", "severity": "high"})
-    if signals.get("bounce_or_dsn_count") or signals.get("rate_limit_count") or signals.get("spam_signal_count"):
+    live_outreach_sent = int(state.get("live_outreach_sent_count", 0) or 0)
+    clean_active_canary = (
+        state.get("launch_readiness_state") == "LIVE_OUTREACH_READY"
+        and state.get("latest_mail_qa_decision") == "PASS"
+        and int(signals.get("bounce_or_dsn_count", 0) or 0) == 0
+        and int(signals.get("rate_limit_count", 0) or 0) == 0
+        and int(signals.get("spam_signal_count", 0) or 0) == 0
+        and int(signals.get("mail_auth_failure_count", 0) or 0) == 0
+    )
+    if live_outreach_sent > 0 and not clean_active_canary:
+        issues.append({"code": "unsafe_live_outreach_state", "severity": "high"})
+    if (
+        signals.get("bounce_or_dsn_count")
+        or signals.get("rate_limit_count")
+        or signals.get("spam_signal_count")
+        or signals.get("mail_auth_failure_count")
+    ):
         issues.append({"code": "recent_mail_signal", "severity": "high", "signals": signals})
     if state.get("latest_mail_qa_decision") != "PASS":
         issues.append({"code": "mail_qa_not_pass", "severity": "high", "decision": state.get("latest_mail_qa_decision")})
