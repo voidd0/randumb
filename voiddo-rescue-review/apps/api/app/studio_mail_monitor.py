@@ -78,6 +78,7 @@ def _record_mail_signal(classified: dict[str, Any], message: dict[str, Any], mes
 def _create_studio_mail_task(classified: dict[str, Any], message: dict[str, Any], message_id: str) -> dict[str, Any] | None:
     task_map = {
         "billing": ("billing_bug", "high", "Autonomously triage billing mailbox signal"),
+        "platform_seo_indexing_alert": ("deployment_issue", "high", "Autonomously triage platform SEO indexing alert"),
         "studio_support_triage": ("customer_fix_request", "medium", "Autonomously triage studio support mailbox signal"),
         "stale_outreach_cleanup": ("outreach_template_improvement", "medium", "Autonomously triage stale outreach reply"),
         "owner_only_escalation": ("deployment_issue", "high", "Owner-only mailbox action required"),
@@ -125,7 +126,23 @@ def classify_studio_mail(message: dict[str, Any]) -> dict[str, Any]:
     sender_domain = sender.split("@")[-1] if "@" in sender else ""
     owner_sender = sender in _owner_emails() or reply_to in _owner_emails()
 
-    if owner_sender:
+    seo_indexing_alert = any(
+        marker in text
+        for marker in [
+            "search console",
+            "pages from being indexed",
+            "prevent pages from being indexed",
+            "page indexing",
+            "indexing issue",
+            "not indexed",
+        ]
+    )
+
+    if seo_indexing_alert:
+        classification = "platform_seo_indexing_alert"
+        priority = "high"
+        human = False
+    elif owner_sender:
         classification = "owner_command_global"
         priority = "critical"
         human = False

@@ -111,6 +111,31 @@ def test_owner_command_show_studio_mail_is_safe_auto_and_redacted(monkeypatch):
         get_settings.cache_clear()
 
 
+def test_forwarded_search_console_alert_is_not_owner_command(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    owner = f"owner-{token}@example.test"
+    monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)
+    get_settings.cache_clear()
+    try:
+        message = _message(
+            token,
+            owner,
+            "Fwd: New reasons prevent pages from being indexed on site voiddo.com",
+            f"Google Search Console noticed page indexing issue {token}",
+            "em@voiddo.com",
+        )
+        result = ingest_studio_mail_messages([message])
+        assert result["owner_command_count"] == 0
+        assert result["results"][0]["classification"] == "platform_seo_indexing_alert"
+        assert result["results"][0]["triage_task"]["task_type"] == "deployment_issue"
+        row = fetch_one("SELECT classification, owner_command_id FROM studio_mail_messages WHERE message_id = %s", (f"<msg-{token}@example.test>",))
+        assert row["classification"] == "platform_seo_indexing_alert"
+        assert row["owner_command_id"] is None
+    finally:
+        _cleanup(token)
+        get_settings.cache_clear()
+
+
 def test_studio_mail_high_risk_owner_command_creates_review_task(monkeypatch):
     token = uuid.uuid4().hex[:8]
     owner = f"owner-{token}@example.test"
