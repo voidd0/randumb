@@ -87,12 +87,26 @@ def unsubscribe_url_from_body(body: str) -> str | None:
 def _warmup_maturity(cur) -> dict:
     min_clean = max(1, int(os.environ.get("WARMUP_MIN_CLEAN_SENDS_BEFORE_OUTREACH", "5") or "5"))
     warmup_sent = _count(cur, "SELECT count(*) AS count FROM warmup_schedule WHERE status = 'sent'")
+    verified_event_count = _count(
+        cur,
+        """
+        SELECT count(*) AS count
+        FROM email_events
+        WHERE event_type = 'warmup_sent'
+          AND created_at >= now() - interval '30 days'
+          AND payload_json->>'policy' = 'neutral_calendar_warmup_no_sales_no_tracking'
+          AND COALESCE(payload_json->>'schedule_id', '') <> ''
+          AND COALESCE(payload_json->>'recipient_hash', '') <> ''
+          AND COALESCE(payload_json->>'sender', '') LIKE '%%@voiddorescue.com'
+        """,
+    )
+    verified_warmup_sent = max(warmup_sent, verified_event_count)
     legacy_event_count = _count(cur, "SELECT count(*) AS count FROM email_events WHERE event_type = 'warmup_sent'")
     recent_bounce = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type IN ('bounce','dsn') AND created_at >= now() - interval '24 hours'")
     recent_rate = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'smtp_rate_limit' AND created_at >= now() - interval '24 hours'")
     recent_spam = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'spam_signal' AND created_at >= now() - interval '24 hours'")
     blockers = []
-    if warmup_sent < min_clean:
+    if verified_warmup_sent < min_clean:
         blockers.append("warmup_clean_send_count_below_threshold")
     if recent_bounce:
         blockers.append("recent_bounce_or_dsn")
@@ -102,9 +116,11 @@ def _warmup_maturity(cur) -> dict:
         blockers.append("recent_spam_signal")
     return {
         "allowed": not blockers,
-        "warmup_sent_count": warmup_sent,
+        "warmup_sent_count": verified_warmup_sent,
+        "warmup_schedule_sent_count": warmup_sent,
+        "verified_warmup_event_count": verified_event_count,
         "legacy_warmup_event_count": legacy_event_count,
-        "maturity_source": "warmup_schedule_sent",
+        "maturity_source": "warmup_schedule_sent" if warmup_sent >= verified_event_count else "verified_warmup_sent_events",
         "min_clean_sends_required": min_clean,
         "recent_bounce_count": recent_bounce,
         "recent_rate_limit_count": recent_rate,

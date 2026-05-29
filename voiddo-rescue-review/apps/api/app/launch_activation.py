@@ -300,13 +300,19 @@ def apply_launch_activation(confirm_text: str, requested_by: str = "operator", l
     if dry_run:
         blockers.append("dry_run_activation_no_runtime_change")
     decision = "READY_RECORDED_NO_ENV_CHANGE" if not blockers else "BLOCKED"
+    runtime_controls: list[dict[str, Any]] = []
+    if decision == "READY_RECORDED_NO_ENV_CHANGE":
+        runtime_controls.append(
+            json_safe(set_runtime_control("pause_outreach", False, "launch_activation", "confirmed_live_canary_activation"))
+        )
     activation = {
         **readiness,
         "decision": decision,
         "blockers": sorted(set(blockers)),
         "applied": False,
-        "runtime_change_performed": False,
-        "note": "This API records the verified activation decision. Host env changes remain guarded by the runtime deployment operator.",
+        "runtime_change_performed": bool(runtime_controls),
+        "runtime_controls": runtime_controls,
+        "note": "This API records the verified activation decision and clears the outreach runtime pause only after all no-send gates pass. Host env changes remain guarded by the runtime deployment operator.",
         **SAFE_FLAGS,
     }
     run = _record_activation_run(

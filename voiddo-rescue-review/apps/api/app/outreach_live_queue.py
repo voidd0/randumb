@@ -7,6 +7,7 @@ from psycopg.types.json import Jsonb
 from .config import get_settings
 from .db import execute, fetch_all, fetch_one
 from .launch_activation import launch_activation_readiness
+from .launch_readiness_scoreboard import launch_readiness_scoreboard
 from .p0 import json_safe, live_outreach_quota_status, recipient_hash
 
 
@@ -158,11 +159,26 @@ def stage_live_outreach_batch(limit: int = 20, dry_run: bool = True, requested_b
     settings = get_settings()
     safe_limit = max(1, min(int(limit or 20), settings.daily_send_limit, 100))
     readiness = launch_activation_readiness(safe_limit)
+    scoreboard = launch_readiness_scoreboard(safe_limit)
+    runtime_live_armed = (
+        settings.outreach_dry_run is False
+        and settings.outreach_paused is False
+        and settings.first_live_send_flag is True
+    )
+    pre_activation_ready = readiness.get("decision") == "READY_FOR_OPERATOR_ENV_ACTIVATION"
+    runtime_activation_ready = (
+        runtime_live_armed
+        and scoreboard.get("state") == "LIVE_OUTREACH_READY"
+        and int(scoreboard.get("score") or 0) >= 100
+        and int(scoreboard.get("blocker_count") or 0) == 0
+    )
     candidates = _candidate_rows(safe_limit)
     quota = live_outreach_quota_status()
     blockers: list[str] = []
-    if readiness.get("decision") != "READY_FOR_OPERATOR_ENV_ACTIVATION":
+    if not pre_activation_ready and not runtime_activation_ready:
         blockers.append("launch_activation_not_ready")
+    if runtime_live_armed and not runtime_activation_ready:
+        blockers.append("runtime_launch_scoreboard_not_live_ready")
     if not quota["allowed"]:
         blockers.extend(quota["blockers"])
     if not candidates:
@@ -201,6 +217,8 @@ def stage_live_outreach_batch(limit: int = 20, dry_run: bool = True, requested_b
             "blocked_count": 0 if staged_ids else len(candidates),
             "quota": quota,
             "readiness_decision": readiness.get("decision"),
+            "runtime_activation_ready": runtime_activation_ready,
+            "runtime_launch_state": scoreboard.get("state"),
             "candidate_ids": staged_ids if staged_ids else [],
             "send_spacing_minutes": 24,
             "candidate_preview": [

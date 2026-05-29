@@ -58,13 +58,84 @@ def test_launch_activation_prepare_records_no_send_run():
 
 
 def test_launch_activation_apply_is_blocked_without_runtime_activation_flag():
-    result = apply_launch_activation("START LIVE OUTREACH", requested_by="test_p99", dry_run=False)
+    import app.launch_activation as activation_module
+
+    class Settings:
+        allow_live_outreach_activation = False
+        outreach_dry_run = True
+        outreach_paused = True
+        first_live_send_flag = False
+        daily_send_limit = 20
+        hourly_domain_send_limit = 5
+
+    activation_module.get_settings.cache_clear()
+    original_get_settings = activation_module.get_settings
+    activation_module.get_settings = lambda: Settings()
+    try:
+        result = apply_launch_activation("START LIVE OUTREACH", requested_by="test_p99", dry_run=False)
+    finally:
+        activation_module.get_settings = original_get_settings
+        activation_module.get_settings.cache_clear()
     activation = result["activation"]
     assert activation["decision"] == "BLOCKED"
     assert "allow_live_outreach_activation_env_false" in activation["blockers"]
     assert activation["runtime_change_performed"] is False
     assert result["send_mail"] is False
     assert result["live_outreach_allowed"] is False
+
+
+def test_launch_activation_apply_clears_outreach_runtime_pause(monkeypatch):
+    import app.launch_activation as activation_module
+
+    token = f"p99-{uuid.uuid4()}"
+    previous = fetch_one("SELECT value, source, reason FROM runtime_controls WHERE key = 'pause_outreach'")
+    execute(
+        """
+        INSERT INTO runtime_controls(key, value, source, reason)
+        VALUES ('pause_outreach', true, %s, 'test setup')
+        ON CONFLICT (key) DO UPDATE SET value = excluded.value, source = excluded.source, reason = excluded.reason, updated_at = now()
+        """,
+        (token,),
+    )
+
+    class Settings:
+        allow_live_outreach_activation = True
+        daily_send_limit = 20
+        hourly_domain_send_limit = 5
+
+    readiness = {
+        "decision": "READY_FOR_OPERATOR_ENV_ACTIVATION",
+        "blockers": [],
+        "scoreboard": {"state": "PREVIEW_PIPELINE_READY_NO_OUTREACH", "score": 100, "blocker_count": 0},
+        "preview_message_count": 20,
+        "approved_preview_count": 20,
+        "live_outreach_sent_count": 0,
+        "warmup_sent_count": 0,
+    }
+    monkeypatch.setattr(activation_module, "get_settings", lambda: Settings())
+    monkeypatch.setattr(activation_module, "launch_activation_readiness", lambda _limit: readiness)
+    try:
+        result = apply_launch_activation("START LIVE OUTREACH", requested_by=token, limit=20, dry_run=False)
+        control = fetch_one("SELECT value, source FROM runtime_controls WHERE key = 'pause_outreach'")
+    finally:
+        execute("DELETE FROM launch_activation_runs WHERE requested_by = %s", (token,))
+        if previous:
+            execute(
+                """
+                INSERT INTO runtime_controls(key, value, source, reason)
+                VALUES ('pause_outreach', %s, %s, %s)
+                ON CONFLICT (key) DO UPDATE SET value = excluded.value, source = excluded.source, reason = excluded.reason, updated_at = now()
+                """,
+                (previous["value"], previous["source"], previous["reason"]),
+            )
+        else:
+            execute("DELETE FROM runtime_controls WHERE key = 'pause_outreach'")
+    activation = result["activation"]
+    assert activation["decision"] == "READY_RECORDED_NO_ENV_CHANGE"
+    assert activation["runtime_change_performed"] is True
+    assert control["value"] is False
+    assert control["source"] == "launch_activation"
+    assert result["send_mail"] is False
 
 
 def test_live_outreach_queue_stage_dry_run_never_changes_preview_status():
@@ -92,6 +163,7 @@ def test_live_outreach_stage_assigns_24_minute_due_spacing(monkeypatch):
     updates: list[tuple[int, str]] = []
     monkeypatch.setattr(queue_module, "get_settings", lambda: Settings())
     monkeypatch.setattr(queue_module, "launch_activation_readiness", lambda _limit: {"decision": "READY_FOR_OPERATOR_ENV_ACTIVATION"})
+    monkeypatch.setattr(queue_module, "launch_readiness_scoreboard", lambda _limit: {"state": "LIVE_OUTREACH_READY", "score": 100, "blocker_count": 0})
     monkeypatch.setattr(queue_module, "live_outreach_quota_status", lambda: {"allowed": True, "blockers": []})
     monkeypatch.setattr(
         queue_module,
@@ -114,6 +186,43 @@ def test_live_outreach_stage_assigns_24_minute_due_spacing(monkeypatch):
     assert result["result"]["decision"] == "STAGED_FOR_WORKER"
     assert result["result"]["send_spacing_minutes"] == 24
     assert [minute for minute, _message_id in updates] == [0, 24, 48]
+
+
+def test_live_outreach_stage_allows_runtime_live_ready_state(monkeypatch):
+    import app.outreach_live_queue as queue_module
+
+    class Settings:
+        daily_send_limit = 20
+        outreach_dry_run = False
+        outreach_paused = False
+        first_live_send_flag = True
+        allow_live_outreach_activation = True
+
+    updates: list[tuple[int, str]] = []
+    monkeypatch.setattr(queue_module, "get_settings", lambda: Settings())
+    monkeypatch.setattr(queue_module, "launch_activation_readiness", lambda _limit: {"decision": "BLOCKED", "blockers": ["runtime_live_flags_not_locked_before_activation"]})
+    monkeypatch.setattr(queue_module, "launch_readiness_scoreboard", lambda _limit: {"state": "LIVE_OUTREACH_READY", "score": 100, "blocker_count": 0})
+    monkeypatch.setattr(queue_module, "live_outreach_quota_status", lambda: {"allowed": True, "blockers": []})
+    monkeypatch.setattr(
+        queue_module,
+        "_candidate_rows",
+        lambda _limit: [
+            {"outreach_message_id": "00000000-0000-0000-0000-000000000011", "campaign_id": "c1", "domain": "one.example", "public_slug": "one", "recipient_domain": "one.example"},
+        ],
+    )
+
+    def fake_execute(sql, params=()):
+        if "send_after = now()" in sql:
+            updates.append((params[0], params[1]))
+            return None
+        return {"id": "run-id", "status": "queued", "decision": "STAGED_FOR_WORKER", "requested_by": "test", "dry_run": False, "requested_limit": 1, "candidate_count": 1, "staged_count": 1, "sent_count": 0, "blocked_count": 0, "created_at": "now"}
+
+    monkeypatch.setattr(queue_module, "execute", fake_execute)
+    result = queue_module.stage_live_outreach_batch(1, dry_run=False, requested_by="test")
+    assert result["result"]["decision"] == "STAGED_FOR_WORKER"
+    assert result["result"]["runtime_activation_ready"] is True
+    assert result["result"]["runtime_launch_state"] == "LIVE_OUTREACH_READY"
+    assert updates == [(0, "00000000-0000-0000-0000-000000000011")]
 
 
 def test_live_outreach_queue_candidates_are_redacted():

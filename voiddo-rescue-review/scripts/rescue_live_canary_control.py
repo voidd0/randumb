@@ -117,6 +117,20 @@ def activate(args: argparse.Namespace, env: dict[str, str], token: str) -> dict:
     if not args.apply:
         return {"status": "dry_run", "blockers": [], "applied": False, "preflight": snapshot}
 
+    activation = api_request(
+        "/admin/launch-activation/apply",
+        token,
+        {"confirm_text": "START LIVE OUTREACH", "requested_by": "host_canary_control", "limit": args.limit, "dry_run": False},
+    )["activation"]
+    activation_decision = (activation.get("activation") or {}).get("decision")
+    if activation_decision != "READY_RECORDED_NO_ENV_CHANGE":
+        return {
+            "status": "blocked",
+            "blockers": (activation.get("activation") or {}).get("blockers", ["activation_apply_not_ready"]),
+            "applied": False,
+            "activation": activation,
+        }
+
     backup = write_env_updates(
         {
             "OUTREACH_DRY_RUN": "false",
@@ -127,11 +141,6 @@ def activate(args: argparse.Namespace, env: dict[str, str], token: str) -> dict:
         }
     )
     restart_services(["api", "worker"])
-    activation = api_request(
-        "/admin/launch-activation/apply",
-        token,
-        {"confirm_text": "START LIVE OUTREACH", "requested_by": "host_canary_control", "limit": args.limit, "dry_run": False},
-    )["activation"]
     queue_before = live_queue_status(token, args.limit)
     queued_before = int((queue_before.get("history") or {}).get("queued_message_count") or 0)
     if queued_before > 0:
@@ -158,7 +167,7 @@ def activate(args: argparse.Namespace, env: dict[str, str], token: str) -> dict:
         "applied": True,
         "env_backup_path": str(backup),
         "worker_enabled": worker_enabled,
-        "activation_decision": activation.get("activation", {}).get("decision"),
+        "activation_decision": activation_decision,
         "staged_decision": staged.get("result", {}).get("decision"),
         "staged_count": staged.get("result", {}).get("staged_count"),
         "existing_queued_message_count": staged.get("result", {}).get("existing_queued_message_count", queued_before),

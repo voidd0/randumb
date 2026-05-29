@@ -219,6 +219,7 @@ def test_live_canary_control_does_not_stage_duplicate_when_queue_exists(monkeypa
     assert result["staged_decision"] == "SKIPPED_EXISTING_QUEUED_CANARY"
     assert result["existing_queued_message_count"] == 3
     assert "/admin/outreach/live-queue/stage" not in calls
+    assert calls.index("/admin/launch-activation/apply") < calls.index("/admin/outreach/live-queue")
 
 
 def test_run_loop_retries_remote_disconnected(monkeypatch):
