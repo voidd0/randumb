@@ -106,7 +106,8 @@ def run_self_audit(scope: str = "full") -> dict[str, Any]:
         findings.append({"severity": "high", "code": "recent_rate_limit", "message": "Recent SMTP rate-limit signal blocks mail sending."})
     if state.get("latest_mail_qa_decision") != "PASS":
         findings.append({"severity": "high", "code": "mail_qa_not_pass", "message": "Latest mail QA is not PASS."})
-    if state.get("launch_readiness_state") == "LIVE_OUTREACH_READY":
+    live_canary_evidence_ready = live_runtime_armed and live_mail_signals_clean and live_outreach_sent > 0
+    if state.get("launch_readiness_state") == "LIVE_OUTREACH_READY" and not live_canary_evidence_ready:
         findings.append({"severity": "medium", "code": "readiness_overstated_check", "message": "Verify live readiness is backed by scenario evidence."})
 
     agent_failures = fetch_one(
