@@ -153,6 +153,7 @@ Message-ID: <orig-{token}@voiddorescue.com>
     assert result["enriched"] == 1
     assert result["linked_outreach_count"] == 1
     assert result["outreach_marked_bounced"] == 1
+    assert result["domain_suppression_upsert_attempts"] == 1
     assert result["send_mail"] is False
     assert result["raw_recipient_addresses_included"] is False
     assert f"lead-{token}@example.test" not in str(result)

@@ -192,6 +192,7 @@ def backfill_bounce_dsn_details(window_hours: int = 24, limit: int = 20, apply: 
     processed = 0
     enriched = 0
     suppressed = 0
+    domain_suppressed = 0
     linked = 0
     outreach_marked_bounced = 0
     samples = []
@@ -211,6 +212,7 @@ def backfill_bounce_dsn_details(window_hours: int = 24, limit: int = 20, apply: 
         linked += 1 if outreach_row else 0
         if apply:
             if details.get("bounced_recipient"):
+                recipient_domain = details["bounced_recipient"].rsplit("@", 1)[-1].lower() if "@" in details["bounced_recipient"] else ""
                 execute(
                     """
                     INSERT INTO suppression_list(email, reason, source)
@@ -224,6 +226,20 @@ def backfill_bounce_dsn_details(window_hours: int = 24, limit: int = 20, apply: 
                     (details["bounced_recipient"], f"bounce_{details['reason']}", details["bounced_recipient"]),
                 )
                 suppressed += 1
+                if recipient_domain and details.get("reason") == "domain_not_found":
+                    execute(
+                        """
+                        INSERT INTO suppression_list(domain, reason, source)
+                        SELECT %s, %s, 'inbox_bounce_domain'
+                        WHERE NOT EXISTS (
+                          SELECT 1 FROM suppression_list
+                          WHERE lower(domain) = lower(%s)
+                            AND source = 'inbox_bounce_domain'
+                        )
+                        """,
+                        (recipient_domain, "bounce_domain_not_found", recipient_domain),
+                    )
+                    domain_suppressed += 1
             execute(
                 """
                 UPDATE mail_signals
@@ -306,6 +322,7 @@ def backfill_bounce_dsn_details(window_hours: int = 24, limit: int = 20, apply: 
             "processed": processed,
             "enriched": enriched,
             "suppression_upsert_attempts": suppressed,
+            "domain_suppression_upsert_attempts": domain_suppressed,
             "linked_outreach_count": linked,
             "outreach_marked_bounced": outreach_marked_bounced,
             "apply": apply,
@@ -457,7 +474,7 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
                     "outreach_message_id": str(row["id"]),
                     "provider_message_id_present": bool(row.get("provider_message_id")),
                     "sent_at": row.get("sent_at"),
-                    "domain": row.get("domain") or "",
+                    "audit_domain_hash": recipient_hash(row.get("domain") or ""),
                     "recipient_domain_hash": recipient_hash(row.get("recipient_domain") or ""),
                 }
                 for row in linked_rows[:10]
