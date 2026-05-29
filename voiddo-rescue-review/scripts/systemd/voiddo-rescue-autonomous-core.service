@@ -7,6 +7,6 @@ Requires=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/voiddo-rescue
-ExecStart=/usr/bin/python3 /opt/voiddo-rescue/scripts/rescue_autonomous_loop.py --mode core --lock /tmp/voiddo-rescue-autonomous-core.lock --timeout 420
+ExecStart=/usr/bin/python3 /opt/voiddo-rescue/scripts/rescue_autonomous_loop.py --mode core --lock /tmp/voiddo-rescue-autonomous-core.lock --timeout 420 --allow-agent-failures
 TimeoutStartSec=600
 Nice=7
