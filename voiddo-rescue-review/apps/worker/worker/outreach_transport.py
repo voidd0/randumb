@@ -88,6 +88,23 @@ def _runtime_control_enabled(cur, *keys: str) -> bool:
     return bool(cur.fetchone())
 
 
+def outreach_queue_pause_state() -> dict:
+    blockers = []
+    if os.environ.get("OUTREACH_DRY_RUN", "true").lower() == "true":
+        blockers.append("outreach_dry_run_enabled")
+    if os.environ.get("OUTREACH_PAUSED", "true").lower() == "true":
+        blockers.append("outreach_env_paused")
+    if os.environ.get("FIRST_LIVE_SEND_FLAG", "false").lower() != "true":
+        blockers.append("first_live_send_flag_false")
+    with connect() as conn:
+        with conn.cursor() as cur:
+            if _runtime_control_enabled(cur, "pause_outreach"):
+                blockers.append("runtime_pause_outreach")
+            if _runtime_control_enabled(cur, "pause_workers", "pause_all_workers"):
+                blockers.append("runtime_workers_paused")
+    return {"paused": bool(blockers), "blockers": blockers}
+
+
 def unsubscribe_url_from_body(body: str) -> str | None:
     match = re.search(r"https?://[^\s<>()\"']+/unsubscribe/u_[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]+", body or "")
     return match.group(0) if match else None
@@ -352,15 +369,37 @@ def send_message_if_allowed(message_id: str) -> dict:
             campaign_id = str(campaign["campaign_id"]) if campaign else None
     allowed, reason, checks = transport_gate(email, message["body"], campaign_id, str(message.get("html_body") or ""))
     if not allowed:
+        pause_reasons = {"outreach_dry_run_enabled", "live_outreach_not_approved"}
+        paused_without_consuming = reason in pause_reasons and (
+            checks.get("outreach_dry_run")
+            or checks.get("outreach_paused")
+            or checks.get("runtime_outreach_paused")
+            or not checks.get("first_live_send_flag")
+        )
         with connect() as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO system_events(type, severity, message, payload_json) VALUES ('outreach.transport_blocked', 'warning', %s, %s)",
-                    (reason, Jsonb({"message_id": message_id, "checks": checks})),
-                )
-                cur.execute("UPDATE outreach_messages SET status = 'transport_blocked' WHERE id = %s", (message_id,))
+                if paused_without_consuming:
+                    cur.execute(
+                        "INSERT INTO system_events(type, severity, message, payload_json) VALUES ('outreach.transport_paused', 'info', %s, %s)",
+                        (reason, Jsonb({"message_id": message_id, "checks": checks, "queued_preserved": True})),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE outreach_messages
+                        SET status = 'queued',
+                            send_after = GREATEST(COALESCE(send_after, now()), now() + interval '10 minutes')
+                        WHERE id = %s
+                        """,
+                        (message_id,),
+                    )
+                else:
+                    cur.execute(
+                        "INSERT INTO system_events(type, severity, message, payload_json) VALUES ('outreach.transport_blocked', 'warning', %s, %s)",
+                        (reason, Jsonb({"message_id": message_id, "checks": checks})),
+                    )
+                    cur.execute("UPDATE outreach_messages SET status = 'transport_blocked' WHERE id = %s", (message_id,))
             conn.commit()
-        return {"sent": False, "reason": reason, "checks": checks}
+        return {"sent": False, "reason": reason, "checks": checks, "queued_preserved": paused_without_consuming}
 
     msg = EmailMessage()
     msg["From"] = os.environ.get("SMTP_FROM_DEFAULT", "audit@voiddorescue.com")
@@ -417,6 +456,9 @@ def send_message_if_allowed(message_id: str) -> dict:
 def process_outreach_queue(limit: int = 1) -> dict:
     safe_limit = max(1, min(int(limit or 1), 5))
     min_spacing_minutes = max(1, int(os.environ.get("OUTREACH_MIN_SEND_SPACING_MINUTES", "24") or "24"))
+    pause = outreach_queue_pause_state()
+    if pause["paused"]:
+        return {"processed": 0, "sent": 0, "blocked": 0, "paused": True, "reason": "queue_paused", "blockers": pause["blockers"], "results": []}
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
