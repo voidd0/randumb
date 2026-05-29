@@ -172,6 +172,8 @@ export default async function AdminPage() {
   const latestPaidCustomerWatchdogRun = Array.isArray(paidCustomerWatchdog.runs) ? paidCustomerWatchdog.runs[0] || {} : {};
   const launchEvidence = launchReadiness.evidence || {};
   const launchMail = launchEvidence.mail || {};
+  const launchMailCompliance = launchEvidence.mail_send_compliance || {};
+  const launchMailComplianceTotals = launchMailCompliance.outgoing_totals || {};
   const launchVisual = launchEvidence.visual || {};
   const launchTransport = launchEvidence.transport_gate || {};
   const launchTransportChecks = launchTransport.checks || {};
@@ -362,8 +364,13 @@ export default async function AdminPage() {
               </div>
               <div className="segment-card">
                 <span className="tag">unsubscribe</span>
-                <strong>{launchTransportChecks.unsubscribe_one_click_ready ? "ready" : "blocked"}</strong>
-                <span>one-click signed link</span>
+                <strong>{launchTransportChecks.unsubscribe_one_click_ready && launchMailCompliance.decision === "PASS" ? "ready" : "blocked"}</strong>
+                <span>one-click signed link plus send ledger audit</span>
+              </div>
+              <div className="segment-card">
+                <span className="tag">send ledger</span>
+                <strong>{launchMailCompliance.decision ?? "unknown"}</strong>
+                <span>{launchMailCompliance.blocker_count ?? 0} blockers · {launchMailComplianceTotals.outreach_sent ?? 0} outreach sent</span>
               </div>
               <div className="segment-card">
                 <span className="tag">html</span>
