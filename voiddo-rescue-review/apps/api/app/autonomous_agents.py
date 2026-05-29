@@ -63,6 +63,7 @@ from .canary_bounce_recovery import backfill_bounce_dsn_details, canary_bounce_r
 from .outreach_queue_suppression_hygiene import outreach_queue_suppression_hygiene
 from .outreach_transport_block_hygiene import outreach_transport_block_hygiene
 from .campaign_control_room import campaign_control_room_snapshot, prepare_campaign_control_room
+from .campaign_offer_optimizer import optimize_campaign_offers, recommend_campaign_offer
 from .campaign_pipeline_repair import campaign_pipeline_gap_snapshot, repair_campaign_pipeline
 from .post_scan_campaign_cycle import post_scan_campaign_cycle
 from .campaign_preflight import campaign_preflight_batch, campaign_preflight_orphan_hygiene
@@ -370,6 +371,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
         "campaign_operator_agent": lambda: run_campaign_operator_cycle(int(payload.get("limit", 25))),
         "campaign_control_room_agent": lambda: campaign_control_room_snapshot(int(payload.get("limit", 100))),
         "campaign_control_room_prepare_agent": lambda: prepare_campaign_control_room(int(payload.get("limit", 100)), dry_run=True),
+        "campaign_offer_optimizer_agent": lambda: optimize_campaign_offers(
+            int(payload.get("limit", 50)),
+            apply=bool(payload.get("apply", False)),
+        ),
+        "campaign_offer_recommendation_agent": lambda: recommend_campaign_offer(str(payload.get("campaign_id", ""))),
         "campaign_pipeline_gap_agent": lambda: campaign_pipeline_gap_snapshot(int(payload.get("limit", 100))),
         "campaign_pipeline_repair_agent": lambda: repair_campaign_pipeline(int(payload.get("limit", 100)), dry_run=True),
         "campaign_preview_refresh_snapshot_agent": lambda: campaign_preview_refresh_snapshot(
@@ -716,6 +722,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("outreach_preview_dedupe_agent", {"limit": 500, "apply": True}),
         ("campaign_geo_hygiene_agent", {"limit": 500, "apply": True}),
         ("campaign_preflight_orphan_hygiene_agent", {"limit": 100, "apply": True}),
+        ("campaign_offer_optimizer_agent", {"limit": 50, "apply": True}),
         ("campaign_preflight_agent", {"limit": 20}),
         ("scout_campaign_quality_summary_agent", {}),
         ("scout_campaign_quality_regression_guard_agent", {}),

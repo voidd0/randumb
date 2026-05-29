@@ -47,6 +47,7 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("outreach_preview_dedupe_agent", {"limit": 200, "apply": True}),
     ("campaign_geo_hygiene_agent", {"limit": 200, "apply": True}),
     ("campaign_preflight_orphan_hygiene_agent", {"limit": 100, "apply": True}),
+    ("campaign_offer_optimizer_agent", {"limit": 50, "apply": True}),
     ("campaign_preflight_agent", {"limit": 5}),
     ("scout_campaign_quality_summary_agent", {}),
     ("scout_campaign_quality_regression_guard_agent", {}),
