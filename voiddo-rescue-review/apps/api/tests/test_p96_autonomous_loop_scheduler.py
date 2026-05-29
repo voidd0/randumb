@@ -157,14 +157,14 @@ def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
     assert "canary_next_batch_preparer_agent" in [agent for agent, _payload in calls]
     assert "canary_scale_plan_agent" in [agent for agent, _payload in calls]
     assert "lead_supply_buildout_agent" not in [agent for agent, _payload in calls]
+    assert "post_scan_campaign_cycle_agent" not in [agent for agent, _payload in calls]
     assert [agent for agent, _payload in calls].index("outreach_post_send_observer_agent") < [agent for agent, _payload in calls].index("canary_bounce_recovery_agent")
     assert [agent for agent, _payload in calls].index("canary_bounce_recovery_agent") < [agent for agent, _payload in calls].index("canary_scale_plan_agent")
     assert [agent for agent, _payload in calls].index("canary_clean_window_forecast_agent") < [agent for agent, _payload in calls].index("canary_resume_plan_agent")
     assert [agent for agent, _payload in calls].index("canary_resume_plan_agent") < [agent for agent, _payload in calls].index("canary_next_batch_preparer_agent")
     assert [agent for agent, _payload in calls].index("lead_quality_diagnostics_agent") < [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent")
     assert [agent for agent, _payload in calls].index("scout_source_feedback_agent") < [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent")
-    assert [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent") < [agent for agent, _payload in calls].index("post_scan_campaign_cycle_agent")
-    assert [agent for agent, _payload in calls].index("post_scan_campaign_cycle_agent") < [agent for agent, _payload in calls].index("outreach_preview_queue_agent")
+    assert [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent") < [agent for agent, _payload in calls].index("outreach_preview_queue_agent")
     assert [agent for agent, _payload in calls].index("outreach_preview_queue_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
     assert [agent for agent, _payload in calls].index("outreach_preview_dedupe_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
     assert [agent for agent, _payload in calls].index("campaign_geo_hygiene_agent") < [agent for agent, _payload in calls].index("campaign_preflight_agent")
