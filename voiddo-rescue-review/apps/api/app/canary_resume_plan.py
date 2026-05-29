@@ -4,7 +4,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
-from .campaign_preflight_status import latest_campaign_preflight_status
+from .campaign_preflight_status import PREFLIGHT_POLICY_VERSION
 from .canary_scale_plan import canary_scale_plan
 from .db import execute, fetch_all, fetch_one
 from .mail_send_compliance import mail_send_compliance_snapshot
@@ -40,19 +40,47 @@ def _latest_blocking_signal_at(window_hours: int) -> str | None:
 def _queued_campaign_preflights(limit: int = 20) -> dict[str, Any]:
     rows = fetch_all(
         """
-        SELECT DISTINCT cl.campaign_id
+        SELECT DISTINCT latest_context.campaign_id
         FROM outreach_messages om
-        JOIN campaign_leads cl
-          ON cl.lead_id = om.lead_id
-         AND (cl.audit_id = om.audit_id OR cl.audit_id IS NULL OR om.audit_id IS NULL)
+        JOIN LATERAL (
+          SELECT cl.campaign_id
+          FROM campaign_leads cl
+          WHERE cl.lead_id = om.lead_id
+            AND (cl.audit_id = om.audit_id OR cl.audit_id IS NULL OR om.audit_id IS NULL)
+            AND cl.campaign_id IS NOT NULL
+          ORDER BY cl.updated_at DESC, cl.created_at DESC
+          LIMIT 1
+        ) latest_context ON true
         WHERE om.status = 'queued'
-          AND cl.campaign_id IS NOT NULL
-        ORDER BY cl.campaign_id
+        ORDER BY latest_context.campaign_id
         LIMIT %s
         """,
         (max(1, min(int(limit or 20), 100)),),
     )
-    statuses = [latest_campaign_preflight_status(str(row["campaign_id"])) for row in rows]
+    statuses = []
+    for row in rows:
+        campaign_id = str(row["campaign_id"])
+        pass_row = fetch_one(
+            """
+            SELECT id, created_at
+            FROM campaign_preflight_runs
+            WHERE campaign_id = %s
+              AND decision = 'PASS_NO_SEND_PREFLIGHT'
+              AND COALESCE(result_json->>'policy_version', '') = %s
+              AND created_at >= now() - interval '24 hours'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (campaign_id, PREFLIGHT_POLICY_VERSION),
+        )
+        statuses.append(
+            {
+                "campaign_id": campaign_id,
+                "allowed": bool(pass_row),
+                "reason": "campaign_preflight_pass" if pass_row else "queued_campaign_current_policy_pass_missing",
+                "policy_current": bool(pass_row),
+            }
+        )
     blocked = [item for item in statuses if not item.get("allowed")]
     return {
         "campaign_count": len(statuses),
