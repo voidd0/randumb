@@ -670,7 +670,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("outreach_queue_suppression_hygiene_agent", {"limit": 100, "apply": True}),
         ("outreach_transport_block_hygiene_agent", {"limit": 100, "apply": True}),
         ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),
-        ("canary_resume_plan_agent", {"window_hours": 24, "apply": False}),
+        ("canary_resume_plan_agent", {"window_hours": 24, "apply": True}),
         ("canary_next_batch_preparer_agent", {"canary_limit": 20, "next_batch_limit": 40}),
         ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),
         ("scanner_completion_watch_agent", {"limit": 100, "min_new_completed": 1, "dry_run": False}),
