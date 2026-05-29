@@ -5,6 +5,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .config import get_settings
+from .campaign_preflight_status import PREFLIGHT_POLICY_VERSION
 from .db import execute, fetch_all, fetch_one
 from .launch_activation import launch_activation_readiness
 from .launch_readiness_scoreboard import launch_readiness_scoreboard
@@ -92,12 +93,18 @@ def _candidate_rows(limit: int = 20) -> list[dict[str, Any]]:
                     FROM campaign_preflight_runs p
                     WHERE p.campaign_id = cl.campaign_id
                       AND p.decision = 'PASS_NO_SEND_PREFLIGHT'
+                      AND COALESCE(p.result_json->>'policy_version', '') = %s
                       AND p.created_at >= now() - interval '120 minutes'
               )
             ORDER BY om.id, om.created_at DESC
             LIMIT %s
             """,
-            (list(CANARY_BLOCKED_DOMAIN_EXACT), list(CANARY_BLOCKED_TEXT_PATTERNS), max(1, min(int(limit or 20), 100))),
+            (
+                list(CANARY_BLOCKED_DOMAIN_EXACT),
+                list(CANARY_BLOCKED_TEXT_PATTERNS),
+                PREFLIGHT_POLICY_VERSION,
+                max(1, min(int(limit or 20), 100)),
+            ),
         )
     ]
 

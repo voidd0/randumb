@@ -11,6 +11,7 @@ from app.launch_activation import apply_launch_activation, launch_activation_rea
 from app.main import app
 from app.outreach_live_queue import live_outreach_queue_candidates, stage_live_outreach_batch
 from app.canary_batch_quality import canary_batch_quality
+from app.campaign_preflight_status import PREFLIGHT_POLICY_VERSION
 from app.canary_checkout_simulation import run_canary_checkout_simulation
 from app.p0 import transport_gate_status
 
@@ -290,7 +291,7 @@ def test_canary_batch_quality_passes_redacted_single_candidate():
             INSERT INTO campaign_preflight_runs(campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json)
             VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s)
             """,
-            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT"})),
+            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT", "policy_version": PREFLIGHT_POLICY_VERSION})),
         )
         execute(
             """
@@ -374,7 +375,7 @@ def test_canary_batch_quality_blocks_domain_country_mismatch():
             INSERT INTO campaign_preflight_runs(campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json)
             VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s)
             """,
-            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT"})),
+            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT", "policy_version": PREFLIGHT_POLICY_VERSION})),
         )
         execute(
             """
@@ -448,7 +449,7 @@ def test_live_outreach_queue_uses_latest_preview_review_only():
             INSERT INTO campaign_preflight_runs(campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json)
             VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s)
             """,
-            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT"})),
+            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT", "policy_version": PREFLIGHT_POLICY_VERSION})),
         )
         execute(
             """
@@ -466,6 +467,84 @@ def test_live_outreach_queue_uses_latest_preview_review_only():
         result = live_outreach_queue_candidates(100)
         assert f"p99-held-{token}.com" not in str(result)
         assert result["send_mail"] is False
+    finally:
+        _cleanup(token)
+
+
+def test_live_queue_and_canary_quality_block_stale_preflight_policy():
+    token = uuid.uuid4().hex[:8]
+    try:
+        business = execute(
+            """
+            INSERT INTO businesses(name, country, city, language, niche, source, website_url, domain, email, status)
+            VALUES (%s, 'US', 'Control', 'en', 'dentists', 'p99', %s, %s, %s, 'scouted')
+            RETURNING id
+            """,
+            (f"P99 Stale Policy {token}", f"https://p99-stale-policy-{token}.com", f"p99-stale-policy-{token}.com", f"owner@p99-stale-policy-{token}.com"),
+        )
+        lead = execute(
+            """
+            INSERT INTO leads(business_id, email, source, status, score, language, country, city, niche)
+            VALUES (%s, %s, 'p99', 'qualified', 88, 'en', 'US', 'Control', 'dentists')
+            RETURNING id
+            """,
+            (business["id"], f"owner@p99-stale-policy-{token}.com"),
+        )
+        audit = execute(
+            """
+            INSERT INTO audits(business_id, lead_id, domain, url, status, score, summary, public_slug, checked_at)
+            VALUES (%s, %s, %s, %s, 'completed', 90, 'P99 stale policy audit', %s, now())
+            RETURNING id
+            """,
+            (business["id"], lead["id"], f"p99-stale-policy-{token}.com", f"https://p99-stale-policy-{token}.com", f"p99-stale-policy-{token}"),
+        )
+        campaign = execute(
+            """
+            INSERT INTO campaigns(name, status, country, language, niche, offer_key, dry_run)
+            VALUES (%s, 'preview_ready', 'US', 'en', 'dentists', 'contact_form_repair', true)
+            RETURNING id
+            """,
+            (f"p99-stale-policy-{token}",),
+        )
+        preview = execute(
+            """
+            INSERT INTO campaign_leads(campaign_id, lead_id, audit_id, status, score, preview_json)
+            VALUES (%s, %s, %s, 'preview', 88, %s)
+            RETURNING id
+            """,
+            (campaign["id"], lead["id"], audit["id"], Jsonb({"token": token})),
+        )
+        execute(
+            "INSERT INTO audit_strength_scores(audit_id, final_score, proof_score, commercial_score, completeness_score, issues_json) VALUES (%s, 82, 84, 82, 80, '[]'::jsonb)",
+            (audit["id"],),
+        )
+        execute("INSERT INTO campaign_preview_reviews(campaign_lead_id, action, reason, actor) VALUES (%s, 'approved', 'stale policy fixture', 'test')", (preview["id"],))
+        execute(
+            """
+            INSERT INTO campaign_preflight_runs(campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json)
+            VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s)
+            """,
+            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT", "policy_version": "legacy_before_mx_bounce_gate"})),
+        )
+        execute(
+            """
+            INSERT INTO outreach_messages(lead_id, audit_id, mailbox, subject, body, html_body, status)
+            VALUES (%s, %s, 'audit@voiddorescue.com', %s, %s, %s, 'preview')
+            """,
+            (
+                lead["id"],
+                audit["id"],
+                f"p99 stale policy {token}",
+                f"Public non-invasive website check.\nUnsubscribe: https://go.rescue.voiddo.com/unsubscribe/u_00000000-0000-0000-0000-000000000000.{token}",
+                "<!doctype html><html><body>Vøiddo Rescue</body></html>",
+            ),
+        )
+        queue = live_outreach_queue_candidates(100)
+        assert f"p99-stale-policy-{token}.com" not in str(queue)
+        quality = canary_batch_quality(100, store=False)
+        row = [item for item in quality["items"] if item["domain"] == f"p99-stale-policy-{token}.com"][0]
+        assert "campaign_preflight_policy_stale" in row["blockers"]
+        assert quality["send_mail"] is False
     finally:
         _cleanup(token)
 
@@ -523,7 +602,7 @@ def test_canary_and_live_queue_skip_large_or_sensitive_first_batch_targets():
             INSERT INTO campaign_preflight_runs(campaign_id, status, decision, checked_count, ready_count, blocker_count, result_json)
             VALUES (%s, 'completed', 'PASS_NO_SEND_PREFLIGHT', 1, 1, 0, %s)
             """,
-            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT"})),
+            (campaign["id"], Jsonb({"token": token, "decision": "PASS_NO_SEND_PREFLIGHT", "policy_version": PREFLIGHT_POLICY_VERSION})),
         )
         execute(
             """

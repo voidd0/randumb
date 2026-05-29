@@ -5,6 +5,7 @@ from typing import Any
 
 from psycopg.types.json import Jsonb
 
+from .campaign_preflight_status import PREFLIGHT_POLICY_VERSION
 from .db import execute, fetch_all
 from .economics import calculate_unit_economics
 from .p0 import json_safe, recipient_hash
@@ -63,6 +64,7 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
                lower(split_part(l.email, '@', 2)) AS recipient_domain,
                latest_review.action AS review_action,
                latest_preflight.decision AS preflight_decision,
+               latest_preflight.policy_version AS preflight_policy_version,
                om.body, om.html_body, om.status AS message_status,
                COALESCE(ls.final_score, cl.score, l.score, 0) AS lead_score,
                latest_strength.final_score AS audit_strength_score
@@ -80,7 +82,7 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
           LIMIT 1
         ) latest_review ON true
         LEFT JOIN LATERAL (
-          SELECT decision
+          SELECT decision, COALESCE(result_json->>'policy_version', '') AS policy_version
           FROM campaign_preflight_runs
           WHERE campaign_id = c.id
           ORDER BY created_at DESC
@@ -160,6 +162,8 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
             item_blockers.append("preview_not_approved")
         if row["preflight_decision"] != "PASS_NO_SEND_PREFLIGHT":
             item_blockers.append("campaign_preflight_not_passed")
+        if row["preflight_policy_version"] != PREFLIGHT_POLICY_VERSION:
+            item_blockers.append("campaign_preflight_policy_stale")
         if "unsubscribe/u_" not in body:
             item_blockers.append("missing_signed_unsubscribe")
         if not html_body or "<html" not in html_body.lower():
