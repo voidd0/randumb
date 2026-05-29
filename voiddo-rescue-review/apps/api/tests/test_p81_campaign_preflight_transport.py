@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 
 from psycopg.types.json import Jsonb
 
@@ -187,6 +188,25 @@ def test_launch_readiness_state_uses_verified_warmup_events_and_preview_pipeline
     monkeypatch.setattr(p0, "recent_mail_signal_count", lambda *args, **kwargs: 0)
     monkeypatch.setattr(p0, "latest_mail_qa_decision", lambda: "PASS")
     assert p0.launch_readiness_state() == "PREVIEW_PIPELINE_READY_NO_OUTREACH"
+
+
+def test_launch_readiness_state_reports_live_canary_when_runtime_armed(monkeypatch):
+    def fake_count(sql: str, *args, **kwargs) -> int:
+        if "FROM outreach_messages" in sql and "status = 'sent'" in sql:
+            return 7
+        if "FROM outreach_messages" in sql and "status = 'queued'" in sql:
+            return 13
+        return 0
+
+    monkeypatch.setattr(p0, "_count", fake_count)
+    monkeypatch.setattr(
+        p0,
+        "get_settings",
+        lambda: SimpleNamespace(outreach_dry_run=False, outreach_paused=False, first_live_send_flag=True),
+    )
+    monkeypatch.setattr(p0, "recent_mail_signal_count", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(p0, "latest_mail_qa_decision", lambda: "PASS")
+    assert p0.launch_readiness_state() == "LIVE_OUTREACH_READY"
 
 
 def test_latest_campaign_preflight_status_blocks_failed_or_stale_evidence():

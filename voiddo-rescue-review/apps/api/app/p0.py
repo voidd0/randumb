@@ -1237,6 +1237,23 @@ def warmup_calendar_health() -> dict[str, Any]:
 
 
 def launch_readiness_state() -> str:
+    settings = get_settings()
+    live_runtime_armed = (
+        settings.outreach_dry_run is False
+        and settings.outreach_paused is False
+        and settings.first_live_send_flag is True
+    )
+    live_sent = _count("SELECT count(*) FROM outreach_messages WHERE status = 'sent'")
+    live_queued = _count("SELECT count(*) FROM outreach_messages WHERE status = 'queued'")
+    if live_runtime_armed and (live_sent > 0 or live_queued > 0):
+        has_blocking_signal = (
+            recent_mail_signal_count(["bounce", "dsn"], 24) > 0
+            or recent_mail_signal_count(["smtp_rate_limit"], 24) > 0
+            or recent_mail_signal_count(["spam_signal", "auth_failure", "tls_failure", "dkim_failure", "dmarc_failure"], 24) > 0
+            or latest_mail_qa_decision() != "PASS"
+        )
+        return "NOT_LAUNCH_READY" if has_blocking_signal else "LIVE_OUTREACH_READY"
+
     maturity = warmup_domain_maturity_status()
     scheduled = _count("SELECT count(*) FROM warmup_schedule WHERE status = 'scheduled'")
     preview_ready = _count(
