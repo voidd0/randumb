@@ -132,13 +132,19 @@ def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
     if int(policy.get("score") or 0) < 90 or policy.get("decision") != "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW":
         blockers.append("mailer_policy_not_ready")
     transport_checks = transport.get("checks") or {}
+    live_canary_transport_mode = bool(
+        transport.get("allowed")
+        and transport_checks.get("outreach_dry_run") is False
+        and transport_checks.get("outreach_paused") is False
+        and transport_checks.get("first_live_send_flag") is True
+    )
     if not transport_checks.get("unsubscribe_one_click_ready"):
         blockers.append("transport_unsubscribe_not_ready")
     if not transport_checks.get("html_body_ready"):
         blockers.append("transport_html_not_ready")
-    if transport.get("allowed"):
+    if transport.get("allowed") and not live_canary_transport_mode:
         blockers.append("transport_unexpectedly_allows_live_send")
-    if transport.get("reason") not in EXPECTED_TRANSPORT_BLOCKS:
+    if not live_canary_transport_mode and transport.get("reason") not in EXPECTED_TRANSPORT_BLOCKS:
         blockers.append("transport_unexpected_block_reason")
 
     decision = "PASS_NO_SEND_PREFLIGHT" if not blockers else "FAIL_BLOCK_LAUNCH"
@@ -159,6 +165,7 @@ def campaign_preflight(campaign_id: str, limit: int = 20) -> dict[str, Any]:
             "mailer_policy_repair": policy_repair,
             "transport_allowed": bool(transport.get("allowed")),
             "transport_reason": transport.get("reason"),
+            "live_canary_transport_mode": live_canary_transport_mode,
             "transport_source": transport.get("source"),
             "transport_checks": transport_checks,
             **SAFE_FLAGS,

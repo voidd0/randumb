@@ -354,6 +354,7 @@ def send_message_if_allowed(message_id: str) -> dict:
 
 def process_outreach_queue(limit: int = 1) -> dict:
     safe_limit = max(1, min(int(limit or 1), 5))
+    min_spacing_minutes = max(1, int(os.environ.get("OUTREACH_MIN_SEND_SPACING_MINUTES", "24") or "24"))
     with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -362,11 +363,17 @@ def process_outreach_queue(limit: int = 1) -> dict:
                 FROM outreach_messages
                 WHERE status = 'queued'
                   AND COALESCE(send_after, created_at) <= now()
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM outreach_messages recent
+                    WHERE recent.status = 'sent'
+                      AND recent.sent_at >= now() - (%s::text || ' minutes')::interval
+                  )
                 ORDER BY created_at
                 FOR UPDATE SKIP LOCKED
                 LIMIT %s
                 """,
-                (safe_limit,),
+                (min_spacing_minutes, safe_limit),
             )
             rows = cur.fetchall()
             ids = [str(row["id"]) for row in rows]

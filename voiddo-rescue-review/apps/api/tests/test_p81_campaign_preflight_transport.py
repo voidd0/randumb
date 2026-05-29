@@ -5,6 +5,7 @@ import uuid
 from psycopg.types.json import Jsonb
 
 from app.campaign_preflight_status import latest_campaign_preflight_status
+import app.campaign_preflight as campaign_preflight_module
 from app.db import execute
 from app.mailer_action_queue import enqueue_mailer_action, process_mailer_action_queue
 from app.mailer_control import evaluate_outbound_message
@@ -197,5 +198,48 @@ def test_latest_campaign_preflight_status_blocks_failed_or_stale_evidence():
         failed = latest_campaign_preflight_status(campaign_id)
         assert failed["allowed"] is False
         assert failed["reason"] == "campaign_preflight_not_pass"
+    finally:
+        _cleanup(token)
+
+
+def test_campaign_preflight_allows_live_canary_transport_mode(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        campaign_id = _campaign(token)
+        monkeypatch.setattr(
+            campaign_preflight_module,
+            "campaign_preview_quality_pack",
+            lambda *_args, **_kwargs: {"status": "PASS_PREVIEW_QUALITY", "checked_count": 3, "ready_count": 3, "blockers_by_code": {}},
+        )
+        monkeypatch.setattr(
+            campaign_preflight_module,
+            "campaign_preview_review_summary",
+            lambda *_args, **_kwargs: {"approved_count": 3, "usable_preview_count": 3, "checked_count": 3, "held_count": 0},
+        )
+        monkeypatch.setattr(
+            campaign_preflight_module,
+            "mailer_policy_score",
+            lambda: {"score": 100, "decision": "NO_SEND_READY_FOR_MONITORED_WARMUP_WINDOW", "blockers": []},
+        )
+        monkeypatch.setattr(
+            campaign_preflight_module,
+            "campaign_preview_transport_gate_status",
+            lambda *_args, **_kwargs: {
+                "allowed": True,
+                "reason": "all_gates_passed",
+                "source": "campaign_preview_outreach_message",
+                "checks": {
+                    "outreach_dry_run": False,
+                    "outreach_paused": False,
+                    "first_live_send_flag": True,
+                    "unsubscribe_one_click_ready": True,
+                    "html_body_ready": True,
+                },
+            },
+        )
+        result = campaign_preflight_module.campaign_preflight(campaign_id, 3)
+        assert result["decision"] == "PASS_NO_SEND_PREFLIGHT"
+        assert result["live_canary_transport_mode"] is True
+        assert "transport_unexpectedly_allows_live_send" not in result["blockers"]
     finally:
         _cleanup(token)
