@@ -106,6 +106,34 @@ def test_autonomous_loop_blocks_agent_failures_by_default():
         raise AssertionError("agent failures must fail the scheduler safety gate")
 
 
+def test_autonomous_loop_allow_failures_still_blocks_live_permission():
+    result = {
+        "ok": True,
+        "loop": {
+            "agents": 2,
+            "live_outreach": False,
+            "runs": [
+                {"agent": "heavy_agent", "status": "failed", "result_json": {"send_mail": False, "live_outreach_allowed": False}},
+                {"agent": "bad_agent", "status": "completed", "result_json": {"live_outreach_allowed": True}},
+            ],
+        },
+    }
+    summary = loop_script.build_summary(result)
+    with pytest.raises(RuntimeError, match="daily_loop_reported_live_outreach_permission"):
+        loop_script.assert_safe(summary, allow_agent_failures=True)
+    safe_result = {
+        "ok": True,
+        "loop": {
+            "agents": 1,
+            "live_outreach": False,
+            "runs": [
+                {"agent": "heavy_agent", "status": "failed", "result_json": {"send_mail": False, "live_outreach_allowed": False}},
+            ],
+        },
+    }
+    loop_script.assert_safe(loop_script.build_summary(safe_result), allow_agent_failures=True)
+
+
 def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
     calls: list[tuple[str, dict]] = []
 
@@ -121,8 +149,17 @@ def test_core_loop_runs_bounded_agent_sequence(monkeypatch):
     assert len(calls) == len(loop_script.CORE_AGENTS)
     assert calls[0][0] == "mail_throttle_agent"
     assert "outreach_post_send_observer_agent" in [agent for agent, _payload in calls]
+    assert "canary_bounce_recovery_agent" in [agent for agent, _payload in calls]
+    assert "outreach_transport_block_hygiene_agent" in [agent for agent, _payload in calls]
+    assert "canary_clean_window_forecast_agent" in [agent for agent, _payload in calls]
+    assert "canary_resume_plan_agent" in [agent for agent, _payload in calls]
+    assert "canary_next_batch_preparer_agent" in [agent for agent, _payload in calls]
     assert "canary_scale_plan_agent" in [agent for agent, _payload in calls]
     assert "lead_supply_buildout_agent" not in [agent for agent, _payload in calls]
+    assert [agent for agent, _payload in calls].index("outreach_post_send_observer_agent") < [agent for agent, _payload in calls].index("canary_bounce_recovery_agent")
+    assert [agent for agent, _payload in calls].index("canary_bounce_recovery_agent") < [agent for agent, _payload in calls].index("canary_scale_plan_agent")
+    assert [agent for agent, _payload in calls].index("canary_clean_window_forecast_agent") < [agent for agent, _payload in calls].index("canary_resume_plan_agent")
+    assert [agent for agent, _payload in calls].index("canary_resume_plan_agent") < [agent for agent, _payload in calls].index("canary_next_batch_preparer_agent")
     assert [agent for agent, _payload in calls].index("lead_quality_diagnostics_agent") < [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent")
     assert [agent for agent, _payload in calls].index("scout_source_feedback_agent") < [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent")
     assert [agent for agent, _payload in calls].index("quality_aware_regional_target_plan_agent") < [agent for agent, _payload in calls].index("post_scan_campaign_cycle_agent")

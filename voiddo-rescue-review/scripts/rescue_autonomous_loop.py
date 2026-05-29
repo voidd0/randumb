@@ -28,7 +28,13 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("warmup_block_recovery_snapshot_agent", {"limit": 50}),
     ("warmup_post_send_observer_agent", {"limit": 10}),
     ("outreach_post_send_observer_agent", {"window_hours": 24, "apply_pause": True}),
+    ("canary_bounce_recovery_agent", {"window_hours": 24, "apply_pause": True}),
+    ("outreach_queue_suppression_hygiene_agent", {"limit": 100, "apply": True}),
+    ("outreach_transport_block_hygiene_agent", {"limit": 100, "apply": True}),
     ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),
+    ("canary_clean_window_forecast_agent", {"window_hours": 24}),
+    ("canary_resume_plan_agent", {"window_hours": 24, "apply": True}),
+    ("canary_next_batch_preparer_agent", {"canary_limit": 20, "next_batch_limit": 40}),
     ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),
     ("scanner_completion_watch_agent", {"limit": 100, "min_new_completed": 1, "dry_run": False}),
     ("lead_quality_diagnostics_agent", {"limit": 500}),
@@ -148,12 +154,12 @@ def build_summary(result: dict) -> dict:
     }
 
 
-def assert_safe(summary: dict) -> None:
+def assert_safe(summary: dict, allow_agent_failures: bool = False) -> None:
     if not summary.get("ok"):
         raise RuntimeError("daily_loop_api_not_ok")
     if summary.get("live_outreach") is True or int(summary.get("live_outreach_flags", 0)) > 0:
         raise RuntimeError("daily_loop_reported_live_outreach_permission")
-    if int(summary.get("failed", 0)) > 0:
+    if int(summary.get("failed", 0)) > 0 and not allow_agent_failures:
         raise RuntimeError("daily_loop_agent_failures")
 
 
@@ -172,6 +178,23 @@ def run_loop(api_base: str, token: str, timeout: int, attempts: int = 2) -> dict
         except (ConnectionResetError, TimeoutError, URLError, RemoteDisconnected) as exc:
             last_error = exc
     raise last_error or RuntimeError("daily_loop_request_failed")
+
+
+def run_heavy_loop(api_base: str, token: str, timeout: int, attempts: int = 2) -> dict:
+    request = Request(
+        f"{api_base.rstrip('/')}/admin/heavy-loop/run",
+        data=b"{}",
+        headers={"Content-Type": "application/json", "X-Admin-Token": token},
+        method="POST",
+    )
+    last_error: Exception | None = None
+    for _attempt in range(max(1, attempts)):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except (ConnectionResetError, TimeoutError, URLError, RemoteDisconnected) as exc:
+            last_error = exc
+    raise last_error or RuntimeError("heavy_loop_request_failed")
 
 
 def run_agent(api_base: str, token: str, agent: str, payload: dict, timeout: int, attempts: int = 2) -> dict:
@@ -215,7 +238,7 @@ def main() -> int:
     parser.add_argument("--api-base", default="http://127.0.0.1:18082")
     parser.add_argument("--env", default=str(DEFAULT_ENV))
     parser.add_argument("--lock", default=str(DEFAULT_LOCK))
-    parser.add_argument("--mode", choices=["core", "full"], default="full")
+    parser.add_argument("--mode", choices=["core", "full", "heavy"], default="full")
     parser.add_argument("--timeout", type=int, default=1200)
     parser.add_argument("--allow-agent-failures", action="store_true")
     args = parser.parse_args()
@@ -246,14 +269,15 @@ def main() -> int:
             return 0
         if args.mode == "core":
             result = run_core_loop(args.api_base, token, max(30, args.timeout))
+        elif args.mode == "heavy":
+            result = run_heavy_loop(args.api_base, token, max(30, args.timeout))
         else:
             result = run_bounded_full_loop(args.api_base, token, max(30, args.timeout))
         summary = build_summary(result)
         summary["mode"] = args.mode
         if args.allow_agent_failures and int(summary.get("failed", 0)) > 0:
             summary["agent_failures_allowed"] = True
-        else:
-            assert_safe(summary)
+        assert_safe(summary, allow_agent_failures=args.allow_agent_failures)
         print(json.dumps(summary, sort_keys=True))
         return 0
     except (RuntimeError, URLError, TimeoutError, RemoteDisconnected) as exc:
