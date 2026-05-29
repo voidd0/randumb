@@ -1026,6 +1026,7 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
         "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE", "SHOW LAUNCH RUNBOOK", "ROLLBACK LIVE OUTREACH",
         "SHOW LEAD SUPPLY", "SHOW CANARY SCALE", "SHOW CANARY BOUNCE RECOVERY", "SHOW STUDIO MAIL",
+        "SHOW CANARY RESUME",
     }
     medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP", "RUN LEAD SUPPLY BUILDOUT"}
     medium.add("RUN LAUNCH REHEARSAL")
@@ -1941,6 +1942,15 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
             "action": "canary_bounce_recovery_status",
             "recovery": canary_bounce_recovery(24, apply_pause=True, store=True),
             "history": latest_canary_bounce_recovery_runs(5),
+        }
+    elif command == "SHOW CANARY RESUME":
+        from .canary_resume_plan import canary_resume_plan, latest_canary_resume_plan_runs
+
+        result = {
+            "ok": True,
+            "action": "canary_resume_status",
+            "plan": canary_resume_plan(24, apply=False, store=True),
+            "history": latest_canary_resume_plan_runs(5),
         }
     elif command == "SHOW LEAD SUPPLY":
         from .lead_discovery import quality_aware_regional_target_plan

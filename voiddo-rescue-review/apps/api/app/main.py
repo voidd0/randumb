@@ -108,6 +108,7 @@ from .canary_checkout_simulation import run_canary_checkout_simulation
 from .canary_operator_packet import build_canary_operator_packet, latest_canary_operator_packet
 from .canary_send_window_plan import build_canary_send_window_plan, latest_canary_send_window_plan
 from .canary_scale_plan import canary_scale_plan
+from .canary_resume_plan import canary_resume_plan, latest_canary_resume_plan_runs
 from .canary_bounce_recovery import backfill_bounce_dsn_details, canary_bounce_recovery, latest_canary_bounce_recovery_runs
 from .outreach_post_send_observer import latest_outreach_post_send_observer_runs, outreach_post_send_observer
 from .launch_operating_lane import advance_launch_operating_lane, launch_operating_lane_snapshot
@@ -621,6 +622,28 @@ async def outreach_live_queue_scale_plan_post(request: Request):
         "plan": canary_scale_plan(
             int(payload.get("canary_limit", 20)),
             int(payload.get("next_batch_limit", 40)),
+            store=True,
+        ),
+    }
+
+
+@app.get("/admin/outreach/live-queue/resume-plan", dependencies=[Depends(require_admin)])
+def outreach_live_queue_resume_plan_get(window_hours: int = 24, limit: int = 10):
+    return {
+        "ok": True,
+        "plan": canary_resume_plan(window_hours, apply=False, store=True),
+        "history": latest_canary_resume_plan_runs(limit),
+    }
+
+
+@app.post("/admin/outreach/live-queue/resume-plan", dependencies=[Depends(require_admin)])
+async def outreach_live_queue_resume_plan_post(request: Request):
+    payload = await request.json()
+    return {
+        "ok": True,
+        "plan": canary_resume_plan(
+            int(payload.get("window_hours", 24)),
+            apply=bool(payload.get("apply", False)),
             store=True,
         ),
     }

@@ -53,6 +53,7 @@ from .canary_batch_quality import canary_batch_quality
 from .canary_checkout_simulation import run_canary_checkout_simulation
 from .canary_operator_packet import build_canary_operator_packet
 from .canary_scale_plan import canary_scale_plan
+from .canary_resume_plan import canary_resume_plan
 from .canary_next_batch_preparer import prepare_next_canary_batch_if_ready
 from .canary_send_window_plan import build_canary_send_window_plan
 from .canary_bounce_recovery import backfill_bounce_dsn_details, canary_bounce_recovery, latest_canary_bounce_recovery_runs
@@ -479,6 +480,11 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             int(payload.get("next_batch_limit", 40)),
             store=True,
         ),
+        "canary_resume_plan_agent": lambda: canary_resume_plan(
+            int(payload.get("window_hours", 24)),
+            apply=bool(payload.get("apply", False)),
+            store=True,
+        ),
         "canary_next_batch_preparer_agent": lambda: prepare_next_canary_batch_if_ready(
             int(payload.get("canary_limit", 20)),
             int(payload.get("next_batch_limit", 40)),
@@ -652,6 +658,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("outreach_post_send_observer_agent", {"window_hours": 24, "apply_pause": True}),
         ("canary_bounce_recovery_agent", {"window_hours": 24, "apply_pause": True}),
         ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),
+        ("canary_resume_plan_agent", {"window_hours": 24, "apply": False}),
         ("canary_next_batch_preparer_agent", {"canary_limit": 20, "next_batch_limit": 40}),
         ("scanner_stale_recovery_agent", {"limit": 10, "older_than_minutes": 15, "dry_run": False}),
         ("scanner_completion_watch_agent", {"limit": 100, "min_new_completed": 1, "dry_run": False}),
