@@ -79,6 +79,13 @@ def _count(cur, sql: str, params: tuple = ()) -> int:
     return int(row["count"] or 0) if row else 0
 
 
+def _runtime_control_enabled(cur, *keys: str) -> bool:
+    if not keys:
+        return False
+    cur.execute("SELECT 1 FROM runtime_controls WHERE key = ANY(%s) AND value = true LIMIT 1", (list(keys),))
+    return bool(cur.fetchone())
+
+
 def unsubscribe_url_from_body(body: str) -> str | None:
     match = re.search(r"https?://[^\s<>()\"']+/unsubscribe/u_[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]+", body or "")
     return match.group(0) if match else None
@@ -212,6 +219,7 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None, html_b
     checks = {
         "outreach_dry_run": os.environ.get("OUTREACH_DRY_RUN", "true").lower() == "true",
         "outreach_paused": os.environ.get("OUTREACH_PAUSED", "true").lower() == "true",
+        "runtime_outreach_paused": False,
         "first_live_send_flag": os.environ.get("FIRST_LIVE_SEND_FLAG", "false").lower() == "true",
         "mail_qa_decision": _latest_decision("mail_qa_runs"),
         "visual_qa_decision": visual_design["visual_qa_decision"],
@@ -231,9 +239,10 @@ def transport_gate(email: str, body: str, campaign_id: str | None = None, html_b
             checks["campaign_preflight"] = _latest_campaign_preflight(cur, campaign_id)
             checks["warmup_maturity"] = _warmup_maturity(cur)
             checks["live_quota"] = _live_quota(cur, email)
+            checks["runtime_outreach_paused"] = _runtime_control_enabled(cur, "pause_outreach", "pause_all_workers", "pause_workers")
     if checks["outreach_dry_run"]:
         return False, "outreach_dry_run_enabled", checks
-    if checks["outreach_paused"] or not checks["first_live_send_flag"]:
+    if checks["outreach_paused"] or checks["runtime_outreach_paused"] or not checks["first_live_send_flag"]:
         return False, "live_outreach_not_approved", checks
     if checks["mail_qa_decision"] != "PASS":
         return False, "mail_qa_not_passed", checks
