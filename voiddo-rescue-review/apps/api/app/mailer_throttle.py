@@ -19,7 +19,7 @@ def throttle_decision(scope: str, scope_key: str, min_delay_seconds: int = 600) 
         "recent_bounce_or_dsn_count": recent_mail_signal_count(["bounce", "dsn"], 24),
         "recent_rate_limit_count": recent_mail_signal_count(["smtp_rate_limit"], 24),
     }
-    if checks["recent_bounce_or_dsn_count"] > 0:
+    if not scope.startswith("owner_mail") and checks["recent_bounce_or_dsn_count"] > 0:
         return {"allowed": False, "reason": "recent_bounce_or_dsn", "checks": checks}
     if checks["recent_rate_limit_count"] > 0:
         return {"allowed": False, "reason": "recent_rate_limit", "checks": checks}

@@ -35,8 +35,8 @@ def test_owner_report_draft_uses_no_send_action_queue():
 
 
 def test_owner_report_generation_sends_no_email():
-    report = write_owner_status_report(send_if_safe=True)
-    assert isinstance(report["email_sent"], bool)
+    report = write_owner_status_report(send_if_safe=False)
+    assert report["email_sent"] is False
     assert report["owner_report_action"]["action_type"] == "owner_report"
     assert report["state"]["live_outreach_sent_count"] >= 0
     execute("DELETE FROM mailer_action_queue WHERE id = %s", (report["owner_report_action"]["id"],))

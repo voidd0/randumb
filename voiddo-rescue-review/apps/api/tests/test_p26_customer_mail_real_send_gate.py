@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 
 from app.db import execute
-from app.mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, send_customer_mail
+from app.mailer_action_queue import enqueue_mailer_action, mailer_action_queue_summary, process_mailer_action_queue, send_customer_mail
 from app.main import app
 
 
@@ -27,7 +27,14 @@ def _send_ready_action(marker: str, raw_email: str = "p26@example.test") -> dict
     return action
 
 
-def _clean_mail_gates(monkeypatch, *, sending_enabled: bool = True, real_enabled: bool = True) -> None:
+def _clean_mail_gates(
+    monkeypatch,
+    *,
+    sending_enabled: bool = True,
+    real_enabled: bool = True,
+    owner_report_enabled: bool = False,
+    owner_sale_enabled: bool = False,
+) -> None:
     import app.mailer_action_queue as queue
 
     monkeypatch.setattr(
@@ -39,8 +46,8 @@ def _clean_mail_gates(monkeypatch, *, sending_enabled: bool = True, real_enabled
             auto_replies_paused=True,
             customer_mail_sending_enabled=sending_enabled,
             customer_mail_real_send_enabled=real_enabled,
-            owner_report_email_enabled=False,
-            owner_sale_email_enabled=False,
+            owner_report_email_enabled=owner_report_enabled,
+            owner_sale_email_enabled=owner_sale_enabled,
             owner_command_email="owner-p26@example.test",
             smtp_from_default="audit@voiddorescue.com",
             smtp_host="mail.example.test",
@@ -53,6 +60,57 @@ def _clean_mail_gates(monkeypatch, *, sending_enabled: bool = True, real_enabled
     monkeypatch.setattr(queue, "latest_mail_qa_decision", lambda: "PASS")
     monkeypatch.setattr(queue, "throttle_decision", lambda scope, scope_key, min_delay_seconds=600: {"allowed": True, "reason": "allowed", "checks": {}})
     monkeypatch.setattr(queue, "record_throttle_send", lambda scope, scope_key, reason="sent": {"scope": scope, "scope_key": scope_key, "reason": reason})
+
+
+def test_owner_report_gate_ignores_cold_bounce_signal(monkeypatch):
+    import app.mailer_action_queue as queue
+
+    marker = "p26-owner-report-bounce-does-not-block"
+    try:
+        _cleanup(marker)
+        _clean_mail_gates(monkeypatch, owner_report_enabled=True)
+        monkeypatch.setattr(queue, "mail_signal_summary", lambda hours=24: {"bounce_or_dsn_count": 3, "rate_limit_count": 0, "spam_signal_count": 2, "mail_auth_failure_count": 0, "items": [], "window_hours": hours})
+        action = enqueue_mailer_action(
+            {
+                "action_type": "owner_report",
+                "risk_level": "SAFE_AUTO",
+                "mailbox": "support@voiddorescue.com",
+                "template_key": "owner_status_report",
+                "payload_json": {"source": marker, "report_date": marker},
+            }
+        )
+        result = process_mailer_action_queue(10)
+        processed = next(item for item in result["actions"] if item["id"] == action["id"])
+        assert processed["status"] == "send_ready"
+        assert "recent_bounce_or_dsn" not in processed["gate_result_json"]["blockers"]
+        assert "recent_spam_signal" not in processed["gate_result_json"]["blockers"]
+    finally:
+        _cleanup(marker)
+
+
+def test_owner_report_gate_still_blocks_rate_limit_signal(monkeypatch):
+    import app.mailer_action_queue as queue
+
+    marker = "p26-owner-report-rate-limit-blocks"
+    try:
+        _cleanup(marker)
+        _clean_mail_gates(monkeypatch, owner_report_enabled=True)
+        monkeypatch.setattr(queue, "mail_signal_summary", lambda hours=24: {"bounce_or_dsn_count": 0, "rate_limit_count": 1, "spam_signal_count": 0, "mail_auth_failure_count": 0, "items": [], "window_hours": hours})
+        action = enqueue_mailer_action(
+            {
+                "action_type": "owner_report",
+                "risk_level": "SAFE_AUTO",
+                "mailbox": "support@voiddorescue.com",
+                "template_key": "owner_status_report",
+                "payload_json": {"source": marker, "report_date": marker},
+            }
+        )
+        result = process_mailer_action_queue(10)
+        processed = next(item for item in result["actions"] if item["id"] == action["id"])
+        assert processed["status"] == "prepared"
+        assert "recent_rate_limit" in processed["gate_result_json"]["blockers"]
+    finally:
+        _cleanup(marker)
 
 
 def test_customer_mail_real_send_default_blocked(monkeypatch):

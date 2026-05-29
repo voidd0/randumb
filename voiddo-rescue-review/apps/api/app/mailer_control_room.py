@@ -1155,9 +1155,17 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
     policy_score_history = latest_mailer_policy_score_history()
     business_kpi_history = latest_mailer_business_kpi_history()
     monitoring = monitoring_control_room_summary()
-    blocked = bool(mailer["warmup_blocked_reason"]) or state["latest_mail_qa_decision"] != "PASS"
+    signals = mail_signal_summary(24)
+    owner_mail_blockers = []
+    if state["latest_mail_qa_decision"] != "PASS":
+        owner_mail_blockers.append("mail_qa_not_pass")
+    if int(signals.get("rate_limit_count", 0) or 0) > 0:
+        owner_mail_blockers.append("recent_rate_limit")
+    if int(signals.get("mail_auth_failure_count", 0) or 0) > 0:
+        owner_mail_blockers.append("recent_mail_auth_failure_signal")
+    blocked = bool(owner_mail_blockers)
     email_sent = False
-    send_decision = "blocked_recent_mail_signals" if blocked else "not_sent_draft_only"
+    send_decision = "blocked_owner_mail_gate" if blocked else "not_sent_draft_only"
     today = datetime.now(timezone.utc).date().isoformat()
     today_payment = fetch_one(
         """
@@ -1221,6 +1229,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
                 f"- mailer_business_kpi_secrets: `{str(bool(business_kpi_history.get('secrets_included'))).lower()}`",
                 f"- email_sent: `{email_sent}`",
                 f"- send_decision: `{send_decision}`",
+                f"- owner_mail_blockers: `{len(owner_mail_blockers)}`",
                 "",
                 "Raw recipient addresses and secrets are intentionally omitted.",
             ]
@@ -1228,73 +1237,91 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         + "\n",
         encoding="utf-8",
     )
-    draft = enqueue_mailer_action(
-        {
-            "action_type": "owner_report",
-            "risk_level": "SAFE_AUTO",
-            "mailbox": "support@voiddorescue.com",
-            "template_key": "owner_status_report",
-            "payload_json": {
-                "source": "daily_digest_hook",
-                "report_date": today,
-                "launch_readiness_state": state["launch_readiness_state"],
-                "live_outreach_sent_count": state["live_outreach_sent_count"],
-                "canary": {
-                    "decision": canary["decision"],
-                    "sent_count": canary["sent_count"],
-                    "queued_count": canary["queued_count"],
-                    "linked_reply_count": canary["reply_count_since_first_send"],
-                    "linked_click_count": canary["click_count_since_first_send"],
-                    "blocker_count": len(canary["blockers"]),
-                },
-                "studio_mail": {
-                    "decision": studio_mail["decision"],
-                    "blocker_count": len(studio_mail["blockers"]),
-                    "latest_status": studio_mail["latest_run"]["status"],
-                    "latest_scanned_count": studio_mail["latest_run"]["scanned_count"],
-                    "latest_owner_command_count": studio_mail["latest_run"]["owner_command_count"],
-                },
-                "warmup_sent_count": state["warmup_sent_count"],
-                "bounce_count": state["bounce_count"],
-                "rate_limit_signal_count": state["rate_limit_signal_count"],
-                "next_allowed_action": mailer["next_allowed_action"],
-                "payments_today": payments_today,
-                "revenue_today": revenue_today,
-                "currency": "USD",
-                "mailer_ops": {
-                    "real_count": ops["real_count"],
-                    "synthetic_count": ops["synthetic_count"],
-                    "blocked_unsafe_count": ops["blocked_unsafe_count"],
-                },
-                "mailer_ops_retention_history": {
-                    "count": ops_retention_history["count"],
-                    "latest_send_mail": bool((ops_retention_history.get("latest") or {}).get("send_mail")),
-                    "raw_recipient_addresses_included": bool(ops_retention_history.get("raw_recipient_addresses_included")),
-                    "secrets_included": bool(ops_retention_history.get("secrets_included")),
-                },
-                "mailer_policy_score_history": {
-                    "count": policy_score_history["count"],
-                    "latest_score": policy_score_history["latest_score"],
-                    "latest_decision": policy_score_history["latest_decision"],
-                    "latest_blocker_count": policy_score_history["latest_blocker_count"],
-                    "latest_send_mail": policy_score_history["latest_send_mail"],
-                    "raw_recipient_addresses_included": bool(policy_score_history.get("raw_recipient_addresses_included")),
-                    "secrets_included": bool(policy_score_history.get("secrets_included")),
-                },
-                "mailer_business_kpi_history": {
-                    "count": business_kpi_history["count"],
-                    "latest_policy_score": business_kpi_history["latest_policy_score"],
-                    "latest_action_queue_rows": business_kpi_history["latest_action_queue_rows"],
-                    "latest_safe_actions_queued": business_kpi_history["latest_safe_actions_queued"],
-                    "latest_blocked_actions": business_kpi_history["latest_blocked_actions"],
-                    "latest_send_mail": business_kpi_history["latest_send_mail"],
-                    "raw_recipient_addresses_included": bool(business_kpi_history.get("raw_recipient_addresses_included")),
-                    "secrets_included": bool(business_kpi_history.get("secrets_included")),
-                },
-                "email_sent": False,
+    owner_report_payload = {
+        "action_type": "owner_report",
+        "risk_level": "SAFE_AUTO",
+        "mailbox": "support@voiddorescue.com",
+        "template_key": "owner_status_report",
+        "payload_json": {
+            "source": "daily_digest_hook",
+            "report_date": today,
+            "launch_readiness_state": state["launch_readiness_state"],
+            "live_outreach_sent_count": state["live_outreach_sent_count"],
+            "canary": {
+                "decision": canary["decision"],
+                "sent_count": canary["sent_count"],
+                "queued_count": canary["queued_count"],
+                "linked_reply_count": canary["reply_count_since_first_send"],
+                "linked_click_count": canary["click_count_since_first_send"],
+                "blocker_count": len(canary["blockers"]),
             },
-        }
-    )
+            "studio_mail": {
+                "decision": studio_mail["decision"],
+                "blocker_count": len(studio_mail["blockers"]),
+                "latest_status": studio_mail["latest_run"]["status"],
+                "latest_scanned_count": studio_mail["latest_run"]["scanned_count"],
+                "latest_owner_command_count": studio_mail["latest_run"]["owner_command_count"],
+            },
+            "warmup_sent_count": state["warmup_sent_count"],
+            "bounce_count": state["bounce_count"],
+            "rate_limit_signal_count": state["rate_limit_signal_count"],
+            "next_allowed_action": mailer["next_allowed_action"],
+            "payments_today": payments_today,
+            "revenue_today": revenue_today,
+            "currency": "USD",
+            "mailer_ops": {
+                "real_count": ops["real_count"],
+                "synthetic_count": ops["synthetic_count"],
+                "blocked_unsafe_count": ops["blocked_unsafe_count"],
+            },
+            "mailer_ops_retention_history": {
+                "count": ops_retention_history["count"],
+                "latest_send_mail": bool((ops_retention_history.get("latest") or {}).get("send_mail")),
+                "raw_recipient_addresses_included": bool(ops_retention_history.get("raw_recipient_addresses_included")),
+                "secrets_included": bool(ops_retention_history.get("secrets_included")),
+            },
+            "mailer_policy_score_history": {
+                "count": policy_score_history["count"],
+                "latest_score": policy_score_history["latest_score"],
+                "latest_decision": policy_score_history["latest_decision"],
+                "latest_blocker_count": policy_score_history["latest_blocker_count"],
+                "latest_send_mail": policy_score_history["latest_send_mail"],
+                "raw_recipient_addresses_included": bool(policy_score_history.get("raw_recipient_addresses_included")),
+                "secrets_included": bool(policy_score_history.get("secrets_included")),
+            },
+            "mailer_business_kpi_history": {
+                "count": business_kpi_history["count"],
+                "latest_policy_score": business_kpi_history["latest_policy_score"],
+                "latest_action_queue_rows": business_kpi_history["latest_action_queue_rows"],
+                "latest_safe_actions_queued": business_kpi_history["latest_safe_actions_queued"],
+                "latest_blocked_actions": business_kpi_history["latest_blocked_actions"],
+                "latest_send_mail": business_kpi_history["latest_send_mail"],
+                "raw_recipient_addresses_included": bool(business_kpi_history.get("raw_recipient_addresses_included")),
+                "secrets_included": bool(business_kpi_history.get("secrets_included")),
+            },
+            "email_sent": False,
+            "owner_mail_blockers": owner_mail_blockers,
+        },
+    }
+    draft = enqueue_mailer_action(owner_report_payload)
+    if send_if_safe and not blocked and draft.get("status") not in {"queued", "send_ready", "sent"}:
+        refreshed_payload = json_safe(owner_report_payload)
+        draft = execute(
+            """
+            UPDATE mailer_action_queue
+            SET status = 'queued',
+                payload_json = %s,
+                result_json = COALESCE(result_json, '{}'::jsonb) || '{"reactivated_daily_owner_report":true}'::jsonb,
+                updated_at = now()
+            WHERE id = %s
+              AND status NOT IN ('sent', 'archived_test_artifact')
+            RETURNING id, action_type, risk_level, status, mailbox, recipient_hash,
+                      template_key, idempotency_key, send_after, attempt_count,
+                      created_at, updated_at
+            """,
+            (Jsonb(refreshed_payload), draft["id"]),
+        ) or draft
+        draft = json_safe(dict(draft))
     if not (send_if_safe and not blocked):
         draft = execute(
             """
@@ -1336,6 +1363,7 @@ def write_owner_status_report(send_if_safe: bool = False) -> dict[str, Any]:
         "mailer_ops_retention_history": ops_retention_history,
         "mailer_policy_score_history": policy_score_history,
         "mailer_business_kpi_history": business_kpi_history,
+        "owner_mail_blockers": owner_mail_blockers,
         "owner_report_action": draft,
         "send_result": send_result,
     }

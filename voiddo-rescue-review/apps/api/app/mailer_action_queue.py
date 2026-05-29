@@ -331,13 +331,20 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
             blockers.append(campaign_preflight["reason"])
     if action_type in {"safe_reply_draft"} and settings.auto_replies_paused:
         blockers.append("auto_replies_paused_env")
-    if action_type in {"deliverability_diagnostic", "warmup_slot", *OWNER_MAIL_ACTIONS, "safe_reply_draft", *CUSTOMER_MAIL_ACTIONS}:
+    if action_type in {"deliverability_diagnostic", "warmup_slot", "safe_reply_draft", *CUSTOMER_MAIL_ACTIONS}:
         if signals["bounce_or_dsn_count"] > 0:
             blockers.append("recent_bounce_or_dsn")
         if signals["rate_limit_count"] > 0:
             blockers.append("recent_rate_limit")
         if signals.get("spam_signal_count", 0) > 0:
             blockers.append("recent_spam_signal")
+        if signals.get("mail_auth_failure_count", 0) > 0:
+            blockers.append("recent_mail_auth_failure_signal")
+        if latest_mail_qa_decision() != "PASS":
+            blockers.append("mail_qa_not_pass")
+    if action_type in OWNER_MAIL_ACTIONS:
+        if signals["rate_limit_count"] > 0:
+            blockers.append("recent_rate_limit")
         if signals.get("mail_auth_failure_count", 0) > 0:
             blockers.append("recent_mail_auth_failure_signal")
         if latest_mail_qa_decision() != "PASS":
@@ -357,7 +364,7 @@ def _gate_action(action: dict[str, Any]) -> dict[str, Any]:
         rendered = render_customer_mail_preview(action)
         if not rendered["qa"]["passed"]:
             blockers.append("owner_template_qa_failed")
-        throttle = throttle_decision("owner_mail", action.get("mailbox", "support@voiddorescue.com"), 3600 if action_type == "owner_report" else 0)
+        throttle = throttle_decision(f"owner_mail:{action_type}", action.get("mailbox", "support@voiddorescue.com"), 3600 if action_type == "owner_report" else 0)
         if not throttle["allowed"]:
             blockers.append(f"throttle:{throttle['reason']}")
         if action_type == "owner_report" and not settings.owner_report_email_enabled:
@@ -531,7 +538,7 @@ def _real_send_gate(action: dict[str, Any], preview: dict[str, Any] | None = Non
     signals = mail_signal_summary(24)
     preview = preview or render_customer_mail_preview(action)
     action_type = action.get("action_type")
-    throttle_kind = "owner_mail" if action_type in OWNER_MAIL_ACTIONS else "customer_mail"
+    throttle_kind = f"owner_mail:{action_type}" if action_type in OWNER_MAIL_ACTIONS else "customer_mail"
     throttle = throttle_decision(throttle_kind, action.get("mailbox", "support@voiddorescue.com"), 3600 if action_type == "owner_report" else 0 if action_type == "owner_sale_notification" else 600)
     blockers: list[str] = []
     if action.get("status") != "send_ready":
@@ -548,11 +555,11 @@ def _real_send_gate(action: dict[str, Any], preview: dict[str, Any] | None = Non
         blockers.append("owner_sale_email_flag_false")
     if latest_mail_qa_decision() != "PASS":
         blockers.append("mail_qa_not_pass")
-    if signals["bounce_or_dsn_count"] > 0:
+    if action_type not in OWNER_MAIL_ACTIONS and signals["bounce_or_dsn_count"] > 0:
         blockers.append("recent_bounce_or_dsn")
     if signals["rate_limit_count"] > 0:
         blockers.append("recent_rate_limit")
-    if signals.get("spam_signal_count", 0) > 0:
+    if action_type not in OWNER_MAIL_ACTIONS and signals.get("spam_signal_count", 0) > 0:
         blockers.append("recent_spam_signal")
     if signals.get("mail_auth_failure_count", 0) > 0:
         blockers.append("recent_mail_auth_failure_signal")
@@ -689,8 +696,8 @@ def send_customer_mail(limit: int = 10) -> dict[str, Any]:
                 """,
                 (Jsonb(json_safe(result)), row["id"]),
             )
-            sent_scope = "owner_mail" if row.get("action_type") in OWNER_MAIL_ACTIONS else "customer_mail"
-            sent_reason = "owner_mail_sent" if sent_scope == "owner_mail" else "customer_mail_sent"
+            sent_scope = f"owner_mail:{row.get('action_type')}" if row.get("action_type") in OWNER_MAIL_ACTIONS else "customer_mail"
+            sent_reason = "owner_mail_sent" if row.get("action_type") in OWNER_MAIL_ACTIONS else "customer_mail_sent"
             record_throttle_send(sent_scope, row.get("mailbox", "support@voiddorescue.com"), sent_reason)
             record_send_ledger(dict(updated), "sent", gate, result)
             actions.append(dict(updated))

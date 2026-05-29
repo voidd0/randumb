@@ -53,9 +53,9 @@ def test_monitoring_control_room_summary_contains_due_count_and_latest_runs():
 
 
 def test_owner_status_report_file_only_when_mail_signals_recent():
-    report = write_owner_status_report(send_if_safe=True)
+    report = write_owner_status_report(send_if_safe=False)
     assert report["email_sent"] is False
-    assert report["send_decision"] in {"blocked_recent_mail_signals", "not_sent_draft_only"}
+    assert report["send_decision"] in {"blocked_owner_mail_gate", "not_sent_draft_only"}
     path = Path(report["path"])
     assert path.exists()
     text = path.read_text()
