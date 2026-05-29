@@ -209,6 +209,19 @@ def backfill_bounce_dsn_details(window_hours: int = 24, limit: int = 20, apply: 
                 "SELECT id, lead_id FROM outreach_messages WHERE provider_message_id = %s LIMIT 1",
                 (details["original_message_id"],),
             )
+        if not outreach_row and details.get("bounced_recipient"):
+            outreach_row = fetch_one(
+                """
+                SELECT om.id, om.lead_id
+                FROM outreach_messages om
+                JOIN leads l ON l.id = om.lead_id
+                WHERE lower(l.email) = lower(%s)
+                  AND om.status IN ('sent', 'bounced')
+                ORDER BY om.sent_at DESC NULLS LAST, om.created_at DESC
+                LIMIT 1
+                """,
+                (details["bounced_recipient"],),
+            )
         linked += 1 if outreach_row else 0
         if apply:
             if details.get("bounced_recipient"):
@@ -381,6 +394,24 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
             """,
             (message_ids,),
         )]
+    signal_recipient_hashes = {str(row.get("recipient_hash") or "") for row in signals if row.get("recipient_hash")}
+    hash_linked_rows = []
+    if signal_recipient_hashes:
+        possible_rows = [dict(row) for row in fetch_all(
+            """
+            SELECT om.id, om.status, om.provider_message_id, om.sent_at, l.email,
+                   lower(split_part(COALESCE(l.email, ''), '@', 2)) AS recipient_domain
+            FROM outreach_messages om
+            JOIN leads l ON l.id = om.lead_id
+            WHERE om.status IN ('sent', 'bounced')
+            ORDER BY om.sent_at DESC NULLS LAST, om.created_at DESC
+            LIMIT 500
+            """
+        )]
+        hash_linked_rows = [
+            row for row in possible_rows
+            if recipient_hash(row.get("email") or "") in signal_recipient_hashes
+        ]
     blocked_rows = [dict(row) for row in fetch_all(
         """
         SELECT om.id, om.status, om.created_at, om.send_after,
@@ -457,7 +488,8 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
             "bounce_or_dsn_signal_count": len(signals),
             "distinct_signal_count": len(signal_keys),
             "linked_sent_message_count": len(linked_rows),
-            "unlinked_signal_count": max(0, len(signal_keys) - len(linked_rows)),
+            "hash_linked_sent_message_count": len(hash_linked_rows),
+            "unlinked_signal_count": max(0, len(signal_keys) - len(linked_rows) - len(hash_linked_rows)),
             "blocked_outreach_row_count": len(blocked_rows),
             "bounced_outreach_row_count": len(bounced_rows),
             "inbox_bounce_suppression_count": inbox_bounce_suppression_count,
@@ -490,6 +522,15 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
                     "recipient_domain_hash": recipient_hash(row.get("recipient_domain") or ""),
                 }
                 for row in linked_rows[:10]
+            ],
+            "hash_linked_sent_sample": [
+                {
+                    "outreach_message_id": str(row["id"]),
+                    "provider_message_id_present": bool(row.get("provider_message_id")),
+                    "sent_at": row.get("sent_at"),
+                    "recipient_domain_hash": recipient_hash(row.get("recipient_domain") or ""),
+                }
+                for row in hash_linked_rows[:10]
             ],
             "blocked_outreach_sample": [
                 {
