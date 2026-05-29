@@ -30,6 +30,7 @@ CORE_AGENTS: tuple[tuple[str, dict], ...] = (
     ("warmup_post_send_observer_agent", {"limit": 10}),
     ("outreach_post_send_observer_agent", {"window_hours": 24, "apply_pause": True}),
     ("canary_bounce_recovery_agent", {"window_hours": 24, "apply_pause": True}),
+    ("warmup_signal_sanitizer_agent", {"window_hours": 168, "limit": 200, "apply": True}),
     ("outreach_queue_suppression_hygiene_agent", {"limit": 100, "apply": True}),
     ("outreach_transport_block_hygiene_agent", {"limit": 100, "apply": True}),
     ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),

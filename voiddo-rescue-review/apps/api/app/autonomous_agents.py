@@ -109,6 +109,7 @@ from .self_development import run_self_development_cycle
 from .warmup_planner import apply_provider_spacing_when_safe, plan_provider_spaced_warmup
 from .warmup_block_recovery import recover_blocked_warmup_slots, warmup_block_recovery_snapshot
 from .warmup_post_send import observe_warmup_post_send
+from .warmup_signal_sanitizer import warmup_signal_sanitizer
 
 
 def _record_agent(agent: str, func: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -354,6 +355,12 @@ def run_agent(agent: str, payload: dict[str, Any] | None = None) -> dict[str, An
             apply=bool(payload.get("apply", True)),
         ),
         "warmup_block_recovery_snapshot_agent": lambda: warmup_block_recovery_snapshot(int(payload.get("limit", 50))),
+        "warmup_signal_sanitizer_agent": lambda: warmup_signal_sanitizer(
+            int(payload.get("window_hours", 168)),
+            int(payload.get("limit", 200)),
+            apply=bool(payload.get("apply", True)),
+            source=str(payload.get("source", "")),
+        ),
         "campaign_agent": lambda: prepare_outreach_preview(int(payload.get("limit", 20))),
         "outreach_preview_queue_agent": lambda: queue_outreach_preview(int(payload.get("limit", 20))),
         "outreach_preview_dedupe_agent": lambda: dedupe_outreach_preview_messages(
@@ -679,6 +686,7 @@ def runtime_daily_loop_plan() -> list[tuple[str, dict[str, Any]]]:
         ("warmup_post_send_observer_agent", {"limit": 10}),
         ("outreach_post_send_observer_agent", {"window_hours": 24, "apply_pause": True}),
         ("canary_bounce_recovery_agent", {"window_hours": 24, "apply_pause": True}),
+        ("warmup_signal_sanitizer_agent", {"window_hours": 168, "limit": 200, "apply": True}),
         ("outreach_queue_suppression_hygiene_agent", {"limit": 100, "apply": True}),
         ("outreach_transport_block_hygiene_agent", {"limit": 100, "apply": True}),
         ("canary_scale_plan_agent", {"canary_limit": 20, "next_batch_limit": 40}),

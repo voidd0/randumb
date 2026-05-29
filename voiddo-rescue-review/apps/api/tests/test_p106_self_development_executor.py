@@ -103,6 +103,44 @@ def test_self_development_executes_safe_lead_supply_item_without_send(monkeypatc
         cleanup(token)
 
 
+def test_self_development_executes_no_send_revenue_modules(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    try:
+        item = execute(
+            """
+            INSERT INTO self_build_queue(module, priority, title, acceptance_json, created_at)
+            VALUES ('offer_economics', 'P0', %s, %s, now() - interval '100 years')
+            RETURNING id
+            """,
+            (f"Close revenue autonomy gap: mrr below target: offer_economics {token}", Jsonb([token])),
+        )
+        monkeypatch.setattr(dev_module, "_safe_to_execute", lambda allow_mail_blocked_no_send=False: (True, []))
+        monkeypatch.setattr(
+            dev_module,
+            "_execute_no_send_module",
+            lambda module: {
+                "module": module,
+                "status": "qa_no_send",
+                "send_mail": False,
+                "smtp_called": False,
+                "live_outreach_allowed": False,
+                "token": token,
+            },
+        )
+
+        result = run_self_development_cycle(limit=1, execute_safe_auto=True)
+
+        assert result["execution"]["executed"] == 1
+        row = fetch_one("SELECT status, acceptance_json FROM self_build_queue WHERE id = %s", (item["id"],))
+        assert row["status"] == "executed_safe_auto"
+        execution = row["acceptance_json"]["self_development_execution"]
+        assert execution["module"] == "offer_economics"
+        assert execution["result"]["smtp_called"] is False
+        assert execution["result"]["live_outreach_allowed"] is False
+    finally:
+        cleanup(token)
+
+
 def test_self_development_safe_to_execute_allows_clean_active_canary(monkeypatch):
     monkeypatch.setattr(
         dev_module,

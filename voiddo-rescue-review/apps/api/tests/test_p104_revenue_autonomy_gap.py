@@ -76,6 +76,48 @@ def test_revenue_autonomy_gap_actions_are_idempotent_for_custom_gap(monkeypatch)
         _cleanup_token(token)
 
 
+def test_revenue_gap_mrr_queues_broader_no_send_revenue_modules(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+
+    def fake_snapshot(target_mrr_cents: int = 500_000, approved_preview_target: int = 110, assumed_conversion_rate: float = 0.015):
+        return {
+            "status": "gap",
+            "target_mrr_cents": target_mrr_cents,
+            "current_real_mrr_cents": 0,
+            "real_customer_count": 0,
+            "approved_previews": 120,
+            "ready_candidates": 120,
+            "active_scout_sources": 10,
+            "recent_scout_accepted_24h": 10,
+            "recent_audits_24h": 10,
+            "launch_readiness_state": "CHECKOUT_READY_NOT_WARMED",
+            "gaps": [{"code": "mrr_below_target", "severity": "critical", "token": token}],
+            "gap_count": 1,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+
+    monkeypatch.setattr(gap_module, "revenue_autonomy_gap_snapshot", fake_snapshot)
+    try:
+        result = create_revenue_autonomy_gap_actions(apply=True)
+        modules = {item.get("module") for item in result["actions"] if item["action"] == "self_build_queued"}
+        assert modules >= {
+            "conversion_pipeline",
+            "checkout_conversion",
+            "offer_economics",
+            "visual_conversion_quality",
+            "mailer_policy",
+            "daily_loop_readiness",
+        }
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+    finally:
+        _cleanup_token(token)
+
+
 def test_revenue_autonomy_gap_endpoint_and_agents_are_admin_gated(monkeypatch):
     token = uuid.uuid4().hex[:8]
     assert client.get("/admin/revenue-autonomy-gap").status_code == 401

@@ -6,12 +6,17 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .canary_batch_quality import canary_batch_quality
+from .canary_checkout_simulation import run_canary_checkout_simulation
 from .canary_operator_packet import build_canary_operator_packet
 from .canary_send_window_plan import build_canary_send_window_plan
 from .db import execute, fetch_all, fetch_one
+from .economics import latest_economics_summary, run_economics_audit
 from .launch_activation import launch_activation_readiness
 from .lead_supply_buildout import lead_supply_buildout
+from .mailer_control_room import mailer_policy_score
 from .p0 import mail_signal_summary, runtime_state_snapshot
+from .quality_plugins import latest_quality_summary, quality_plugin_manifest
+from .revenue_loop import prepare_revenue_loop
 
 
 def _safe_json(value: Any) -> Any:
@@ -261,6 +266,118 @@ def _safe_to_execute(allow_mail_blocked_no_send: bool = False) -> tuple[bool, li
     return not issues, issues
 
 
+def _visual_revenue_gate_snapshot() -> dict[str, Any]:
+    latest_visual = fetch_one(
+        """
+        SELECT decision, huanshu_status, target_url, score, created_at
+        FROM visual_qa_runs
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    latest_huanshu = fetch_one(
+        """
+        SELECT status, target, score, created_at
+        FROM quality_plugin_runs
+        WHERE tool = 'huanshu'
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    quality = latest_quality_summary()
+    blockers: list[str] = []
+    if not latest_visual:
+        blockers.append("missing_visual_qa_run")
+    elif latest_visual["decision"] not in {"PASS", "PASS_WITH_WARNINGS"}:
+        blockers.append("latest_visual_qa_not_pass")
+    if not latest_huanshu or latest_huanshu["status"] != "PASS":
+        blockers.append("latest_huanshu_not_pass")
+    if not quality.get("all_pass"):
+        blockers.append("secondary_design_plugins_not_all_pass")
+    return _safe_json(
+        {
+            "decision": "PASS_NO_SEND" if not blockers else "BLOCKED_REVIEW",
+            "blockers": blockers,
+            "canonical": "huanshu",
+            "manifest": quality_plugin_manifest(),
+            "latest_visual": dict(latest_visual or {}),
+            "latest_huanshu": dict(latest_huanshu or {}),
+            "quality_summary": quality,
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+            "raw_recipient_addresses_included": False,
+            "secrets_included": False,
+        }
+    )
+
+
+def _execute_no_send_module(module: str) -> dict[str, Any]:
+    if module == "lead_supply":
+        return lead_supply_buildout(
+            target_preview_count=110,
+            canary_count=20,
+            limit=120,
+            max_cycles=1,
+            max_seconds=45,
+            enrichment_limit=0,
+            apply=True,
+        )
+    if module == "scout_sources":
+        return lead_supply_buildout(
+            target_preview_count=110,
+            canary_count=20,
+            limit=80,
+            max_cycles=1,
+            max_seconds=45,
+            enrichment_limit=0,
+            apply=True,
+        )
+    if module == "conversion_pipeline":
+        return {
+            "operator_packet": build_canary_operator_packet(20, store=True, run_checkout_simulation=False),
+            "send_window": build_canary_send_window_plan(20, store=True),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+        }
+    if module == "checkout_conversion":
+        return {
+            "checkout_simulation": run_canary_checkout_simulation(cleanup_after=True),
+            "revenue_loop": prepare_revenue_loop(20, dry_run=True, prepare_campaigns=False, prepare_customers=True),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+        }
+    if module == "offer_economics":
+        return {
+            "economics_audit": run_economics_audit(),
+            "summary": latest_economics_summary(),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+        }
+    if module == "visual_conversion_quality":
+        return _visual_revenue_gate_snapshot()
+    if module == "mailer_policy":
+        return {
+            "policy": mailer_policy_score(),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+        }
+    if module == "daily_loop_readiness":
+        return {
+            "runtime": runtime_state_snapshot(),
+            "operator_packet": build_canary_operator_packet(20, store=True, run_checkout_simulation=False),
+            "send_window": build_canary_send_window_plan(20, store=True),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+        }
+    raise ValueError("unsupported_self_development_module")
+
+
 def _execute_safe_build_items(limit: int) -> dict[str, Any]:
     allowed, blockers = _safe_to_execute(allow_mail_blocked_no_send=True)
     if not allowed:
@@ -270,7 +387,16 @@ def _execute_safe_build_items(limit: int) -> dict[str, Any]:
         SELECT id, module, priority, title, acceptance_json, created_at
         FROM self_build_queue
         WHERE status = 'queued'
-          AND module IN ('lead_supply', 'conversion_pipeline', 'scout_sources')
+          AND module IN (
+            'lead_supply',
+            'conversion_pipeline',
+            'scout_sources',
+            'checkout_conversion',
+            'offer_economics',
+            'visual_conversion_quality',
+            'mailer_policy',
+            'daily_loop_readiness'
+          )
         ORDER BY
           CASE priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 ELSE 3 END,
           created_at ASC
@@ -282,33 +408,7 @@ def _execute_safe_build_items(limit: int) -> dict[str, Any]:
     for row in rows:
         module = str(row["module"])
         try:
-            if module == "lead_supply":
-                result = lead_supply_buildout(
-                    target_preview_count=110,
-                    canary_count=20,
-                    limit=120,
-                    max_cycles=1,
-                    max_seconds=75,
-                    enrichment_limit=2,
-                    apply=True,
-                )
-            elif module == "conversion_pipeline":
-                result = {
-                    "operator_packet": build_canary_operator_packet(20, store=True, run_checkout_simulation=False),
-                    "send_window": build_canary_send_window_plan(20, store=True),
-                    "send_mail": False,
-                    "live_outreach_allowed": False,
-                }
-            else:
-                result = lead_supply_buildout(
-                    target_preview_count=110,
-                    canary_count=20,
-                    limit=80,
-                    max_cycles=1,
-                    max_seconds=60,
-                    enrichment_limit=0,
-                    apply=True,
-                )
+            result = _execute_no_send_module(module)
             safe_result = _safe_json(result)
             execute(
                 """

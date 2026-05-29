@@ -277,7 +277,8 @@ def create_revenue_autonomy_gap_actions(
     for gap in snapshot["gaps"]:
         code = str(gap["code"])
         priority = "P0" if gap.get("severity") == "critical" else "P1" if gap.get("severity") == "high" else "P2"
-        title = f"Close revenue autonomy gap: {code.replace('_', ' ')}"
+        title_suffix = f": {gap.get('token')}" if gap.get("token") else ""
+        title = f"Close revenue autonomy gap: {code.replace('_', ' ')}{title_suffix}"
         if code in {"approved_preview_stockpile_below_near_term_target", "ready_candidate_pipeline_below_target"}:
             build = _open_build_once(
                 "lead_supply",
@@ -305,18 +306,45 @@ def create_revenue_autonomy_gap_actions(
             if build:
                 actions.append({"action": "self_build_queued", "code": code, "id": str(build["id"])})
         elif code == "mrr_below_target":
-            build = _open_build_once(
-                "conversion_pipeline",
-                priority,
-                title,
-                [
+            no_send_modules = [
+                (
+                    "conversion_pipeline",
                     "Keep checkout, audit pages, previews, onboarding, and fix request creation ready for first paid conversion.",
-                    "Do not enable live outreach until launch gates and owner approval pass.",
-                    "Track real MRR separately from QA/test payments.",
-                ],
-            )
-            if build:
-                actions.append({"action": "self_build_queued", "code": code, "id": str(build["id"])})
+                ),
+                (
+                    "checkout_conversion",
+                    "Continuously simulate the Paddle paid journey in QA mode and prove customer/payment/fix-request state is created.",
+                ),
+                (
+                    "offer_economics",
+                    "Recheck product prices, margin floor, and offer mix before campaign activation.",
+                ),
+                (
+                    "visual_conversion_quality",
+                    "Require Huanshu plus secondary design plugin evidence for landing, audit, checkout, admin, customer, and email surfaces.",
+                ),
+                (
+                    "mailer_policy",
+                    "Keep mail policy scoring current while sends are blocked by warmup or signal windows.",
+                ),
+                (
+                    "daily_loop_readiness",
+                    "Prepare the no-send daily operating packet so the system can activate immediately after clean gates pass.",
+                ),
+            ]
+            for module, acceptance in no_send_modules:
+                build = _open_build_once(
+                    module,
+                    priority,
+                    f"{title}: {module}",
+                    [
+                        acceptance,
+                        "Do not enable live outreach or warmup sends from this self-build item.",
+                        "Store redacted evidence only and keep real revenue separated from QA/test artifacts.",
+                    ],
+                )
+                if build:
+                    actions.append({"action": "self_build_queued", "code": code, "module": module, "id": str(build["id"])})
         else:
             fix = _open_fix_once("revenue_autonomy_gap", priority, title, {"gap": gap, **safe_evidence})
             if fix:
