@@ -66,12 +66,46 @@ def test_canary_bounce_recovery_does_not_count_bounced_rows_as_active_blocked():
     )["id"]
     try:
         result = canary_bounce_recovery(1, apply_pause=False, store=False)
-        assert result["blocked_outreach_row_count"] == 0
         assert result["bounced_outreach_row_count"] >= 1
-        assert "blocked_outreach_rows_present" not in result["blockers"]
+        assert message_id not in {row["outreach_message_id"] for row in result["blocked_outreach_sample"]}
+        if result["bounce_or_dsn_signal_count"] == 0:
+            assert "blocked_outreach_rows_present" not in result["blockers"]
     finally:
         execute("DELETE FROM outreach_messages WHERE id = %s", (message_id,))
         execute("DELETE FROM leads WHERE id = %s", (lead_id,))
+
+
+def test_canary_bounce_recovery_does_not_pause_for_stale_transport_blocks_without_signals():
+    token = uuid.uuid4().hex
+    previous_pause = runtime_control_enabled("pause_outreach")
+    lead_id = execute(
+        """
+        INSERT INTO leads(email, status, score, source)
+        VALUES (%s, 'qualified', 90, 'p112_stale_block_test')
+        RETURNING id
+        """,
+        (f"lead-{token}@hygiene-{token}.com",),
+    )["id"]
+    message_id = execute(
+        """
+        INSERT INTO outreach_messages(lead_id, mailbox, subject, body, status)
+        VALUES (%s, 'audit@voiddorescue.com', 'Diagnostic', 'body', 'transport_blocked')
+        RETURNING id
+        """,
+        (lead_id,),
+    )["id"]
+    try:
+        result = canary_bounce_recovery(1, apply_pause=True, store=False)
+        assert result["bounce_or_dsn_signal_count"] == 0
+        assert result["blocked_outreach_row_count"] >= 1
+        assert result["decision"] == "CLEAN_NO_BOUNCE_RECOVERY_NEEDED"
+        assert "blocked_outreach_rows_present" not in result["blockers"]
+        assert result["pause_outreach_applied"] is False
+        assert runtime_control_enabled("pause_outreach") is previous_pause
+    finally:
+        execute("DELETE FROM outreach_messages WHERE id = %s", (message_id,))
+        execute("DELETE FROM leads WHERE id = %s", (lead_id,))
+        set_runtime_control("pause_outreach", previous_pause, "p112_test_cleanup", "restore")
 
 
 def test_canary_bounce_recovery_endpoint_requires_admin():

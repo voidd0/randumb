@@ -464,7 +464,11 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
         blockers.append("recent_bounce_or_dsn")
     if len(linked_rows) < len(signal_keys):
         blockers.append("unlinked_bounce_or_dsn_signals")
-    if blocked_rows:
+    # Stale transport/preflight blocks are handled by transport-block hygiene.
+    # Bounce recovery should pause outreach only when there is current Rescue
+    # bounce/DSN evidence to recover from; otherwise old blocked rows can
+    # incorrectly re-pause a clean live canary.
+    if blocked_rows and signals:
         blockers.append("blocked_outreach_rows_present")
 
     pause_applied = False
