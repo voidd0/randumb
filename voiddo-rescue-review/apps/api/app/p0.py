@@ -14,6 +14,7 @@ import subprocess
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
+from email.header import decode_header, make_header
 from email.message import EmailMessage
 from email.utils import make_msgid, parseaddr
 from pathlib import Path
@@ -953,19 +954,32 @@ def persist_inbound_message(message: dict[str, Any]) -> dict[str, Any]:
     return {"stored": True, "duplicate": False, "classification": classification, "human_review_required": human}
 
 
-def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = "", auth_results: str = "") -> dict[str, Any]:
-    settings = get_settings()
-    owner_email = (settings.owner_command_email or OWNER_EMAIL_FALLBACK).lower()
-    studio_owner_command_emails = getattr(settings, "studio_owner_command_emails", "")
-    owner_emails = {
-        item.strip().lower()
-        for item in ",".join([owner_email, studio_owner_command_emails or ""]).split(",")
-        if item.strip()
-    }
-    sender_email = parseaddr(sender)[1].lower()
-    reply_email = parseaddr(reply_to)[1].lower() if reply_to else sender_email
-    text = f"{subject}\n{body}".strip()
-    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+def _decode_mail_header(value: str) -> str:
+    try:
+        return str(make_header(decode_header(value or "")))
+    except Exception:
+        return value or ""
+
+
+def _owner_command_candidate_lines(subject: str, body: str) -> list[str]:
+    decoded_subject = _decode_mail_header(subject)
+    candidates: list[str] = []
+    for source in [body or "", decoded_subject]:
+        for raw_line in str(source or "").splitlines():
+            line = re.sub(r"\s+", " ", raw_line.strip())
+            if not line:
+                continue
+            lowered = line.lower()
+            if line.startswith(">") or lowered.startswith(("on ", "from:", "sent:", "to:", "subject:")):
+                continue
+            if lowered in {"--", "sent from my iphone", "sent from my mobile"}:
+                continue
+            candidates.append(line)
+    return candidates or ([decoded_subject.strip()] if decoded_subject.strip() else [])
+
+
+def _canonical_owner_command(candidate: str, full_text: str) -> tuple[str, dict[str, Any], str]:
+    first_line = candidate.strip()
     normalized = re.sub(r"\s+", " ", first_line.upper())
     args: dict[str, Any] = {}
     command = normalized
@@ -989,6 +1003,8 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "ПОКАЖИ СИГНАЛЫ ПОЧТЫ": "SHOW MAIL SIGNALS",
         "ПОКАЖИ СТУДИО ПОЧТУ": "SHOW STUDIO MAIL",
         "ПОКАЖИ ОСНОВНУЮ ПОЧТУ": "SHOW STUDIO MAIL",
+        "ПОКАЖИ ТРИГГЕРЫ": "SHOW OWNER TRIGGERS",
+        "ПОКАЖИ ПОЧТОВЫЕ ТРИГГЕРЫ": "SHOW OWNER TRIGGERS",
         "ПОКАЖИ ОТВЕТЫ": "SHOW REPLIES",
         "ПОКАЖИ ПЛАТЕЖИ": "SHOW PAYMENTS",
         "ПОКАЖИ РУЧНУЮ ПРОВЕРКУ": "SHOW HUMAN REVIEW",
@@ -1012,9 +1028,67 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         "ЗАПУСТИ ВИЗУАЛ QA": "RUN VISUAL QA",
         "ПОДГОТОВЬ ПРОГРЕВ": "PREPARE WARMUP",
         "ВОЗОБНОВИ ПРОГРЕВ": "RESUME WARMUP",
+        "ДЕЛАЙ ДЕНЬГИ": "RUN REVENUE LOOP",
+        "НУЖНЫ ДЕНЬГИ": "RUN REVENUE LOOP",
+        "ПОЛНАЯ МОЩНОСТЬ": "RUN REVENUE LOOP",
+        "ПОЛНУЮ МОЩЬ": "RUN REVENUE LOOP",
     }
     if normalized in russian_aliases:
         command = russian_aliases[normalized]
+
+    command_prefixes = [
+        "SHOW TRANSPORT BLOCK HYGIENE",
+        "SHOW CANARY BOUNCE RECOVERY",
+        "RUN LEAD SUPPLY BUILDOUT",
+        "SHOW CANARY CLEAN WINDOW",
+        "RUN DELIVERABILITY TEST",
+        "SHOW WARMUP CALENDAR",
+        "SHOW OWNER TRIGGERS",
+        "ROLLBACK LIVE OUTREACH",
+        "PREPARE LIVE CANARY",
+        "RUN LAUNCH REHEARSAL",
+        "SHOW LAUNCH RUNBOOK",
+        "SHOW DELIVERABILITY",
+        "SHOW HUMAN REVIEW",
+        "PAUSE AUTO REPLIES",
+        "RUN REVENUE LOOP",
+        "SHOW MAIL SIGNALS",
+        "SHOW LEAD SUPPLY",
+        "SHOW CANARY SCALE",
+        "SHOW CANARY RESUME",
+        "UNPAUSE OUTREACH",
+        "PREPARE WARMUP",
+        "START WARMUP",
+        "RESUME WARMUP",
+        "SHOW STUDIO MAIL",
+        "SHOW LIVE QUEUE",
+        "SHOW PAYMENTS",
+        "SHOW REPLIES",
+        "RUN VISUAL QA",
+        "RUN MAIL QA",
+        "PAUSE OUTREACH",
+        "PAUSE WARMUP",
+        "PAUSE SCANNER",
+        "SEND OUTREACH",
+        "REPORT TODAY",
+        "PAUSE ALL",
+        "RUN SHELL",
+        "EXECUTE",
+        "STATUS",
+    ]
+    if command == normalized:
+        for prefix in command_prefixes:
+            if normalized == prefix or normalized.startswith(prefix + " "):
+                command = prefix
+                break
+
+    lowered_full = full_text.lower()
+    money_markers = ["нужны деньги", "денбги", "деньги", "полную мощ", "полная мощ", "заработ", "автономк"]
+    trigger_markers = ["триггер", "мейл", "почт"]
+    if command == normalized and any(marker in lowered_full for marker in money_markers):
+        command = "RUN REVENUE LOOP"
+    elif command == normalized and any(marker in lowered_full for marker in trigger_markers) and any(marker in lowered_full for marker in ["почему", "не исполня", "что с"]):
+        command = "SHOW OWNER TRIGGERS"
 
     if normalized.startswith("PREPARE LEADS"):
         command = "PREPARE LEADS"
@@ -1027,14 +1101,57 @@ def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = ""
         if "день" in args:
             args["day"] = args.pop("день")
 
+    return command, args, normalized
+
+
+def parse_owner_command(sender: str, subject: str, body: str, reply_to: str = "", auth_results: str = "") -> dict[str, Any]:
+    settings = get_settings()
+    owner_email = (settings.owner_command_email or OWNER_EMAIL_FALLBACK).lower()
+    studio_owner_command_emails = getattr(settings, "studio_owner_command_emails", "")
+    owner_emails = {
+        item.strip().lower()
+        for item in ",".join([owner_email, studio_owner_command_emails or ""]).split(",")
+        if item.strip()
+    }
+    sender_email = parseaddr(_decode_mail_header(sender))[1].lower()
+    reply_email = parseaddr(_decode_mail_header(reply_to))[1].lower() if reply_to else sender_email
+    decoded_subject = _decode_mail_header(subject)
+    full_text = f"{decoded_subject}\n{body or ''}".strip()
+    known_commands = {
+        "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",
+        "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
+        "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE", "SHOW LAUNCH RUNBOOK", "ROLLBACK LIVE OUTREACH",
+        "SHOW LEAD SUPPLY", "SHOW CANARY SCALE", "SHOW CANARY BOUNCE RECOVERY", "SHOW STUDIO MAIL", "SHOW OWNER TRIGGERS",
+        "SHOW CANARY RESUME", "SHOW CANARY CLEAN WINDOW", "SHOW TRANSPORT BLOCK HYGIENE", "RUN VISUAL QA", "RUN MAIL QA",
+        "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP",
+        "RUN LEAD SUPPLY BUILDOUT", "RUN LAUNCH REHEARSAL", "RUN REVENUE LOOP", "SEND OUTREACH", "UNPAUSE OUTREACH",
+        "RUN SHELL", "EXECUTE",
+    }
+    command = ""
+    args: dict[str, Any] = {}
+    normalized = ""
+    candidates = _owner_command_candidate_lines(decoded_subject, body or "")
+    for candidate in candidates:
+        candidate_command, candidate_args, candidate_normalized = _canonical_owner_command(candidate, full_text)
+        if candidate_command in known_commands or candidate_command == "PREPARE LEADS":
+            command, args, normalized = candidate_command, candidate_args, candidate_normalized
+            break
+    subject_normalized = re.sub(r"\s+", " ", decoded_subject.upper().strip())
+    if not command and re.match(r"^(RE|FW|FWD):\s*VØIDDO RESCUE DAILY AUTONOMOUS REPORT", subject_normalized):
+        command, args, normalized = "NO_ACTION_OWNER_REPLY", {}, subject_normalized
+    elif not command:
+        command, args, normalized = _canonical_owner_command(candidates[0] if candidates else decoded_subject, full_text)
+    if command not in known_commands and command == normalized and re.match(r"^(RE|FW|FWD):\s*VØIDDO RESCUE DAILY AUTONOMOUS REPORT", subject_normalized):
+        command = "NO_ACTION_OWNER_REPLY"
+
     safe = {
         "STATUS", "REPORT TODAY", "PAUSE OUTREACH", "PAUSE WARMUP", "PAUSE SCANNER", "PAUSE AUTO REPLIES", "PAUSE ALL",
         "SHOW HUMAN REVIEW", "SHOW PAYMENTS", "SHOW REPLIES", "SHOW MAIL QA", "SHOW DELIVERABILITY", "SHOW WARMUP",
         "SHOW WARMUP CALENDAR", "SHOW MAIL SIGNALS", "SHOW LIVE QUEUE", "SHOW LAUNCH RUNBOOK", "ROLLBACK LIVE OUTREACH",
-        "SHOW LEAD SUPPLY", "SHOW CANARY SCALE", "SHOW CANARY BOUNCE RECOVERY", "SHOW STUDIO MAIL",
-        "SHOW CANARY RESUME", "SHOW CANARY CLEAN WINDOW", "SHOW TRANSPORT BLOCK HYGIENE",
+        "SHOW LEAD SUPPLY", "SHOW CANARY SCALE", "SHOW CANARY BOUNCE RECOVERY", "SHOW STUDIO MAIL", "SHOW OWNER TRIGGERS",
+        "SHOW CANARY RESUME", "SHOW CANARY CLEAN WINDOW", "SHOW TRANSPORT BLOCK HYGIENE", "NO_ACTION_OWNER_REPLY",
     }
-    medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP", "RUN LEAD SUPPLY BUILDOUT"}
+    medium = {"RUN VISUAL QA", "RUN MAIL QA", "RUN DELIVERABILITY TEST", "PREPARE WARMUP", "PREPARE LEADS", "PREPARE LIVE CANARY", "START WARMUP", "RESUME WARMUP", "RUN LEAD SUPPLY BUILDOUT", "RUN REVENUE LOOP"}
     medium.add("RUN LAUNCH REHEARSAL")
     high = {"SEND OUTREACH", "START WARMUP", "UNPAUSE OUTREACH", "RUN SHELL", "EXECUTE"}
     if command in safe:
@@ -1852,6 +1969,38 @@ def resume_warmup_gate() -> dict[str, Any]:
     return {"ok": allowed, "action": "resume_warmup", "allowed": allowed, "checks": checks}
 
 
+def owner_command_trigger_status(limit: int = 10) -> dict[str, Any]:
+    safe_limit = max(1, min(int(limit or 10), 50))
+    rows = fetch_all(
+        """
+        SELECT command, risk_level, status, result_json, created_at
+        FROM owner_commands
+        ORDER BY created_at DESC
+        LIMIT %s
+        """,
+        (safe_limit,),
+    )
+    return {
+        "count": len(rows),
+        "commands": [
+            {
+                "command": row["command"],
+                "risk_level": row["risk_level"],
+                "status": row["status"],
+                "action": (row.get("result_json") or {}).get("action") if isinstance(row.get("result_json"), dict) else None,
+                "reason": (row.get("result_json") or {}).get("reason") if isinstance(row.get("result_json"), dict) else None,
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ],
+        "send_mail": False,
+        "smtp_called": False,
+        "live_outreach_allowed": False,
+        "raw_private_addresses_included": False,
+        "secrets_included": False,
+    }
+
+
 def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
     command = parsed["command"]
     risk = parsed["risk_level"]
@@ -1939,6 +2088,30 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
             "health": studio_mail_monitor_health(15),
             "latest_messages": latest_studio_mail_messages(10),
             "latest_runs": latest_studio_mail_runs(5),
+        }
+    elif command == "SHOW OWNER TRIGGERS":
+        from .studio_mail_monitor import latest_studio_mail_messages, latest_studio_mail_runs, studio_mail_monitor_health
+
+        result = {
+            "ok": True,
+            "action": "owner_trigger_status",
+            "studio_mail_health": studio_mail_monitor_health(15),
+            "latest_owner_commands": owner_command_trigger_status(10),
+            "latest_studio_mail_runs": latest_studio_mail_runs(5),
+            "latest_studio_messages": latest_studio_mail_messages(5),
+            "runtime_state": runtime_state_snapshot(),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
+        }
+    elif command == "NO_ACTION_OWNER_REPLY":
+        result = {
+            "ok": True,
+            "action": "no_action_owner_reply",
+            "reason": "reply_to_daily_report_without_parseable_command",
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
         }
     elif command == "SHOW LIVE QUEUE":
         from .outreach_live_queue import latest_outreach_send_runs, live_outreach_queue_candidates
@@ -2042,6 +2215,25 @@ def execute_owner_command(parsed: dict[str, Any]) -> dict[str, Any]:
             "ok": True,
             "action": "lead_supply_buildout",
             "supply": lead_supply_buildout(100, 20, 120, max_cycles=1, max_seconds=90, enrichment_limit=0, apply=True),
+        }
+    elif command == "RUN REVENUE LOOP":
+        from .lead_supply_buildout import lead_supply_buildout
+        from .launch_rehearsal import run_launch_rehearsal
+        from .mail_send_compliance import mail_send_compliance_snapshot
+        from .revenue_loop import prepare_revenue_loop, revenue_loop_snapshot
+
+        result = {
+            "ok": True,
+            "action": "revenue_loop_no_send",
+            "runtime_state": runtime_state_snapshot(),
+            "mail_send_compliance": mail_send_compliance_snapshot(),
+            "lead_supply": lead_supply_buildout(100, 20, 120, max_cycles=1, max_seconds=20, enrichment_limit=0, apply=True),
+            "revenue_loop": prepare_revenue_loop(25, dry_run=True),
+            "snapshot": revenue_loop_snapshot(25),
+            "launch_rehearsal": run_launch_rehearsal(20, apply_pause=False),
+            "send_mail": False,
+            "smtp_called": False,
+            "live_outreach_allowed": False,
         }
     elif command == "RUN LAUNCH REHEARSAL":
         from .launch_rehearsal import run_launch_rehearsal

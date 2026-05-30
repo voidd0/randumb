@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from email.header import decode_header, make_header
 from email import message_from_bytes
 from email.message import Message
 import imaplib
@@ -43,6 +44,13 @@ def _extract_text(msg: Message) -> str:
     return payload.decode(msg.get_content_charset() or "utf-8", errors="replace")
 
 
+def _decode_header_value(value: str) -> str:
+    try:
+        return str(make_header(decode_header(value or "")))
+    except Exception:
+        return value or ""
+
+
 def _read_password(username: str) -> str:
     password = os.environ.get("STUDIO_MAIL_PASSWORD", "")
     if password:
@@ -69,12 +77,12 @@ def _message_payload(mailbox: str, uid: str, raw: bytes) -> dict[str, Any]:
         "mailbox": mailbox,
         "uid": uid,
         "message_id": message_id,
-        "sender": str(msg.get("From", "")),
-        "reply_to": str(msg.get("Reply-To", "")),
-        "to": str(msg.get("To", "")),
-        "delivered_to": str(msg.get("Delivered-To", "")),
-        "x_original_to": str(msg.get("X-Original-To", "")),
-        "subject": str(msg.get("Subject", "")),
+        "sender": _decode_header_value(str(msg.get("From", ""))),
+        "reply_to": _decode_header_value(str(msg.get("Reply-To", ""))),
+        "to": _decode_header_value(str(msg.get("To", ""))),
+        "delivered_to": _decode_header_value(str(msg.get("Delivered-To", ""))),
+        "x_original_to": _decode_header_value(str(msg.get("X-Original-To", ""))),
+        "subject": _decode_header_value(str(msg.get("Subject", ""))),
         "body": _extract_text(msg)[:8000],
         "authentication_results": str(msg.get("Authentication-Results", "")),
     }

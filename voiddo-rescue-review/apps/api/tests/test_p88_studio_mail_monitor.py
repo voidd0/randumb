@@ -94,6 +94,74 @@ def test_studio_mail_owner_command_accepts_russian_alias(monkeypatch):
         get_settings.cache_clear()
 
 
+def test_owner_command_decodes_report_reply_subject_and_uses_body_command(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    owner = f"owner-{token}@example.test"
+    monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)
+    get_settings.cache_clear()
+    try:
+        encoded_subject = "=?UTF-8?Q?RE=3A_V=C3=B8IDDO_RESCUE_DAILY_AUTONOMOUS_REPORT?="
+        result = ingest_studio_mail_messages([_message(token, owner, encoded_subject, f"STATUS\n\n{token}")])
+        assert result["owner_command_count"] == 1
+        command = fetch_one("SELECT command, risk_level, status FROM owner_commands WHERE message_id = %s", (f"<msg-{token}@example.test>",))
+        assert command["command"] == "STATUS"
+        assert command["risk_level"] == "SAFE_AUTO"
+        assert command["status"] == "executed"
+    finally:
+        _cleanup(token)
+        get_settings.cache_clear()
+
+
+def test_owner_report_reply_without_body_command_is_noop_not_high_risk(monkeypatch):
+    token = uuid.uuid4().hex[:8]
+    owner = f"owner-{token}@example.test"
+    monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)
+    get_settings.cache_clear()
+    try:
+        encoded_subject = "=?UTF-8?Q?RE=3A_V=C3=B8IDDO_RESCUE_DAILY_AUTONOMOUS_REPORT?="
+        result = ingest_studio_mail_messages([_message(token, owner, encoded_subject, f"Thanks {token}")])
+        assert result["owner_command_count"] == 1
+        command = fetch_one("SELECT command, risk_level, status, result_json FROM owner_commands WHERE message_id = %s", (f"<msg-{token}@example.test>",))
+        assert command["command"] == "NO_ACTION_OWNER_REPLY"
+        assert command["risk_level"] == "SAFE_AUTO"
+        assert command["status"] == "executed"
+        assert command["result_json"]["action"] == "no_action_owner_reply"
+    finally:
+        _cleanup(token)
+        get_settings.cache_clear()
+
+
+def test_owner_russian_money_intent_maps_to_no_send_revenue_loop(monkeypatch):
+    owner = "owner-money-intent@example.test"
+    monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)
+    get_settings.cache_clear()
+    try:
+        parsed = parse_owner_command(owner, "что с автономкой", "нужны деньги, вперед на полную мощь", owner, "dkim=pass")
+        assert parsed["command"] == "RUN REVENUE LOOP"
+        assert parsed["risk_level"] == "MEDIUM_RISK"
+        assert parsed["status"] == "prepared"
+    finally:
+        get_settings.cache_clear()
+
+
+def test_owner_command_show_triggers_is_safe_auto_and_redacted(monkeypatch):
+    owner = "owner-triggers@example.test"
+    monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)
+    get_settings.cache_clear()
+    try:
+        parsed = parse_owner_command(owner, "почему мои мейлы не исполняются как триггеры", "", owner, "dkim=pass")
+        assert parsed["command"] == "SHOW OWNER TRIGGERS"
+        assert parsed["risk_level"] == "SAFE_AUTO"
+        result = execute_owner_command(parsed)
+        assert result["ok"] is True
+        assert result["action"] == "owner_trigger_status"
+        assert result["send_mail"] is False
+        assert result["live_outreach_allowed"] is False
+        assert owner not in str(result)
+    finally:
+        get_settings.cache_clear()
+
+
 def test_owner_command_show_studio_mail_is_safe_auto_and_redacted(monkeypatch):
     owner = "owner-studio-mail@example.test"
     monkeypatch.setenv("OWNER_COMMAND_EMAIL", owner)

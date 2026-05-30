@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from email import message_from_bytes
+from email.header import decode_header, make_header
 from email.message import EmailMessage
 from email.utils import parseaddr
 import httpx
@@ -122,6 +123,13 @@ def extract_text(msg) -> str:
     return payload.decode(msg.get_content_charset() or "utf-8", errors="replace")
 
 
+def decode_header_value(value: str) -> str:
+    try:
+        return str(make_header(decode_header(value or "")))
+    except Exception:
+        return value or ""
+
+
 def read_unseen(mailbox: str, username: str, password: str, limit: int = 20) -> list[InboxMessage]:
     host = os.environ.get("IMAP_HOST", "mail.voiddorescue.com")
     port = int(os.environ.get("IMAP_PORT", "993"))
@@ -139,9 +147,9 @@ def read_unseen(mailbox: str, username: str, password: str, limit: int = 20) -> 
                 continue
             raw = fetched[0][1]
             msg = message_from_bytes(raw)
-            subject = str(msg.get("Subject", ""))
-            sender = parseaddr(str(msg.get("From", "")))[1]
-            reply_to = parseaddr(str(msg.get("Reply-To", "")))[1]
+            subject = decode_header_value(str(msg.get("Subject", "")))
+            sender = parseaddr(decode_header_value(str(msg.get("From", ""))))[1]
+            reply_to = parseaddr(decode_header_value(str(msg.get("Reply-To", ""))))[1]
             message_id = str(msg.get("Message-ID", "")) or uid
             authentication_results = str(msg.get("Authentication-Results", ""))
             body = extract_text(msg)
