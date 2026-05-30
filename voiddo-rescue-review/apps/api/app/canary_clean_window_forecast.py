@@ -6,7 +6,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .db import execute, fetch_one
-from .p0 import json_safe, mail_signal_summary, runtime_control_enabled
+from .p0 import RESCUE_MAIL_SIGNAL_SCOPE_SQL, json_safe, mail_signal_summary, runtime_control_enabled
 
 
 SAFE_FLAGS = {
@@ -37,13 +37,14 @@ def _iso(value: Any) -> str | None:
 def canary_clean_window_forecast(window_hours: int = 24, store: bool = True) -> dict[str, Any]:
     hours = max(1, min(int(window_hours or 24), 168))
     row = fetch_one(
-        """
+        f"""
         SELECT now() AS now_at,
                max(created_at) AS last_signal_at,
                count(*) AS signal_count
         FROM mail_signals
         WHERE signal_type = ANY(%s)
           AND created_at >= now() - (%s || ' hours')::interval
+          {RESCUE_MAIL_SIGNAL_SCOPE_SQL}
         """,
         (list(BLOCKING_SIGNALS), hours),
     ) or {}
@@ -97,4 +98,3 @@ def canary_clean_window_forecast(window_hours: int = 24, store: bool = True) -> 
             ("completed" if clean else "blocked", Jsonb(result)),
         )
     return result
-

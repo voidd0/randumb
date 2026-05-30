@@ -52,70 +52,81 @@ def canary_batch_quality(limit: int = 20, store: bool = True) -> dict[str, Any]:
     safe_limit = max(1, min(int(limit or 20), 100))
     rows = fetch_all(
         """
-        SELECT om.id AS outreach_message_id,
-               cl.id AS campaign_lead_id,
-               cl.campaign_id,
-               c.country, c.language, c.niche, c.offer_key,
-               b.name AS business_name,
-               b.domain,
-               b.website_url,
-               b.status AS business_status,
-               a.public_slug,
-               lower(split_part(l.email, '@', 2)) AS recipient_domain,
-               latest_review.action AS review_action,
-               latest_preflight.decision AS preflight_decision,
-               latest_preflight.policy_version AS preflight_policy_version,
-               om.body, om.html_body, om.status AS message_status,
-               COALESCE(ls.final_score, cl.score, l.score, 0) AS lead_score,
-               latest_strength.final_score AS audit_strength_score
-        FROM outreach_messages om
-        JOIN leads l ON l.id = om.lead_id
-        JOIN businesses b ON b.id = l.business_id
-        JOIN audits a ON a.id = om.audit_id
-        JOIN campaign_leads cl ON cl.lead_id = om.lead_id AND cl.audit_id = om.audit_id AND cl.status = 'preview'
-        JOIN campaigns c ON c.id = cl.campaign_id
-        LEFT JOIN LATERAL (
-          SELECT action
-          FROM campaign_preview_reviews
-          WHERE campaign_lead_id = cl.id
-          ORDER BY created_at DESC
-          LIMIT 1
-        ) latest_review ON true
-        LEFT JOIN LATERAL (
-          SELECT decision, COALESCE(result_json->>'policy_version', '') AS policy_version
-          FROM campaign_preflight_runs
-          WHERE campaign_id = c.id
-          ORDER BY created_at DESC
-          LIMIT 1
-        ) latest_preflight ON true
-        LEFT JOIN LATERAL (
-          SELECT final_score FROM lead_scores WHERE lead_id = l.id ORDER BY created_at DESC LIMIT 1
-        ) ls ON true
-        LEFT JOIN LATERAL (
-          SELECT final_score FROM audit_strength_scores WHERE audit_id = a.id ORDER BY created_at DESC LIMIT 1
-        ) latest_strength ON true
-        WHERE om.status = 'preview'
-          AND upper(COALESCE(c.country, '')) !~ %s
-          AND lower(COALESCE(c.niche, '')) NOT IN ('government', 'banks', 'bank', 'hospital', 'hospitals', 'gambling', 'adult', 'crypto', 'political')
-          AND regexp_replace(lower(COALESCE(b.domain, a.domain, '')), '^www\\.', '') <> ALL(%s)
-          AND NOT (
-                lower(COALESCE(b.name, '') || ' ' || COALESCE(b.domain, '') || ' ' || COALESCE(b.website_url, '') || ' ' || COALESCE(c.niche, ''))
-                LIKE ANY(%s)
-          )
-          AND lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
-          AND lower(COALESCE(l.email, '')) NOT LIKE '%%.example.test'
-          AND lower(COALESCE(b.domain, '')) NOT IN ('example.com', 'localhost')
-          AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
-          AND NOT EXISTS (
-                SELECT 1 FROM suppression_list s
-                WHERE lower(s.email) = lower(l.email)
-                   OR lower(COALESCE(s.domain, '')) = lower(COALESCE(b.domain, ''))
-                   OR lower(COALESCE(s.domain, '')) = lower(split_part(l.email, '@', 2))
-          )
-        ORDER BY om.created_at DESC, om.id DESC
+        WITH candidates AS (
+          SELECT DISTINCT ON (om.id)
+                 om.id AS outreach_message_id,
+                 cl.id AS campaign_lead_id,
+                 cl.campaign_id,
+                 c.country, c.language, c.niche, c.offer_key,
+                 b.name AS business_name,
+                 b.domain,
+                 b.website_url,
+                 b.status AS business_status,
+                 a.public_slug,
+                 lower(split_part(l.email, '@', 2)) AS recipient_domain,
+                 latest_review.action AS review_action,
+                 latest_preflight.decision AS preflight_decision,
+                 latest_preflight.policy_version AS preflight_policy_version,
+                 om.body, om.html_body, om.status AS message_status,
+                 COALESCE(ls.final_score, cl.score, l.score, 0) AS lead_score,
+                 latest_strength.final_score AS audit_strength_score,
+                 om.created_at
+          FROM outreach_messages om
+          JOIN leads l ON l.id = om.lead_id
+          JOIN businesses b ON b.id = l.business_id
+          JOIN audits a ON a.id = om.audit_id
+          JOIN campaign_leads cl ON cl.lead_id = om.lead_id AND cl.audit_id = om.audit_id AND cl.status = 'preview'
+          JOIN campaigns c ON c.id = cl.campaign_id
+          JOIN LATERAL (
+            SELECT action
+            FROM campaign_preview_reviews
+            WHERE campaign_lead_id = cl.id
+            ORDER BY created_at DESC
+            LIMIT 1
+          ) latest_review ON true
+          JOIN LATERAL (
+            SELECT decision, COALESCE(result_json->>'policy_version', '') AS policy_version
+            FROM campaign_preflight_runs
+            WHERE campaign_id = c.id
+            ORDER BY created_at DESC
+            LIMIT 1
+          ) latest_preflight ON true
+          LEFT JOIN LATERAL (
+            SELECT final_score FROM lead_scores WHERE lead_id = l.id ORDER BY created_at DESC LIMIT 1
+          ) ls ON true
+          LEFT JOIN LATERAL (
+            SELECT final_score FROM audit_strength_scores WHERE audit_id = a.id ORDER BY created_at DESC LIMIT 1
+          ) latest_strength ON true
+          WHERE om.status = 'preview'
+            AND latest_review.action = 'approved'
+            AND latest_preflight.decision = 'PASS_NO_SEND_PREFLIGHT'
+            AND latest_preflight.policy_version = %s
+            AND upper(COALESCE(c.country, '')) !~ %s
+            AND lower(COALESCE(c.niche, '')) NOT IN ('government', 'banks', 'bank', 'hospital', 'hospitals', 'gambling', 'adult', 'crypto', 'political')
+            AND regexp_replace(lower(COALESCE(b.domain, a.domain, '')), '^www\\.', '') <> ALL(%s)
+            AND NOT (
+                  lower(COALESCE(b.name, '') || ' ' || COALESCE(b.domain, '') || ' ' || COALESCE(b.website_url, '') || ' ' || COALESCE(c.niche, ''))
+                  LIKE ANY(%s)
+            )
+            AND lower(COALESCE(b.domain, '')) NOT LIKE '%%.example.test'
+            AND lower(COALESCE(l.email, '')) NOT LIKE '%%.example.test'
+            AND lower(COALESCE(b.domain, '')) NOT IN ('example.com', 'localhost')
+            AND COALESCE(l.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
+            AND COALESCE(b.status, '') NOT IN ('excluded_sensitive_target', 'suppressed', 'unsubscribed')
+            AND NOT EXISTS (
+                  SELECT 1 FROM suppression_list s
+                  WHERE lower(s.email) = lower(l.email)
+                     OR lower(COALESCE(s.domain, '')) = lower(COALESCE(b.domain, ''))
+                     OR lower(COALESCE(s.domain, '')) = lower(split_part(l.email, '@', 2))
+            )
+          ORDER BY om.id, om.created_at DESC
+        )
+        SELECT *
+        FROM candidates
+        ORDER BY created_at DESC, outreach_message_id DESC
         LIMIT %s
         """,
-        (TEST_COUNTRY_PATTERN, list(CANARY_BLOCKED_DOMAIN_EXACT), list(CANARY_BLOCKED_TEXT_PATTERNS), safe_limit),
+        (PREFLIGHT_POLICY_VERSION, TEST_COUNTRY_PATTERN, list(CANARY_BLOCKED_DOMAIN_EXACT), list(CANARY_BLOCKED_TEXT_PATTERNS), safe_limit),
     )
     items: list[dict[str, Any]] = []
     domain_counts: Counter[str] = Counter()

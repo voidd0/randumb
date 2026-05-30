@@ -542,8 +542,7 @@ def test_live_queue_and_canary_quality_block_stale_preflight_policy():
         queue = live_outreach_queue_candidates(100)
         assert f"p99-stale-policy-{token}.com" not in str(queue)
         quality = canary_batch_quality(100, store=False)
-        row = [item for item in quality["items"] if item["domain"] == f"p99-stale-policy-{token}.com"][0]
-        assert "campaign_preflight_policy_stale" in row["blockers"]
+        assert f"p99-stale-policy-{token}.com" not in str(quality["items"])
         assert quality["send_mail"] is False
     finally:
         _cleanup(token)

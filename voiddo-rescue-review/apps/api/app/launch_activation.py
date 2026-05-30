@@ -92,9 +92,10 @@ def launch_activation_readiness(limit: int = 25) -> dict[str, Any]:
         blockers.append("preview_outreach_messages_missing")
     if approved_preview_count <= 0:
         blockers.append("approved_campaign_previews_missing")
-    if preflight["passed_campaign_count"] <= 0 or preflight["failed_campaign_count"] > 0 or preflight["missing_campaign_count"] > 0:
+    canary_quality_pass = canary_quality.get("decision") == "PASS_CANARY_BATCH_QUALITY"
+    if preflight["passed_campaign_count"] <= 0 or (not canary_quality_pass and (preflight["failed_campaign_count"] > 0 or preflight["missing_campaign_count"] > 0)):
         blockers.append("campaign_preflight_not_clean")
-    if canary_quality.get("decision") != "PASS_CANARY_BATCH_QUALITY":
+    if not canary_quality_pass:
         blockers.append("canary_batch_quality_not_pass")
     transport_checks = transport.get("checks") or {}
     if not transport_checks.get("unsubscribe_one_click_ready"):

@@ -70,6 +70,12 @@ MAIL_SIGNAL_RECENT_BLOCKING_TYPES = {"bounce", "dsn", "smtp_rate_limit"}
 MAIL_AUTH_BLOCKING_SIGNAL_TYPES = {"auth_failure", "tls_failure", "dkim_failure", "dmarc_failure"}
 DIAGNOSTIC_DAILY_CAP = 5
 DIAGNOSTIC_MINUTE_CAP = 1
+RESCUE_MAIL_SIGNAL_SCOPE_SQL = """
+          AND NOT (
+            source = 'studio_mail_monitor'
+            AND position('voiddorescue.com' in lower(COALESCE(mailbox, ''))) = 0
+          )
+"""
 
 
 def _split_config_emails(raw: str) -> list[str]:
@@ -188,15 +194,17 @@ def record_mail_signal(
     return dict(row)
 
 
-def recent_mail_signal_count(signal_types: list[str] | tuple[str, ...] | set[str], hours: int = 24) -> int:
+def recent_mail_signal_count(signal_types: list[str] | tuple[str, ...] | set[str], hours: int = 24, scope: str = "rescue") -> int:
     if not signal_types:
         return 0
+    scope_sql = RESCUE_MAIL_SIGNAL_SCOPE_SQL if scope == "rescue" else ""
     row = fetch_one(
-        """
+        f"""
         SELECT count(*) AS count
         FROM mail_signals
         WHERE signal_type = ANY(%s)
           AND created_at >= now() - (%s || ' hours')::interval
+          {scope_sql}
         """,
         (list(signal_types), hours),
     )
@@ -1236,24 +1244,29 @@ def _count(sql: str, params: tuple = ()) -> int:
     return int(next(iter(row.values())))
 
 
-def mail_signal_summary(hours: int = 24) -> dict[str, Any]:
+def mail_signal_summary(hours: int = 24, scope: str = "rescue") -> dict[str, Any]:
+    scope_sql = RESCUE_MAIL_SIGNAL_SCOPE_SQL if scope == "rescue" else ""
     rows = fetch_all(
-        """
+        f"""
         SELECT signal_type, severity, count(*) AS count
         FROM mail_signals
         WHERE created_at >= now() - (%s || ' hours')::interval
+          {scope_sql}
         GROUP BY signal_type, severity
         ORDER BY signal_type, severity
         """,
         (hours,),
     )
+    ignored_studio = recent_mail_signal_count(["bounce", "dsn"], hours, scope="all") - recent_mail_signal_count(["bounce", "dsn"], hours, scope="rescue")
     return {
         "window_hours": hours,
+        "scope": scope,
         "items": [dict(row) for row in rows],
-        "bounce_or_dsn_count": recent_mail_signal_count(["bounce", "dsn"], hours),
-        "rate_limit_count": recent_mail_signal_count(["smtp_rate_limit"], hours),
-        "spam_signal_count": recent_mail_signal_count(["spam_signal"], hours),
-        "mail_auth_failure_count": recent_mail_signal_count(MAIL_AUTH_BLOCKING_SIGNAL_TYPES, hours),
+        "bounce_or_dsn_count": recent_mail_signal_count(["bounce", "dsn"], hours, scope=scope),
+        "rate_limit_count": recent_mail_signal_count(["smtp_rate_limit"], hours, scope=scope),
+        "spam_signal_count": recent_mail_signal_count(["spam_signal"], hours, scope=scope),
+        "mail_auth_failure_count": recent_mail_signal_count(MAIL_AUTH_BLOCKING_SIGNAL_TYPES, hours, scope=scope),
+        "ignored_studio_bounce_or_dsn_count": max(0, ignored_studio),
     }
 
 

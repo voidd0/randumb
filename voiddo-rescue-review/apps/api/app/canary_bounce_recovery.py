@@ -12,7 +12,7 @@ from psycopg.types.json import Jsonb
 
 from .config import get_settings
 from .db import execute, fetch_all, fetch_one
-from .p0 import email_provider, json_safe, recipient_hash, set_runtime_control
+from .p0 import RESCUE_MAIL_SIGNAL_SCOPE_SQL, email_provider, json_safe, recipient_hash, set_runtime_control
 
 
 SAFE_FLAGS = {
@@ -365,12 +365,13 @@ def canary_bounce_recovery(window_hours: int = 24, apply_pause: bool = True, sto
     if store:
         backfill_bounce_dsn_details(window_hours=hours, limit=50, apply=True)
     signals = [dict(row) for row in fetch_all(
-        """
+        f"""
         SELECT signal_type, severity, source, mailbox, recipient_hash, provider,
                message_id, raw_summary, created_at
         FROM mail_signals
         WHERE signal_type IN ('bounce', 'dsn')
           AND created_at >= now() - (%s || ' hours')::interval
+          {RESCUE_MAIL_SIGNAL_SCOPE_SQL}
         ORDER BY created_at DESC
         LIMIT 200
         """,

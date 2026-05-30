@@ -5,7 +5,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .db import execute, fetch_all, fetch_one
-from .p0 import json_safe, recipient_hash, set_runtime_control
+from .p0 import RESCUE_MAIL_SIGNAL_SCOPE_SQL, json_safe, recipient_hash, set_runtime_control
 
 
 SAFE_FLAGS = {
@@ -50,11 +50,12 @@ def outreach_post_send_observer(window_hours: int = 24, apply_pause: bool = True
         (hours,),
     )
     signals = fetch_all(
-        """
+        f"""
         SELECT signal_type, severity, source, mailbox, provider, message_id, created_at, raw_summary
         FROM mail_signals
         WHERE signal_type = ANY(%s)
           AND created_at >= now() - (%s || ' hours')::interval
+          {RESCUE_MAIL_SIGNAL_SCOPE_SQL}
         ORDER BY created_at DESC
         LIMIT 100
         """,

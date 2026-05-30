@@ -10,7 +10,8 @@ from app.db import execute, fetch_one
 from app.main import app
 from app.autonomous_agents import run_agent
 from app.owner_command_control import owner_command_control_summary
-from app.p0 import execute_owner_command, parse_owner_command
+from app.p0 import execute_owner_command, mail_signal_summary, parse_owner_command, recent_mail_signal_count
+from app.canary_clean_window_forecast import canary_clean_window_forecast
 from app.studio_mail_monitor import classify_studio_mail, ingest_studio_mail_messages, latest_studio_mail_messages, studio_mail_monitor_health
 
 
@@ -320,6 +321,28 @@ def test_studio_mail_bounce_records_mail_signal_without_raw_address():
         assert signal["signal_type"] == "bounce"
         assert sender not in signal["raw_summary"]
         assert signal["recipient_hash"] != sender
+    finally:
+        _cleanup(token)
+
+
+def test_studio_mail_bounce_does_not_block_rescue_mail_risk_scope():
+    token = uuid.uuid4().hex[:8]
+    try:
+        execute(
+            """
+            INSERT INTO mail_signals(signal_type, severity, source, mailbox, recipient_hash, provider, message_id, raw_summary)
+            VALUES ('bounce', 'warning', 'studio_mail_monitor', 'em@voiddo.com', %s, 'example.test', %s, 'studio mailbox delivery failure')
+            """,
+            (f"hash-{token}", f"<msg-{token}@example.test>"),
+        )
+        rescue_summary = mail_signal_summary(24)
+        all_summary = mail_signal_summary(24, scope="all")
+        assert recent_mail_signal_count(["bounce", "dsn"], 24) == 0
+        assert all_summary["bounce_or_dsn_count"] >= 1
+        assert rescue_summary["ignored_studio_bounce_or_dsn_count"] >= 1
+        forecast = canary_clean_window_forecast(24, store=False)
+        assert forecast["signal_counts"]["bounce_or_dsn"] == 0
+        assert forecast["status"] == "clean"
     finally:
         _cleanup(token)
 

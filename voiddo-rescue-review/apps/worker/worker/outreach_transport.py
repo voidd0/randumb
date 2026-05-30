@@ -15,6 +15,12 @@ from psycopg.types.json import Jsonb
 from .db import connect
 
 PREFLIGHT_POLICY_VERSION = "20260529_mx_bounce_v1"
+RESCUE_MAIL_SIGNAL_SCOPE_SQL = """
+          AND NOT (
+            source = 'studio_mail_monitor'
+            AND position('voiddorescue.com' in lower(COALESCE(mailbox, ''))) = 0
+          )
+"""
 
 
 def _latest_decision(table: str) -> str:
@@ -130,10 +136,10 @@ def _warmup_maturity(cur) -> dict:
     )
     verified_warmup_sent = max(warmup_sent, verified_event_count)
     legacy_event_count = _count(cur, "SELECT count(*) AS count FROM email_events WHERE event_type = 'warmup_sent'")
-    recent_bounce = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type IN ('bounce','dsn') AND created_at >= now() - interval '24 hours'")
-    recent_rate = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'smtp_rate_limit' AND created_at >= now() - interval '24 hours'")
-    recent_spam = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'spam_signal' AND created_at >= now() - interval '24 hours'")
-    recent_auth_failure = _count(cur, "SELECT count(*) AS count FROM mail_signals WHERE signal_type IN ('auth_failure','tls_failure','dkim_failure','dmarc_failure') AND created_at >= now() - interval '24 hours'")
+    recent_bounce = _count(cur, f"SELECT count(*) AS count FROM mail_signals WHERE signal_type IN ('bounce','dsn') AND created_at >= now() - interval '24 hours' {RESCUE_MAIL_SIGNAL_SCOPE_SQL}")
+    recent_rate = _count(cur, f"SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'smtp_rate_limit' AND created_at >= now() - interval '24 hours' {RESCUE_MAIL_SIGNAL_SCOPE_SQL}")
+    recent_spam = _count(cur, f"SELECT count(*) AS count FROM mail_signals WHERE signal_type = 'spam_signal' AND created_at >= now() - interval '24 hours' {RESCUE_MAIL_SIGNAL_SCOPE_SQL}")
+    recent_auth_failure = _count(cur, f"SELECT count(*) AS count FROM mail_signals WHERE signal_type IN ('auth_failure','tls_failure','dkim_failure','dmarc_failure') AND created_at >= now() - interval '24 hours' {RESCUE_MAIL_SIGNAL_SCOPE_SQL}")
     blockers = []
     if verified_warmup_sent < min_clean:
         blockers.append("warmup_clean_send_count_below_threshold")
@@ -371,14 +377,31 @@ def send_message_if_allowed(message_id: str) -> dict:
             email = lead["email"] if lead else ""
             cur.execute(
                 """
-                SELECT campaign_id
-                FROM campaign_leads
-                WHERE lead_id = %s
-                  AND (audit_id = %s OR %s IS NULL)
-                ORDER BY updated_at DESC, created_at DESC
+                SELECT cl.campaign_id
+                FROM campaign_leads cl
+                JOIN LATERAL (
+                  SELECT action
+                  FROM campaign_preview_reviews
+                  WHERE campaign_lead_id = cl.id
+                  ORDER BY created_at DESC
+                  LIMIT 1
+                ) latest_review ON true
+                WHERE cl.lead_id = %s
+                  AND (cl.audit_id = %s OR %s IS NULL)
+                  AND cl.status = 'preview'
+                  AND latest_review.action = 'approved'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM campaign_preflight_runs p
+                    WHERE p.campaign_id = cl.campaign_id
+                      AND p.decision = 'PASS_NO_SEND_PREFLIGHT'
+                      AND COALESCE(p.result_json->>'policy_version', '') = %s
+                      AND p.created_at >= now() - interval '120 minutes'
+                  )
+                ORDER BY cl.updated_at DESC, cl.created_at DESC
                 LIMIT 1
                 """,
-                (message["lead_id"], message["audit_id"], message["audit_id"]),
+                (message["lead_id"], message["audit_id"], message["audit_id"], PREFLIGHT_POLICY_VERSION),
             )
             campaign = cur.fetchone()
             campaign_id = str(campaign["campaign_id"]) if campaign else None
