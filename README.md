@@ -11,7 +11,7 @@
 
 **Locale-consistent random test data.** 58 locales, 5000+ real names. Country ⟺ phone prefix ⟺ currency ⟺ city are coupled: Russia → Ivan Petrov / +7 / RUB / Moscow. Moldova → Tudor Popa / +373 / MDL / Chișinău. No Russian Johns. No Moldovan shekels. No "San Jose, Arizona". Slavic female surnames are properly inflected. Credit cards are Luhn-valid. Everything is English-Latin, seeded for reproducibility.
 
-Free forever gift from [vøiddo](https://voiddo.com).
+gift from [vøiddo](https://voiddo.com).
 
 ## Compare with Faker.js
 
@@ -42,16 +42,16 @@ $ randumb user --locale ru
 
 ## Why randumb
 
-Most faker libraries give you a Jane Smith living at 123 Main Street in Moscow, paying in USD, with an `@bezeqint.net` email. That's not a test fixture — that's a bug report waiting to happen. Your validation code will pass on data that could never occur in production, and fail on real users when you ship.
+Most faker libraries give you a Jane Smith living at 123 Main Street in Moscow, paying in USD, with an `@bezeqint.net` email. That's not a test fixture, that's a bug report waiting to happen. Your validation code will pass on data that could never occur in production, and fail on real users when you ship.
 
 `randumb` guarantees coherent identities:
-- **58 locales** — US, UK, DE, FR, ES, IT, NL, SE, NO, DK, FI, IS, PL, CZ, HU, RO, BG, GR, TR, RU, UA, BY, MD, IL, SA, AE, EG, MA, NG, KE, ZA, JP, KR, CN, HK, SG, MY, ID, PH, TH, VN, IN, PK, BD, BR, AR, MX, CO, CL, PE, CA, AU, NZ, IE, AT, CH, BE, PT.
-- **5000+ real names** — US alone has 1700+ first names and 800+ last names from SSA + diaspora pools. Every locale has a properly-sized pool for its population.
-- **Country-coupled output** — picking locale `ru` gives you a Russian name, a `+7` phone, RUB currency, and a city that actually exists in Russia.
-- **Slavic surname gender inflection** — `Ivanov` (male) → `Ivanova` (female), `Morozov` → `Morozova`, `Moskovskiy` → `Moskovskaya`. Because Valeria Morozov is wrong; Valeria Morozova is right.
-- **Luhn-valid test credit cards** — 6 brands (Visa, MC, Amex, Discover, JCB, Diners). Perfect for Stripe test-mode flows.
-- **Deterministic seeding** — `--seed 42` gives you the same 100 users every run. Fixtures stay stable; tests don't flake.
-- **Latin-ASCII only** — no Cyrillic, no Hebrew, no Arabic, no Kanji. Your logs, BI dashboards, and DB indexes stay clean.
+- **58 locales**: US, UK, DE, FR, ES, IT, NL, SE, NO, DK, FI, IS, PL, CZ, HU, RO, BG, GR, TR, RU, UA, BY, MD, IL, SA, AE, EG, MA, NG, KE, ZA, JP, KR, CN, HK, SG, MY, ID, PH, TH, VN, IN, PK, BD, BR, AR, MX, CO, CL, PE, CA, AU, NZ, IE, AT, CH, BE, PT.
+- **5000+ real names**: US alone has 1700+ first names and 800+ last names from SSA + diaspora pools. Every locale has a properly-sized pool for its population.
+- **Country-coupled output**: picking locale `ru` gives you a Russian name, a `+7` phone, RUB currency, and a city that actually exists in Russia.
+- **Slavic surname gender inflection**: `Ivanov` (male) → `Ivanova` (female), `Morozov` → `Morozova`, `Moskovskiy` → `Moskovskaya`. Because Valeria Morozov is wrong; Valeria Morozova is right.
+- **Luhn-valid test credit cards**: 6 brands (Visa, MC, Amex, Discover, JCB, Diners). Perfect for Stripe test-mode flows.
+- **Deterministic seeding**: `--seed 42` gives you the same 100 users every run. Fixtures stay stable; tests don't flake.
+- **Latin-ASCII only**: no Cyrillic, no Hebrew, no Arabic, no Kanji. Your logs, BI dashboards, and DB indexes stay clean.
 
 ## Install
 
@@ -71,7 +71,7 @@ npx -y @v0idd0/randumb user --locale jp --json
 # Realistic user object, random locale
 randumb user
 
-# Forced locale — Russian user with correct phone/currency/address
+# Forced locale: Russian user with correct phone/currency/address
 randumb user --locale ru
 
 # 5 Brazilian users as a JSON array
@@ -232,7 +232,7 @@ const cc = r.creditCard('amex');       // → "378282..."
 r.isValidLuhn(cc);                      // → true
 
 // Weighted picking
-const plan = r.weighted([['free', 80], ['starter', 15], ['pro', 5]]);
+const plan = r.weighted([['basic', 80], ['starter', 15], ['pro', 5]]);
 
 // Introspect
 r.LOCALES.ru.firstNamesMale;            // ['Alexander', 'Dmitry', ...]
@@ -255,27 +255,9 @@ r.LOCALES.ru.feminizeSurname('Ivanov'); // 'Ivanova'
 | **SE Asia & Oceania** | `sg` `my` `id` `ph` `th` `vn` `au` `nz` |
 | **South Asia** | `in` `pk` `bd` |
 
-## From the same studio
-
-vøiddo builds sharp, free-forever CLIs for devs who are tired of paywalls:
-
-- [`@v0idd0/jsonyo`](https://tools.voiddo.com/jsonyo/?ref=randumb-related-jsonyo-readme) — JSON that yells at you
-- [`@v0idd0/tokcount`](https://extensions.voiddo.com/tokcount/?ref=randumb-related-tokcount-readme) — token counter for 60+ LLMs
-- [`@v0idd0/ctxstuff`](https://tools.voiddo.com/ctxstuff/?ref=randumb-related-ctxstuff-readme) — stuff a repo into an LLM context
-- [`@v0idd0/promptdiff`](https://tools.voiddo.com/promptdiff/?ref=randumb-related-promptdiff-readme) — diff two prompts
-- [`@v0idd0/httpwut`](https://tools.voiddo.com/httpwut/?ref=randumb-related-httpwut-readme) — HTTP debugger with phase timing
-- [`@v0idd0/gitstats`](https://tools.voiddo.com/gitstats/?ref=randumb-related-gitstats-readme) — local git analytics
-- [`@v0idd0/licenseme`](https://tools.voiddo.com/licenseme/?ref=randumb-related-licenseme-readme) — LICENSE generator + detector
-- [`@v0idd0/envguard`](https://tools.voiddo.com/envguard/?ref=randumb-related-envguard-readme) — .env validator + secret scanner
-- [`@v0idd0/depcheck`](https://tools.voiddo.com/depcheck/?ref=randumb-related-depcheck-readme) — offline CVE scanner + unused-deps
-- [`@v0idd0/logparse`](https://tools.voiddo.com/logparse/?ref=randumb-related-logparse-readme) — structured log parser + aggregator
-- [`@v0idd0/cronwtf`](https://tools.voiddo.com/cronwtf/?ref=randumb-related-cronwtf-readme) — explain cron, catch gotchas
-
-Full catalog: [tools.voiddo.com](https://tools.voiddo.com/?ref=randumb-catalog-readme).
-
 ## License
 
-MIT © [vøiddo](https://voiddo.com) — free forever, no asterisks.
+MIT © [vøiddo](https://voiddo.com), no asterisks.
 
 ## Links
 
@@ -288,4 +270,4 @@ MIT © [vøiddo](https://voiddo.com) — free forever, no asterisks.
 
 ---
 
-Built by [vøiddo](https://voiddo.com/) — a small studio shipping AI-flavoured products, free dev tools, Chrome extensions and weird browser games.
+Maintained by v0idd0.
