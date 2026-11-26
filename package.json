@@ -1,7 +1,7 @@
 {
   "name": "@v0idd0/randumb",
-  "version": "2.0.5",
-  "description": "Locale-consistent random test data: 58 locales and 5000+ real names tied to country, phone prefix, currency and city. Seeded generator, Luhn-valid cards, CLI and library.",
+  "version": "2.0.6",
+  "description": "Locale-consistent random test data: 58 locales with first and last names tied to country, phone prefix, currency and city. Seeded generator, Luhn-valid cards, CLI and library.",
   "main": "src/generator.js",
   "bin": {
     "randumb": "./bin/randumb.js"
@@ -25,34 +25,29 @@
   ],
   "author": "vøiddo <support@voiddo.com> (https://voiddo.com)",
   "license": "MIT",
-  "homepage": "https://tools.voiddo.com/randumb/",
+  "homepage": "https://voiddo.com/packages/#randumb",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/voidd0/randumb.git"
   },
   "bugs": {
-    "url": "https://github.com/voidd0/randumb/issues",
-    "email": "support@voiddo.com"
+    "url": "https://github.com/voidd0/randumb/issues"
   },
   "publishConfig": {
     "access": "public"
   },
   "engines": {
-    "node": ">=14"
+    "node": ">=18"
   },
   "files": [
-    "bin/",
-    "src/",
-    "LICENSE",
-    "README.md"
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
   ],
   "os": [
     "darwin",
     "linux",
     "win32"
-  ],
-  "funding": {
-    "type": "individual",
-    "url": "https://voiddo.com/contact/"
-  }
+  ]
 }

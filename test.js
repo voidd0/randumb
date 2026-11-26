@@ -1,5 +1,3 @@
-// randumb — tests. free forever from vøiddo. https://voiddo.com/tools/randumb/
-
 const g = require('./src/generator');
 
 let passed = 0;
@@ -25,6 +23,11 @@ g.seed(42); const a1 = g.uuid(); const a2 = g.uuid();
 g.seed(42); const b1 = g.uuid(); const b2 = g.uuid();
 g.seed(null);
 test('seeded output is deterministic', a1 === b1 && a2 === b2, { a1, b1 });
+
+g.seed(42); const p1 = g.phone('local', false, 'ru') + g.address(false, 'ru');
+g.seed(42); const p2 = g.phone('local', false, 'ru') + g.address(false, 'ru');
+g.seed(null);
+test('seeded phone and address are deterministic', p1 === p2, { p1, p2 });
 
 // Luhn credit cards
 for (const brand of ['visa','mastercard','amex','discover','jcb','diners']) {

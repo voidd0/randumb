@@ -1,11 +1,13 @@
 // randumb/locales — country-coupled data pools.
-// free forever from vøiddo. https://voiddo.com/tools/randumb/
 //
 // Each locale ensures internal consistency: Russia→Ivan, +7, RUB, Moscow;
 // Moldova→Alexandru, +373, MDL, Chișinău. Never Russia→John→USD.
 
-function zip5() { return String(Math.floor(Math.random() * 90000) + 10000); }
-function rng(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+// Random source: the generator installs its seedable rng here so --seed covers phones and postal codes.
+let random = Math.random;
+function setRandom(fn) { random = fn || Math.random; }
+function zip5() { return String(Math.floor(random() * 90000) + 10000); }
+function rng(min, max) { return Math.floor(random() * (max - min + 1)) + min; }
 
 // Feminize a surname (English-transliterated pools only — see ru.feminizeSurname).
 
@@ -707,4 +709,4 @@ const LOCALES = {
 };
 
 // Sync US pool names exported below to stay DRY
-module.exports = { LOCALES, US_FIRST, US_LAST };
+module.exports = { LOCALES, US_FIRST, US_LAST, setRandom };

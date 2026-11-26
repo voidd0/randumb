@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// randumb — random test data generator. free forever from vøiddo.
-// https://voiddo.com/tools/randumb/
 
 const generator = require('../src/generator');
 
-const YELLOW = '\x1b[33m';
-const CYAN = '\x1b[36m';
-const GREEN = '\x1b[32m';
-const DIM = '\x1b[2m';
-const BOLD = '\x1b[1m';
-const RESET = '\x1b[0m';
+const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
+const ansi = (code) => (useColor ? `\x1b[${code}m` : '');
+const YELLOW = ansi(33);
+const CYAN = ansi(36);
+const GREEN = ansi(32);
+const DIM = ansi(2);
+const BOLD = ansi(1);
+const RESET = ansi(0);
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -32,7 +32,7 @@ function showHelp() {
   const localeList = Object.keys(generator.LOCALES).join(', ');
   console.log(`
 ${BOLD}${YELLOW}randumb${RESET} ${DIM}v${readPkgVersion()}${RESET}
-${DIM}// locale-consistent random test data. free forever from vøiddo.${RESET}
+${DIM}locale-consistent random test data${RESET}
 
 ${CYAN}Usage${RESET}
   randumb <command> [options]
@@ -48,13 +48,13 @@ ${CYAN}Commands${RESET}
   ${BOLD}Web${RESET}          url, slug, hashtag, useragent, method, status
   ${BOLD}Content${RESET}      lorem, animal, food, tech, emoji
   ${BOLD}Meta${RESET}         locales          list all locales
-                          (${DIM}${Object.keys(generator.LOCALES).length} locales, ${Object.keys(generator.LOCALES).reduce((s,c)=>s+generator.LOCALES[c].firstNames.length+generator.LOCALES[c].lastNames.length,0).toLocaleString()} names${RESET})
+                          (${DIM}${Object.keys(generator.LOCALES).length} locales, ${Object.keys(generator.LOCALES).reduce((s,c)=>s+generator.LOCALES[c].firstNames.length+generator.LOCALES[c].lastNames.length,0).toLocaleString()} first and last names${RESET})
 
 ${CYAN}Global options${RESET}
   -n, --count <n>       Generate N items
       --seed <int>      Deterministic output (great for test fixtures)
       --locale <code>   Force a locale (e.g. ru, jp, il, mx, br, ...)
-      --cursed          Meme mode (Ligma Balls @ fr-fr-no-cap.io)
+      --cursed          Joke data (silly placeholder names and places)
       --json            JSON array
       --csv             CSV (when items are objects)
   -h, --help            Show this help
@@ -74,12 +74,12 @@ ${CYAN}Command-specific${RESET}
 ${CYAN}Examples${RESET}
   randumb user --locale ru                ${DIM}# Russian name, +7 phone, RUB, Moscow${RESET}
   randumb user --locale il --json          ${DIM}# Israeli user, full JSON${RESET}
-  randumb user --locale md                 ${DIM}# Moldovan: Tudor Popa, +373, MDL${RESET}
+  randumb user --locale md                 ${DIM}# Moldovan name, +373 phone, MDL${RESET}
   randumb email --locale jp -n 5           ${DIM}# 5 Japanese-style emails${RESET}
   randumb phone --locale br                ${DIM}# Brazilian phone +55 11 9...${RESET}
   randumb creditcard --brand visa -n 3     ${DIM}# 3 Luhn-valid test cards${RESET}
   randumb user --seed 42                   ${DIM}# Deterministic fixture${RESET}
-  randumb user --cursed --json             ${DIM}# Ligma Balls, Chief Yeet Officer${RESET}
+  randumb user --cursed --json             ${DIM}# joke data as JSON${RESET}
   randumb lorem --type paragraph           ${DIM}# Lorem ipsum paragraph${RESET}
   randumb uuid -n 100                      ${DIM}# 100 UUIDs${RESET}
   randumb latlng --json                    ${DIM}# Random {lat, lng}${RESET}
@@ -88,11 +88,9 @@ ${CYAN}Examples${RESET}
 ${CYAN}Locales${RESET}
   ${localeList}
 
-${DIM}// use --seed for reproducible fixtures. use --locale to avoid John Smiths in Russia.${RESET}
+${DIM}Use --seed for reproducible fixtures and --locale to match names to a country.${RESET}
 
-  Docs:    https://voiddo.com/tools/randumb/
-  Source:  https://github.com/voidd0/randumb
-  Catalog: https://voiddo.com/tools/
+${DIM}Docs and issues: https://github.com/voidd0/randumb${RESET}
 `);
 }
 

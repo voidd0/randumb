@@ -1,7 +1,4 @@
-// randumb — random test data generator. free forever from vøiddo.
-// https://voiddo.com/tools/randumb/
-
-const { LOCALES } = require('./locales');
+const { LOCALES, setRandom } = require('./locales');
 const LOCALE_CODES = Object.keys(LOCALES);
 
 let rngState = null;
@@ -21,6 +18,8 @@ function rng() {
   t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
+
+setRandom(() => rng());
 
 function pick(arr) { return arr[Math.floor(rng() * arr.length)]; }
 function randomInt(min, max) { return Math.floor(rng() * (max - min + 1)) + min; }
