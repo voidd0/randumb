@@ -4,7 +4,7 @@
   "description": "Locale-consistent random test data: 58 locales with first and last names tied to country, phone prefix, currency and city. Seeded generator, Luhn-valid cards, CLI and library.",
   "main": "src/generator.js",
   "bin": {
-    "randumb": "./bin/randumb.js"
+    "randumb": "bin/randumb.js"
   },
   "scripts": {
     "test": "node test.js"
